@@ -42,6 +42,18 @@ struct TorznabTests {
         #expect(found.map(\.title) == ["Some.Movie.2023.1080p.BluRay.x264-GRP"])
     }
 
+    @Test func theSameTorrentFromTwoTrackersIsOneRow() {
+        let hash = String(repeating: "e", count: 40)
+        let groups = StreamGroup.group([
+            StreamCandidate(id: "newznab:jackett:1", kind: .p2p, title: "Some.Program", label: "Jackett", infoHash: hash, category: 4000, seeders: 3),
+            StreamCandidate(id: "newznab:prowlarr:9", kind: .p2p, title: "Some.Program", label: "Prowlarr", infoHash: hash.uppercased(), seeders: 40),
+        ])
+        #expect(groups.count == 1)
+        #expect(groups[0].seeders == 40)
+        #expect(groups[0].category == 4000)
+        #expect(groups[0].indexers == ["Jackett", "Prowlarr"])
+    }
+
     @Test func routingLeavesTorrentsToTheDebrids() {
         let torrent = StreamCandidate(id: "t", kind: .p2p, title: "T", infoHash: String(repeating: "c", count: 40))
         let nzb = StreamCandidate(id: "n", kind: .usenet, title: "N", nzbURL: URL(string: "https://i.example/get/1")!)

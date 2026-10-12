@@ -15,8 +15,8 @@ struct SearchView: View {
     @State private var typeFilter: MediaType?
     @AppStorage("searchScope") private var scope: SearchScope = .media
     @AppStorage("otherCategory") private var category: NewznabCategory = .all
-    @State private var otherResults: [StreamCandidate] = []
-    @State private var busy: Set<StreamCandidate.ID> = []
+    @State private var otherResults: [StreamGroup] = []
+    @State private var busy: Set<StreamGroup.ID> = []
     @Environment(\.scenePhase) private var scenePhase
     /// `UIPasteboard.changeCount` the banner was last answered for, so it does not come back for the same copy.
     @AppStorage("clipboardAnsweredChange") private var answeredChange = -1
@@ -178,12 +178,12 @@ extension SearchView {
         @Bindable var model = model
         Section {
             Toggle("Download only", isOn: $model.downloadOnly)
-            ForEach(otherResults) { candidate in
+            ForEach(otherResults) { group in
                 OtherResultRow(
-                    candidate: candidate,
-                    isBusy: busy.contains(candidate.id),
+                    group: group,
+                    isBusy: busy.contains(group.id),
                     downloadOnly: model.downloadOnly,
-                    onAdd: canAdd(candidate) ? { addOther(candidate) } : nil
+                    onAdd: canAdd(group) ? { addOther(group) } : nil
                 )
             }
         } footer: {
@@ -194,6 +194,7 @@ extension SearchView {
     }
 
     /// Words in the picked category, through Dove's own indexers. Same release from several indexers: one row.
+    /// Rows show at once; then TorBox/Offcloud say which torrents they have cached, and those move up.
     func searchOther(_ query: String) {
         guard !model.newznab.isEmpty else {
             message = "Add a Newznab or Torznab indexer in Settings › Search › Indexers to search beyond movies and series."
@@ -203,34 +204,40 @@ extension SearchView {
         otherResults = []
         let search = model.newznab
         let category = category
+        let usenet = model.usenetBackend
+        let checkers = model.cacheCheckers
         Task {
-            let found = await search.search(.text(query, category: category))
-            var seen = Set<String>()
-            otherResults = found.candidates.filter { seen.insert($0.title.lowercased()).inserted }
+            let found = await search.search(.text(query, category: category)).routed(to: usenet)
+            otherResults = StreamGroup.group(found.candidates)
             let failures = found.failures.joined(separator: "\n")
             message = otherResults.isEmpty
                 ? (failures.isEmpty ? "Nothing found." : failures)
                 : (failures.isEmpty ? nil : failures)
             isSearching = false
+            guard !checkers.isEmpty, otherResults.contains(where: { $0.infoHash != nil }) else { return }
+            let checked = await CacheChecker.annotate(otherResults, using: checkers)
+            // Stable: cached torrents first, the indexers' order otherwise.
+            otherResults = checked.filter { $0.kind != .usenet && $0.isCached } + checked.filter { !($0.kind != .usenet && $0.isCached) }
         }
     }
 
-    func canAdd(_ candidate: StreamCandidate) -> Bool {
-        candidate.kind == .usenet ? model.usenetBackend != nil : !model.backends(usenet: false).isEmpty
+    func canAdd(_ group: StreamGroup) -> Bool {
+        group.kind == .usenet ? model.usenetBackend != nil : !model.backends(usenet: false).isEmpty
     }
 
-    /// Adds through the priority order (NZBs: nzbdav, then TorBox Usenet; torrents: the debrid order);
-    /// "Download only" fetches every file.
-    func addOther(_ candidate: StreamCandidate) {
-        guard let source = candidate.librarySource else { return }
-        busy.insert(candidate.id)
+    /// Adds through the priority order (NZBs: nzbdav, then TorBox Usenet; torrents: services that have it
+    /// cached first, then the debrid order); "Download only" fetches every file.
+    func addOther(_ group: StreamGroup) {
+        guard let source = group.librarySource else { return }
+        busy.insert(group.id)
         Task {
-            defer { busy.remove(candidate.id) }
+            defer { busy.remove(group.id) }
             do {
                 // A Torznab result's .torrent link carries the indexer's key: fetch it here, never hand it over.
-                let result = try await model.router.add(try await IndexerTorrent.prepare(source))
+                let router = model.router(preferring: group.cachedBackends())
+                let result = try await router.add(try await IndexerTorrent.prepare(source))
                 message = model.downloadOnly
-                    ? await model.startDownloadOnly(result.itemID, on: result.backend, name: candidate.title, pick: .allVideos)
+                    ? await model.startDownloadOnly(result.itemID, on: result.backend, name: group.title, pick: .allVideos)
                     : "Added to \(result.backend.displayName)."
             } catch {
                 message = error.localizedDescription

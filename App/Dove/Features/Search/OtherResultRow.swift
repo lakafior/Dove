@@ -15,14 +15,15 @@ enum SearchScope: String, CaseIterable {
 }
 
 /// One release from Dove's own indexers, found by name: software, music, books or anything else.
+/// Torrents show which debrid services already have them (⚡), like the source list.
 struct OtherResultRow: View {
-    let candidate: StreamCandidate
+    let group: StreamGroup
     let isBusy: Bool
     let downloadOnly: Bool
     let onAdd: (() -> Void)?
 
     private var kind: ContentKind {
-        candidate.category.map(ContentKind.init(newznabCategory:)) ?? .other
+        group.category.map(ContentKind.init(newznabCategory:)) ?? .other
     }
 
     var body: some View {
@@ -32,18 +33,33 @@ struct OtherResultRow: View {
                 .frame(width: 24)
                 .padding(.top, 2)
             VStack(alignment: .leading, spacing: 4) {
-                Text(candidate.title)
+                Text(group.title)
                     .font(.subheadline)
                     .lineLimit(3)
                 HStack(spacing: 8) {
-                    if let size = candidate.size {
+                    if let size = group.size {
                         Text(size.formatted(.byteCount(style: .file))).monospacedDigit()
                     }
                     Text(kind.displayName)
-                    if let seeders = candidate.seeders {
+                    if let seeders = group.seeders {
                         Label("\(seeders)", systemImage: "arrow.up").labelStyle(.titleAndIcon)
                     }
-                    if !candidate.label.isEmpty { Text("via " + candidate.label).lineLimit(1) }
+                }
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                HStack(spacing: 8) {
+                    ForEach(group.availability, id: \.service) { availability in
+                        HStack(spacing: 2) {
+                            if availability.cached == true {
+                                Image(systemName: "bolt.fill").foregroundStyle(.yellow)
+                            }
+                            Text(availability.displayName)
+                        }
+                        .foregroundStyle(availability.cached == true ? .primary : .secondary)
+                    }
+                    if !group.indexers.isEmpty {
+                        Text("via " + group.indexers.joined(separator: " · ")).lineLimit(1)
+                    }
                 }
                 .font(.caption)
                 .foregroundStyle(.secondary)

@@ -28,6 +28,10 @@ public struct StreamGroup: Identifiable, Sendable, Hashable {
     public var folderSize: Int64? { candidates.lazy.compactMap(\.folderSize).first }
     public var infoHash: String? { candidates.lazy.compactMap(\.infoHash).first }
     public var kind: StreamCandidate.Kind { primary.kind }
+    /// Newznab category from Dove's own indexers (Search › Other shows the kind).
+    public var category: Int? { candidates.lazy.compactMap(\.category).first }
+    /// The most seeders any tracker reported (Torznab).
+    public var seeders: Int? { candidates.compactMap(\.seeders).max() }
 
     /// Link to play: a cached one if any service has it, otherwise the first.
     public var playURL: URL? {
