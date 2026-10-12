@@ -11,6 +11,27 @@ final class AppModel {
     let library = LibraryModel()
     private(set) var backends: [any LibraryBackend] = []
 
+    /// A magnet or file opened from another app; RootView shows the add sheet for it.
+    var openedSource: Source?
+
+    /// Handles `onOpenURL`. Copies iOS made into Documents/Inbox are removed once read,
+    /// so they do not pile up next to downloads in Files.
+    func open(_ url: URL) {
+        openedSource = SourceDetector.source(opening: url)
+        if url.isFileURL, url.deletingLastPathComponent().lastPathComponent == "Inbox",
+           url.resolvingSymlinksInPath().path.hasPrefix(URL.documentsDirectory.resolvingSymlinksInPath().path) {
+            try? FileManager.default.removeItem(at: url)
+        }
+    }
+
+    static let downloadSessionID = "net.smigi.dove.downloads"
+    /// Finished files go to Documents, which Files shows under On My iPhone › Dove.
+    let downloads = DownloadManager(
+        configuration: DownloadManager.backgroundConfiguration(identifier: AppModel.downloadSessionID),
+        directory: .documentsDirectory,
+        store: DownloadStore(directory: .applicationSupportDirectory.appending(path: "Dove/Downloads"))
+    )
+
     /// Debrid priority, highest first. "Automatic" adds try them in this order and fall through on any error.
     /// NZBs always go to nzbdav. Not a secret, so it lives in UserDefaults.
     var debridOrder: [BackendID] {
@@ -70,6 +91,19 @@ final class AppModel {
         aioStreamsVariant = UserDefaults.standard.string(forKey: Self.variantKey) ?? ""
         reloadBackends()
         addonEntries = storedAddonURLs().map { AddonEntry(url: $0) }
+        downloads.requestProvider = { [weak self] record in
+            guard let backend = self?.backend(record.backend) else {
+                throw BackendError.api(message: "\(record.backend.displayName) is no longer configured.")
+            }
+            return try await backend.downloadRequest(itemID: record.itemID, fileID: record.fileID)
+        }
+    }
+
+    /// Asks the service for a link and starts downloading the file to the device.
+    func download(_ file: LibraryFile, of item: LibraryItem) async throws {
+        guard let backend = backend(item.backend) else { return }
+        let request = try await backend.downloadRequest(itemID: item.id, fileID: file.id)
+        try downloads.start(request, backend: item.backend, itemID: item.id, file: file)
     }
 
     /// Rebuilds backends from the Keychain. Call after credentials change.

@@ -26,6 +26,8 @@ public enum BackendID: String, Sendable, Codable, CaseIterable, Identifiable {
 public struct LibraryItem: Identifiable, Sendable, Hashable {
     public enum Status: Sendable, Hashable {
         case queued
+        /// Waits for the user to choose files (see `FileSelecting`).
+        case awaitingFileSelection
         case downloading(progress: Double)
         case ready
         case failed(reason: String)

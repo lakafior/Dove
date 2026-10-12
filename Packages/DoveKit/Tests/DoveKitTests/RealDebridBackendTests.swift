@@ -203,4 +203,80 @@ struct RealDebridBackendTests {
         #expect(RealDebridItemRef("download:X")?.id == "download:X")
         #expect(RealDebridItemRef("torrent:") == nil)
     }
+
+    // MARK: - File selection
+
+    private static let waitingInfo = """
+        {"id":"W1","status":"waiting_files_selection","files":[
+          {"id":3,"path":"/Show/Show.S01E02.mkv","bytes":10,"selected":0},
+          {"id":1,"path":"/Show/Show.S01E01.mkv","bytes":10,"selected":0},
+          {"id":2,"path":"/Show/Sample/show.sample.mkv","bytes":1,"selected":0},
+          {"id":4,"path":"/Show/readme.txt","bytes":1,"selected":0}
+        ]}
+        """
+
+    @Test func waitingTorrentIsAwaitingFileSelection() async throws {
+        let (backend, transport) = makeBackend()
+        await transport.stub("torrents/info/W1", json: Self.waitingInfo)
+
+        #expect(try await backend.item("torrent:W1").status == .awaitingFileSelection)
+    }
+
+    @Test func selectableFilesListsEveryFileAndSuggestsVideos() async throws {
+        let (backend, transport) = makeBackend()
+        await transport.stub("torrents/info/W1", json: Self.waitingInfo)
+
+        let selection = try await backend.selectableFiles("torrent:W1")
+
+        #expect(selection.files.map(\.id) == ["1", "2", "3", "4"])
+        #expect(selection.files[1].name == "Show/Sample/show.sample.mkv")
+        #expect(selection.suggested == ["1", "3"])
+    }
+
+    @Test func selectableFilesSuggestsEverythingWithoutVideos() async throws {
+        let (backend, transport) = makeBackend()
+        await transport.stub("torrents/info/W2", json: """
+            {"id":"W2","status":"waiting_files_selection","files":[
+              {"id":1,"path":"/a.flac","bytes":1,"selected":0},{"id":2,"path":"/b.flac","bytes":1,"selected":0}
+            ]}
+            """)
+
+        #expect(try await backend.selectableFiles("torrent:W2").suggested == ["1", "2"])
+    }
+
+    @Test func selectableFilesRefusesTorrentsThatAreNotWaiting() async throws {
+        let (backend, transport) = makeBackend()
+        await transport.stub("torrents/info/ABCD1234", body: try Fixture.data("realdebrid_torrent_info"))
+
+        await #expect(throws: BackendError.self) {
+            try await backend.selectableFiles("torrent:ABCD1234")
+        }
+    }
+
+    @Test func selectFilesPostsSortedIDs() async throws {
+        let (backend, transport) = makeBackend()
+        await transport.stub("torrents/selectFiles/W1", status: 204, json: "")
+
+        try await backend.selectFiles("torrent:W1", fileIDs: ["10", "3", "1"])
+
+        let sent = try #require(await transport.requests.last)
+        #expect(sent.httpMethod == "POST")
+        #expect(sent.value(forHTTPHeaderField: "Authorization") == "Bearer test-key")
+        #expect(form(sent)["files"] == "1,3,10")
+    }
+
+    @Test func selectFilesNeedsAtLeastOneFile() async {
+        let (backend, transport) = makeBackend()
+        await #expect(throws: BackendError.self) {
+            try await backend.selectFiles("torrent:W1", fileIDs: [])
+        }
+        #expect(await transport.requests.isEmpty)
+    }
+
+    @Test func downloadsCannotBeSelected() async {
+        let (backend, _) = makeBackend()
+        await #expect(throws: BackendError.notFound) {
+            try await backend.selectFiles("download:DL1", fileIDs: ["1"])
+        }
+    }
 }

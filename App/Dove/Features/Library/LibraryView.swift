@@ -226,8 +226,15 @@ struct LibraryItemView: View {
     let item: LibraryItem
     @State private var detail: LibraryItem?
     @State private var message: String?
+    @State private var isChoosingFiles = false
 
     private var files: [LibraryFile] { (detail ?? item).files }
+
+    /// Set when the service waits for the user to pick files (Real-Debrid).
+    private var fileSelector: (any FileSelecting)? {
+        guard (detail ?? item).status == .awaitingFileSelection else { return nil }
+        return model.backend(item.backend) as? any FileSelecting
+    }
 
     var body: some View {
         List {
@@ -240,6 +247,13 @@ struct LibraryItemView: View {
             }
             if let message {
                 Text(message).font(.footnote)
+            }
+            if fileSelector != nil {
+                Section {
+                    Button("Choose files", systemImage: "checklist") { isChoosingFiles = true }
+                } footer: {
+                    Text("\(item.backend.displayName) waits for you to choose which files to download.")
+                }
             }
             Section("Files") {
                 ForEach(files) { file in
@@ -262,13 +276,22 @@ struct LibraryItemView: View {
                     .contextMenu {
                         Button("Play in Infuse", systemImage: "play") { play(file) }
                         Button("Copy link", systemImage: "link") { copyLink(file) }
-                        // TODO(stage-1): "Download to phone" via the background download manager.
+                        Button("Download to phone", systemImage: "arrow.down.circle") { download(file) }
                     }
                 }
             }
         }
         .overlay {
             if detail == nil && files.isEmpty && message == nil { ProgressView() }
+        }
+        .sheet(isPresented: $isChoosingFiles) {
+            // Not `fileSelector`: the status changes on success, before the sheet is dismissed.
+            if let backend = model.backend(item.backend) as? any FileSelecting {
+                FileSelectionView(backend: backend, itemID: item.id) {
+                    await loadDetail()
+                    await model.library.refresh(using: model)
+                }
+            }
         }
         .navigationTitle(item.name)
         .navigationBarTitleDisplayMode(.inline)
@@ -302,6 +325,17 @@ struct LibraryItemView: View {
         }
     }
 
+    private func download(_ file: LibraryFile) {
+        Task {
+            do {
+                try await model.download(file, of: detail ?? item)
+                message = "Downloading \(file.name). Progress is in the Downloads tab."
+            } catch {
+                message = error.localizedDescription
+            }
+        }
+    }
+
     private func copyLink(_ file: LibraryFile) {
         Task {
             if let url = await link(for: file) {
@@ -316,6 +350,7 @@ extension LibraryItem.Status {
     var label: String {
         switch self {
         case .queued: "Queued"
+        case .awaitingFileSelection: "Choose files"
         case .downloading(let progress): "Downloading \(Int(progress * 100))%"
         case .ready: "Ready"
         case .failed(let reason): "Failed: \(reason)"

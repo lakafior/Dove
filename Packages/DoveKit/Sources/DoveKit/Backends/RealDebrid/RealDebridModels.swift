@@ -82,7 +82,8 @@ extension RealDebridTorrent {
     var libraryStatus: LibraryItem.Status {
         switch status {
         case "downloaded": .ready
-        case "magnet_conversion", "waiting_files_selection", "queued": .queued
+        case "waiting_files_selection": .awaitingFileSelection
+        case "magnet_conversion", "queued": .queued
         case "downloading", "compressing", "uploading": .downloading(progress: (progress ?? 0) / 100)
         default: .failed(reason: status.replacingOccurrences(of: "_", with: " "))
         }
@@ -108,11 +109,16 @@ enum RealDebridFiles {
 
     /// File IDs to select: video files without samples. Falls back to every video, then to "all".
     static func selection(for files: [RealDebridFile]) -> String {
-        let videos = files.filter { videoExtensions.contains(($0.path as NSString).pathExtension.lowercased()) }
-        let main = videos.filter { !$0.path.lowercased().contains("sample") }
-        let chosen = main.isEmpty ? videos : main
+        let chosen = suggested(files)
         guard !chosen.isEmpty else { return "all" }
         return chosen.map { String($0.id) }.joined(separator: ",")
+    }
+
+    /// Video files without samples, or every video when all of them look like samples. Empty without videos.
+    static func suggested(_ files: [RealDebridFile]) -> [RealDebridFile] {
+        let videos = files.filter { videoExtensions.contains(($0.path as NSString).pathExtension.lowercased()) }
+        let main = videos.filter { !$0.path.lowercased().contains("sample") }
+        return main.isEmpty ? videos : main
     }
 }
 

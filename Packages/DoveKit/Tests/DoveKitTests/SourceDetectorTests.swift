@@ -3,6 +3,25 @@ import Testing
 @testable import DoveKit
 
 struct SourceDetectorTests {
+    @Test func openedMagnetURL() throws {
+        let magnet = "magnet:?xt=urn:btih:0123456789abcdef0123456789abcdef01234567&dn=A+B"
+        #expect(SourceDetector.source(opening: try #require(URL(string: magnet))) == .magnet(magnet))
+    }
+
+    @Test func openedTorrentAndNzbFiles() throws {
+        let directory = FileManager.default.temporaryDirectory.appending(path: "DoveKitTests-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let torrent = directory.appending(path: "Show.S01.torrent")
+        let nzb = directory.appending(path: "Movie.NZB")
+        let other = directory.appending(path: "notes.txt")
+        for file in [torrent, nzb, other] { try Data([7]).write(to: file) }
+
+        #expect(SourceDetector.source(opening: torrent) == .torrentFile(data: Data([7]), filename: "Show.S01.torrent"))
+        #expect(SourceDetector.source(opening: nzb) == .nzbFile(data: Data([7]), filename: "Movie.NZB"))
+        #expect(SourceDetector.source(opening: other) == nil)
+        #expect(SourceDetector.source(opening: directory.appending(path: "missing.torrent")) == nil)
+    }
+
     @Test func magnetLink() {
         let magnet = "magnet:?xt=urn:btih:0123456789abcdef0123456789abcdef01234567&dn=test"
         #expect(SourceDetector.detect("  \(magnet)\n") == .magnet(magnet))

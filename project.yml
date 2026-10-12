@@ -33,6 +33,21 @@ targets:
       properties:
         # Read at runtime by SharedConfiguration.keychainGroup.
         DoveKeychainGroup: $(AppIdentifierPrefix)net.smigi.dove.shared
+        # Dove opens magnet links and .torrent/.nzb files ("Open in Dove"). iOS has no default-app
+        # setting for schemes: with several magnet apps installed it picks one on its own.
+        CFBundleURLTypes:
+          - CFBundleURLName: net.smigi.dove.magnet
+            CFBundleURLSchemes: [magnet]
+        CFBundleDocumentTypes:
+          - CFBundleTypeName: BitTorrent file
+            LSHandlerRank: Alternate
+            LSItemContentTypes: [org.bittorrent.torrent]
+          - CFBundleTypeName: NZB file
+            LSHandlerRank: Alternate
+            LSItemContentTypes: [org.newzbin.nzb]
+        # Downloaded files (Documents) show in Files under On My iPhone › Dove.
+        UIFileSharingEnabled: true
+        LSSupportsOpeningDocumentsInPlace: true
         # .torrent and .nzb have no system type; declaring them lets the share extension match the files.
         UTImportedTypeDeclarations:
           - UTTypeIdentifier: org.bittorrent.torrent

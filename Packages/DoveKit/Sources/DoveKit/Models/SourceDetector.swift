@@ -48,6 +48,24 @@ public enum SourceDetector {
         return nil
     }
 
+    /// A URL handed to the app or the share extension: a `magnet:` link, a `.torrent`/`.nzb` file
+    /// (read under security-scoped access, since Files opens them in place), or a web link.
+    public static func source(opening url: URL) -> Source? {
+        if url.isFileURL { return fileSource(at: url) }
+        if url.scheme?.lowercased() == "magnet" { return .magnet(url.absoluteString) }
+        return detect(url.absoluteString)
+    }
+
+    static func fileSource(at url: URL) -> Source? {
+        let accessing = url.startAccessingSecurityScopedResource()
+        defer { if accessing { url.stopAccessingSecurityScopedResource() } }
+        let kind = url.pathExtension.lowercased()
+        guard kind == "torrent" || kind == "nzb", let data = try? Data(contentsOf: url) else { return nil }
+        return kind == "torrent"
+            ? .torrentFile(data: data, filename: url.lastPathComponent)
+            : .nzbFile(data: data, filename: url.lastPathComponent)
+    }
+
     /// 40-character hex BitTorrent v1 info hash.
     static func isInfoHash(_ text: String) -> Bool {
         text.count == 40 && text.allSatisfy(\.isHexDigit)

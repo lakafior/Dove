@@ -75,7 +75,7 @@ public struct LibraryFilter: Equatable, Sendable {
         public init(of status: LibraryItem.Status) {
             switch status {
             case .ready: self = .ready
-            case .queued, .downloading: self = .active
+            case .queued, .awaitingFileSelection, .downloading: self = .active
             case .failed: self = .failed
             }
         }

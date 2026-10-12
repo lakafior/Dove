@@ -17,7 +17,7 @@ import Foundation
 /// the release name matches RD's filter (`RealDebridNameFilter`, refused every time), or RD is pausing
 /// all adds on the account for 20 s to ~5 min. RD judges the torrent's real name, not the magnet's `dn`, so without
 /// a known blocked name the two cannot be told apart. Dove does not wait it out silently: it says so at once.
-public struct RealDebridBackend: LibraryBackend {
+public struct RealDebridBackend: LibraryBackend, FileSelecting {
     public let id: BackendID = .realDebrid
     public let supportedSources: Set<SourceKind> = [.torrent, .hoster]
 
@@ -134,6 +134,32 @@ public struct RealDebridBackend: LibraryBackend {
         return URLRequest(url: url)
     }
 
+    // MARK: - FileSelecting
+
+    public func selectableFiles(_ itemID: LibraryItem.ID) async throws -> FileSelection {
+        guard case .torrent(let id) = RealDebridItemRef(itemID) else { throw BackendError.notFound }
+        let torrent = try await info(id)
+        guard torrent.status == "waiting_files_selection" else {
+            throw BackendError.api(message: "Real-Debrid is not waiting for a file selection on this torrent.")
+        }
+        let files = torrent.files ?? []
+        let suggested = RealDebridFiles.suggested(files)
+        return FileSelection(
+            files: files.sorted { $0.id < $1.id }.map {
+                // The path shows folders such as "Extras/"; drop RD's leading slash.
+                LibraryFile(id: String($0.id), name: String($0.path.drop { $0 == "/" }), size: $0.bytes)
+            },
+            suggested: Set((suggested.isEmpty ? files : suggested).map { String($0.id) })
+        )
+    }
+
+    public func selectFiles(_ itemID: LibraryItem.ID, fileIDs: Set<LibraryFile.ID>) async throws {
+        guard case .torrent(let id) = RealDebridItemRef(itemID) else { throw BackendError.notFound }
+        guard !fileIDs.isEmpty else { throw BackendError.api(message: "Choose at least one file.") }
+        let files = fileIDs.sorted { (Int($0) ?? 0) < (Int($1) ?? 0) }.joined(separator: ",")
+        _ = try await send(request("torrents/selectFiles/\(id)", method: "POST", form: [("files", files)]))
+    }
+
     // MARK: - Helpers
 
     static let blockedNameMessage =
@@ -170,8 +196,7 @@ public struct RealDebridBackend: LibraryBackend {
     }
 
     /// Selects video files once the magnet is converted. Gives up quietly if conversion takes longer;
-    /// the item then shows as queued and the user can retry from Real-Debrid.
-    // TODO(stage-1): offer "select files" in the item view for torrents left in waiting_files_selection.
+    /// the item then shows as awaiting file selection and the user picks files in the item view.
     private func selectFilesWhenReady(_ torrentID: String) async throws {
         for attempt in 0..<selectionAttempts {
             let torrent = try await info(torrentID)

@@ -75,9 +75,7 @@ final class ShareModel {
         }
         for provider in providers where provider.hasItemConformingToTypeIdentifier(UTType.url.identifier) {
             guard let url = try? await url(from: provider) else { continue }
-            if url.isFileURL, let source = fileSource(at: url) { return source }
-            if url.scheme?.lowercased() == "magnet" { return .magnet(url.absoluteString) }
-            if let source = SourceDetector.detect(url.absoluteString) { return source }
+            if let source = SourceDetector.source(opening: url) { return source }
         }
         for provider in providers where provider.hasItemConformingToTypeIdentifier(UTType.plainText.identifier) {
             if let text = try? await provider.loadItem(forTypeIdentifier: UTType.plainText.identifier) as? String,
@@ -86,17 +84,6 @@ final class ShareModel {
             }
         }
         return nil
-    }
-
-    private static func fileSource(at url: URL) -> Source? {
-        let accessing = url.startAccessingSecurityScopedResource()
-        defer { if accessing { url.stopAccessingSecurityScopedResource() } }
-        guard let data = try? Data(contentsOf: url) else { return nil }
-        switch url.pathExtension.lowercased() {
-        case "torrent": return .torrentFile(data: data, filename: url.lastPathComponent)
-        case "nzb": return .nzbFile(data: data, filename: url.lastPathComponent)
-        default: return nil
-        }
     }
 
     private static func url(from provider: NSItemProvider) async throws -> URL? {
