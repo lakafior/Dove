@@ -10,6 +10,12 @@ struct SearchView: View {
     @State private var message: String?
     @State private var results: [MediaSummary] = []
     @State private var isSearching = false
+    @State private var typeFilter: MediaType?
+
+    private var visibleResults: [MediaSummary] {
+        guard let typeFilter else { return results }
+        return results.filter { $0.type == typeFilter }
+    }
 
     var body: some View {
         NavigationStack {
@@ -29,8 +35,21 @@ struct SearchView: View {
                         .listRowBackground(Color.clear)
                 }
 
-                ForEach(results) { item in
-                    NavigationLink(value: item) { MediaRow(item: item) }
+                if !results.isEmpty {
+                    Section {
+                        ForEach(visibleResults) { item in
+                            NavigationLink(value: item) { MediaRow(item: item) }
+                        }
+                    } header: {
+                        Picker("Type", selection: $typeFilter) {
+                            Text("All").tag(MediaType?.none)
+                            Text("Movies").tag(MediaType?.some(.movie))
+                            Text("Series").tag(MediaType?.some(.series))
+                        }
+                        .pickerStyle(.segmented)
+                        .textCase(nil)
+                        .padding(.bottom, 4)
+                    }
                 }
             }
             .navigationTitle("Dove")

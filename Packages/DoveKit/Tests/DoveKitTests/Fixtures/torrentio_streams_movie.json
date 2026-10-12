@@ -1,0 +1,37 @@
+{
+  "streams": [
+    {
+      "name": "Torrentio\n4k HDR",
+      "title": "Dune.2021.2160p.HMAX.WEB-DL.DDP5.1.Atmos.HDR.HEVC-EVO[TGx]\n👤 239 💾 20.32 GB ⚙️ ThePirateBay",
+      "infoHash": "799dbc6af33a8f32bf1406dc2ec68bbb6864affb",
+      "fileIdx": 0,
+      "behaviorHints": {
+        "bingeGroup": "torrentio|4k|WEB-DL|hevc|HDR",
+        "filename": "Dune.2021.2160p.HMAX.WEB-DL.DDP5.1.Atmos.HDR.HEVC-EVO.mkv"
+      }
+    },
+    {
+      "name": "Torrentio\n4k DV | HDR",
+      "title": "Dune.2021.REPACK.4K.HDR.DV.2160p.BDRemux Ita Eng x265-NAHOM\n👤 123 💾 73.08 GB ⚙️ ilCorSaRoNeRo\n🇬🇧 / 🇮🇹",
+      "infoHash": "78930639b1a4d37c907966d7b5a6a1c23242fec2",
+      "fileIdx": 0,
+      "behaviorHints": {
+        "bingeGroup": "torrentio|4k|BluRay REMUX|x265|DV|HDR",
+        "filename": "Dune.2021.REPACK.4K.HDR.DV.2160p.BDRemux Ita Eng x265-NAHOM.mkv"
+      }
+    },
+    {
+      "name": "Torrentio\n4k HDR",
+      "title": "Dune.2021.2160p.HMAX.WEB-DL.x265.10bit.HDR.DDP5.1.Atmos-CM\n👤 111 💾 20.32 GB ⚙️ RARBG",
+      "infoHash": "26cbf8e10436451021b87e1a54098d655e7a91e7",
+      "fileIdx": 0,
+      "behaviorHints": {
+        "bingeGroup": "torrentio|4k|WEB-DL|x265|10bit|HDR",
+        "filename": "Dune.2021.2160p.HMAX.WEB-DL.DDP5.1.Atmos.HDR.HEVC-CM.mkv"
+      }
+    }
+  ],
+  "cacheMaxAge": 3600,
+  "staleRevalidate": 14400,
+  "staleError": 604800
+}

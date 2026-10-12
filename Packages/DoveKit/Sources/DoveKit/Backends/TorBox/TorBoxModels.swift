@@ -34,6 +34,10 @@ struct TorBoxFile: Decodable {
     let size: Int64?
 }
 
+struct TorBoxCachedItem: Decodable {
+    let hash: String?
+}
+
 struct TorBoxCreateResult: Decodable {
     let torrentId: Int?
     let webdownloadId: Int?

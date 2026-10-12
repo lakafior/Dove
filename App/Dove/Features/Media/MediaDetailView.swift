@@ -77,13 +77,29 @@ struct MediaDetailView: View {
         if detail.seasons.isEmpty {
             Text("No episode list from your metadata addon.").foregroundStyle(.secondary)
         } else {
+            let currentSeason = season ?? detail.seasons.first ?? 1
+            let firstEpisode = detail.episodes(inSeason: currentSeason).first
             Section {
                 Picker("Season", selection: $season) {
                     ForEach(detail.seasons, id: \.self) { number in
                         Text(number == 0 ? "Specials" : "Season \(number)").tag(Optional(number))
                     }
                 }
-                ForEach(detail.episodes(inSeason: season ?? 1)) { episode in
+                // Packs are found by asking for the first episode and keeping releases whose folder is the season.
+                if let firstEpisode, currentSeason > 0 {
+                    NavigationLink {
+                        SourcesView(
+                            title: "\(summary.name) S\(currentSeason.twoDigits)",
+                            type: .series,
+                            id: firstEpisode.id,
+                            scope: .season(currentSeason)
+                        )
+                    } label: {
+                        Label("Whole season \(currentSeason)", systemImage: "square.stack")
+                    }
+                    .disabled(!model.addonSet.hasStreams)
+                }
+                ForEach(detail.episodes(inSeason: currentSeason)) { episode in
                     NavigationLink {
                         SourcesView(
                             title: "\(summary.name) S\(episode.season.twoDigits)E\(episode.number.twoDigits)",
@@ -95,8 +111,22 @@ struct MediaDetailView: View {
                     }
                     .disabled(!model.addonSet.hasStreams)
                 }
+            } footer: {
+                Text("\(detail.episodes(inSeason: currentSeason).count) episodes")
             }
-            // TODO(stage-2): "Whole season" — query S{n}E1, keep season packs, add without file index.
+
+            if let pilot = detail.episodes(inSeason: detail.seasons.first { $0 > 0 } ?? 1).first, detail.seasons.filter({ $0 > 0 }).count > 1 {
+                Section {
+                    NavigationLink {
+                        SourcesView(title: "\(summary.name) — all seasons", type: .series, id: pilot.id, scope: .series)
+                    } label: {
+                        Label("Whole series", systemImage: "square.stack.3d.up")
+                    }
+                    .disabled(!model.addonSet.hasStreams)
+                } footer: {
+                    Text("Full-series packs are rarer and often incomplete; check the size before adding.")
+                }
+            }
         }
     }
 }

@@ -20,6 +20,10 @@ struct OffcloudHistoryItem: Decodable {
     let server: String?
 }
 
+struct OffcloudCacheResponse: Decodable {
+    let cachedItems: [String]?
+}
+
 struct OffcloudAccountInfo: Decodable {
     let isPremium: Bool?
 }

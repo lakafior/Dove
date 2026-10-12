@@ -113,6 +113,9 @@ public struct TorBoxBackend: LibraryBackend {
 
     // MARK: - Helpers
 
+    /// Hashes per `checkcached` call; they go in the query string.
+    static let cacheCheckChunk = 100
+
     private func createTorrent(_ form: MultipartFormData) async throws -> LibraryItem.ID {
         let result = try await perform(
             request("torrents/createtorrent", method: "POST", body: form.finalized(), contentType: form.contentType),
@@ -123,7 +126,7 @@ public struct TorBoxBackend: LibraryBackend {
         throw BackendError.invalidResponse
     }
 
-    private func request(
+    fileprivate func request(
         _ path: String,
         method: String = "GET",
         query: [URLQueryItem] = [],
@@ -142,7 +145,7 @@ public struct TorBoxBackend: LibraryBackend {
     }
 
     /// Sends the request, maps HTTP errors, unwraps the envelope. Returns `data`, which may be nil on success.
-    private func perform<T: Decodable>(_ request: URLRequest, as type: T.Type) async throws -> T? {
+    fileprivate func perform<T: Decodable>(_ request: URLRequest, as type: T.Type) async throws -> T? {
         let (data, response) = try await transport.send(request)
         if let error = response.backendError, response.statusCode != 400 {
             throw error
@@ -164,4 +167,21 @@ public struct TorBoxBackend: LibraryBackend {
         decoder.keyDecodingStrategy = .convertFromSnakeCase
         return decoder
     }()
+}
+
+extension TorBoxBackend: CacheChecking {
+    /// `GET torrents/checkcached?hash=a,b&format=list` answers with the cached ones only. Adds nothing, costs nothing.
+    public func cachedHashes(_ hashes: [String]) async throws -> Set<String> {
+        var cached = Set<String>()
+        for chunk in BackendID.chunks(hashes.map { $0.lowercased() }, of: Self.cacheCheckChunk) {
+            let query = [
+                URLQueryItem(name: "hash", value: chunk.joined(separator: ",")),
+                URLQueryItem(name: "format", value: "list"),
+                URLQueryItem(name: "list_files", value: "false")
+            ]
+            let items = try await perform(request("torrents/checkcached", query: query), as: [TorBoxCachedItem].self) ?? []
+            cached.formUnion(items.compactMap { $0.hash?.lowercased() })
+        }
+        return cached
+    }
 }

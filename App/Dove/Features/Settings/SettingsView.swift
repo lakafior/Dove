@@ -33,14 +33,12 @@ struct SettingsView: View {
                     } label: {
                         LabeledContent("Stremio addons", value: "\(model.addonEntries.count)")
                     }
-                    if model.addonEntries.contains(where: \.isAIOStreams) {
-                        AIOStreamsPasswordRow()
-                    }
                 } header: {
                     Text("Search")
                 } footer: {
-                    Text("Titles, metadata and sources come from your Stremio addons. With your AIOStreams password Dove also gets info hashes and season packs, so sources can go to your library, not only play.")
+                    Text("Titles, metadata and sources come from your Stremio addons.")
                 }
+
             }
             .navigationTitle("Settings")
         }

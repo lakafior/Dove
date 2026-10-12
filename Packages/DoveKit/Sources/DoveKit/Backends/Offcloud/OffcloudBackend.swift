@@ -137,7 +137,7 @@ public struct OffcloudBackend: LibraryBackend {
         return request(path, method: "POST", body: data, contentType: "application/json")
     }
 
-    private func request(_ path: String, method: String = "GET", body: Data? = nil, contentType: String? = nil) -> URLRequest {
+    fileprivate func request(_ path: String, method: String = "GET", body: Data? = nil, contentType: String? = nil) -> URLRequest {
         var request = URLRequest(url: baseURL.appending(path: path))
         request.httpMethod = method
         request.httpBody = body
@@ -168,7 +168,7 @@ public struct OffcloudBackend: LibraryBackend {
         return data
     }
 
-    private func decode<T: Decodable>(_ type: T.Type, from request: URLRequest) async throws -> T {
+    fileprivate func decode<T: Decodable>(_ type: T.Type, from request: URLRequest) async throws -> T {
         let data = try await send(request)
         do {
             return try Self.decoder.decode(type, from: data)
@@ -182,4 +182,20 @@ public struct OffcloudBackend: LibraryBackend {
         decoder.keyDecodingStrategy = .convertFromSnakeCase
         return decoder
     }()
+}
+
+extension OffcloudBackend: CacheChecking {
+    /// `POST /cache` with `{"hashes": [...]}` answers `{"cachedItems": [...]}` — hits only. Adds nothing.
+    public func cachedHashes(_ hashes: [String]) async throws -> Set<String> {
+        var cached = Set<String>()
+        for chunk in BackendID.chunks(hashes.map { $0.lowercased() }, of: 1000) {
+            let body = try JSONSerialization.data(withJSONObject: ["hashes": chunk])
+            let response = try await decode(
+                OffcloudCacheResponse.self,
+                from: request("cache", method: "POST", body: body, contentType: "application/json")
+            )
+            cached.formUnion((response.cachedItems ?? []).map { $0.lowercased() })
+        }
+        return cached
+    }
 }

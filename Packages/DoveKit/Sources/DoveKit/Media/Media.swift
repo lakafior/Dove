@@ -182,7 +182,10 @@ public struct StreamTraits: Sendable, Hashable {
     public var languages: [String]
     public var seasons: [Int]
     public var episodes: [Int]
+    /// The torrent folder holds whole seasons (and no single episode).
     public var seasonPack: Bool
+    /// Seasons covered by the torrent folder; more than one means a multi-season or full-series pack.
+    public var folderSeasons: [Int]
 
     public init(
         resolution: String? = nil,
@@ -194,7 +197,8 @@ public struct StreamTraits: Sendable, Hashable {
         languages: [String] = [],
         seasons: [Int] = [],
         episodes: [Int] = [],
-        seasonPack: Bool = false
+        seasonPack: Bool = false,
+        folderSeasons: [Int] = []
     ) {
         self.resolution = resolution
         self.quality = quality
@@ -206,5 +210,23 @@ public struct StreamTraits: Sendable, Hashable {
         self.seasons = seasons
         self.episodes = episodes
         self.seasonPack = seasonPack
+        self.folderSeasons = folderSeasons
+    }
+
+    /// Fills fields this value lacks from another parse (e.g. the addon's traits over the file name's).
+    public func merged(with other: StreamTraits) -> StreamTraits {
+        StreamTraits(
+            resolution: resolution ?? other.resolution,
+            quality: quality ?? other.quality,
+            encode: encode ?? other.encode,
+            releaseGroup: releaseGroup ?? other.releaseGroup,
+            visualTags: visualTags.isEmpty ? other.visualTags : visualTags,
+            audioTags: audioTags.isEmpty ? other.audioTags : audioTags,
+            languages: languages.isEmpty ? other.languages : languages,
+            seasons: seasons.isEmpty ? other.seasons : seasons,
+            episodes: episodes.isEmpty ? other.episodes : episodes,
+            seasonPack: seasonPack || other.seasonPack,
+            folderSeasons: folderSeasons.isEmpty ? other.folderSeasons : folderSeasons
+        )
     }
 }

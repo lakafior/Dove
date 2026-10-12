@@ -236,7 +236,7 @@ struct StremioStream: Decodable {
             kind: kind,
             title: behaviorHints?.filename ?? text.last?.components(separatedBy: "\n").first ?? "Stream",
             label: label,
-            size: behaviorHints?.videoSize,
+            size: behaviorHints?.videoSize ?? StremioText.size(in: [title, description, name].compactMap { $0 }.joined(separator: "\n")),
             folderName: behaviorHints?.folderName,
             folderSize: behaviorHints?.folderSize,
             infoHash: infoHash,
@@ -249,6 +249,19 @@ struct StremioStream: Decodable {
 }
 
 enum StremioText {
+    /// Size written into the title by Torrentio, Comet and similar (`💾 20.32 GB`), when no `videoSize` hint is given.
+    static func size(in text: String) -> Int64? {
+        guard let match = text.firstMatch(of: /💾\s*([0-9]+(?:[.,][0-9]+)?)\s*([KMGT]i?B)/) else { return nil }
+        guard let value = Double(match.1.replacingOccurrences(of: ",", with: ".")) else { return nil }
+        let unit: Double = switch match.2.prefix(1) {
+        case "T": 1_000_000_000_000
+        case "G": 1_000_000_000
+        case "M": 1_000_000
+        default: 1_000
+        }
+        return Int64(value * unit)
+    }
+
     /// Formatters pad names with non-breaking and zero-width characters for alignment in Stremio.
     static func clean(_ text: String) -> String {
         // Filter scalars, not Characters: a zero-width joiner merges into the preceding grapheme.

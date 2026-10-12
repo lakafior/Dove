@@ -16,6 +16,22 @@ final class AppModel {
     }
 
     private static let orderKey = "debridOrder"
+    // v2: the default sort became "largest first"; older saves had "addon order" written in.
+    private static let filterKey = "sourceFilter.v2"
+    private static let variantKey = "aioStreamsVariant"
+
+    /// Source list filters. Kept between screens and launches: "PL only, DV" is a standing preference.
+    var sourceFilter = SourceFilter() {
+        didSet { UserDefaults.standard.set(try? JSONEncoder().encode(sourceFilter), forKey: Self.filterKey) }
+    }
+
+    /// AIOStreams config variant for Dove's searches (e.g. one without filters). Not a secret.
+    var aioStreamsVariant: String = "" {
+        didSet {
+            UserDefaults.standard.set(aioStreamsVariant, forKey: Self.variantKey)
+            rebuildAddonSet()
+        }
+    }
     static let debrids = BackendID.allCases.filter { !$0.isUsenet }
 
     /// Stremio addons in the user's order. Manifests load in the background (`loadAddons`).
@@ -34,6 +50,11 @@ final class AppModel {
         let stored = (UserDefaults.standard.stringArray(forKey: Self.orderKey) ?? []).compactMap(BackendID.init(rawValue:))
         // Keep the stored order, append services added in later versions.
         debridOrder = stored.filter(Self.debrids.contains) + Self.debrids.filter { !stored.contains($0) }
+        if let data = UserDefaults.standard.data(forKey: Self.filterKey),
+           let filter = try? JSONDecoder().decode(SourceFilter.self, from: data) {
+            sourceFilter = filter
+        }
+        aioStreamsVariant = UserDefaults.standard.string(forKey: Self.variantKey) ?? ""
         reloadBackends()
         addonEntries = storedAddonURLs().map { AddonEntry(url: $0) }
     }
@@ -56,6 +77,18 @@ final class AppModel {
 
     var router: BackendRouter {
         BackendRouter(backends: backends, order: debridOrder)
+    }
+
+    /// Same priority list, but services that already have the release cached go first:
+    /// adding there is instant and costs nothing.
+    func router(preferring cached: [BackendID]) -> BackendRouter {
+        let first = debridOrder.filter(cached.contains)
+        return BackendRouter(backends: backends, order: first + debridOrder.filter { !first.contains($0) })
+    }
+
+    /// Configured backends that can check cache status without adding anything (TorBox, Offcloud).
+    var cacheCheckers: [any CacheChecking] {
+        backends.compactMap { $0 as? any CacheChecking }
     }
 
     func backend(_ id: BackendID) -> (any LibraryBackend)? {
@@ -125,11 +158,47 @@ final class AppModel {
     }
 
     var aioStreamsPassword: String {
-        get { (try? keychain.get(.aioStreamsPassword)) ?? "" }
-        set {
-            try? keychain.set(newValue.trimmingCharacters(in: .whitespacesAndNewlines), for: .aioStreamsPassword)
-            rebuildAddonSet()
+        (try? keychain.get(.aioStreamsPassword)) ?? ""
+    }
+
+    /// Checks the password against the user's AIOStreams instance before keeping it. Empty removes it.
+    func saveAIOStreamsPassword(_ password: String) async throws {
+        let password = password.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !password.isEmpty {
+            guard let instance = addonEntries.lazy.compactMap({ AIOStreamsSearch.instance(from: $0.url) }).first else {
+                throw BackendError.api(message: "Add your AIOStreams addon first.")
+            }
+            try await AIOStreamsSearch(origin: instance.origin, uuid: instance.uuid, password: password).validate()
         }
+        try keychain.set(password, for: .aioStreamsPassword)
+        aioStreamsPasswordRevision += 1
+        rebuildAddonSet()
+    }
+
+    /// Bumped on every password save, so views that depend on it (the variant list) reload.
+    private(set) var aioStreamsPasswordRevision = 0
+
+    /// Variants defined in the user's AIOStreams configuration (needs the password).
+    func aioStreamsVariants() async throws -> [AIOStreamsSearch.Variant] {
+        let password = aioStreamsPassword
+        guard !password.isEmpty,
+              let instance = addonEntries.lazy.compactMap({ AIOStreamsSearch.instance(from: $0.url) }).first
+        else { return [] }
+        return try await AIOStreamsSearch(origin: instance.origin, uuid: instance.uuid, password: password).variants()
+    }
+
+    /// Adds Dove's unfiltered variant to the user's AIOStreams configuration and selects it.
+    func createUnfilteredAIOStreamsVariant() async throws {
+        let password = aioStreamsPassword
+        guard !password.isEmpty,
+              let instance = addonEntries.lazy.compactMap({ AIOStreamsSearch.instance(from: $0.url) }).first
+        else { throw BackendError.api(message: "Save your AIOStreams password first.") }
+        try await AIOStreamsSearch(origin: instance.origin, uuid: instance.uuid, password: password).addVariant(
+            id: AIOStreamsSearch.unfilteredVariantID,
+            name: "Dove (unfiltered)",
+            script: AIOStreamsSearch.unfilteredVariantScript
+        )
+        aioStreamsVariant = AIOStreamsSearch.unfilteredVariantID
     }
 
     private func rebuildAddonSet() {
@@ -137,7 +206,8 @@ final class AppModel {
         var search: AIOStreamsSearch?
         let password = aioStreamsPassword
         if !password.isEmpty, let instance = addonEntries.lazy.compactMap({ AIOStreamsSearch.instance(from: $0.url) }).first {
-            search = AIOStreamsSearch(origin: instance.origin, uuid: instance.uuid, password: password)
+            let variant = aioStreamsVariant.isEmpty ? instance.variant : aioStreamsVariant
+            search = AIOStreamsSearch(origin: instance.origin, uuid: instance.uuid, password: password, variant: variant)
         }
         addonSet = AddonSet(addons: addons, aioStreams: search)
     }

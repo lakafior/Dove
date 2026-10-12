@@ -145,7 +145,27 @@ struct AIOStreamsSearchTests {
         let instance = try #require(AIOStreamsSearch.instance(from: url))
         #expect(instance.origin.absoluteString == "https://aio.example")
         #expect(instance.uuid == "12345678-90ab-4cde-8f01-23456789abcd")
+        #expect(instance.variant == nil)
         #expect(AIOStreamsSearch.instance(from: URL(string: "https://v3-cinemeta.strem.io/manifest.json")!) == nil)
+    }
+
+    @Test func variantIsReadFromPathOrQuery() throws {
+        let path = URL(string: "https://aio.example/stremio/12345678-90ab-4cde-8f01-23456789abcd/eyJhIjoxfQ/v/dove/manifest.json")!
+        #expect(AIOStreamsSearch.instance(from: path)?.variant == "dove")
+        let query = URL(string: "https://aio.example/stremio/12345678-90ab-4cde-8f01-23456789abcd/eyJhIjoxfQ/manifest.json?v=full")!
+        #expect(AIOStreamsSearch.instance(from: query)?.variant == "full")
+    }
+
+    @Test func variantIsSentToTheSearchAPI() async throws {
+        let transport = MockTransport()
+        await transport.stub("api/v1/search", body: try Fixture.data("aiostreams_search_episode"))
+        let client = AIOStreamsSearch(origin: URL(string: "https://aio.example")!, uuid: "u", password: "p", variant: "dove", transport: transport)
+
+        _ = try await client.search(type: .movie, id: "tt1160419")
+
+        let sent = try #require(await transport.requests.last?.url)
+        let query = URLComponents(url: sent, resolvingAgainstBaseURL: false)?.queryItems ?? []
+        #expect(query.contains(URLQueryItem(name: "v", value: "dove")))
     }
 
     @Test func searchSendsBasicAuthAndQuery() async throws {
@@ -189,5 +209,41 @@ struct AIOStreamsSearchTests {
         await #expect(throws: BackendError.unauthorized) {
             try await client.search(type: .movie, id: "tt1160419")
         }
+    }
+}
+
+struct TorrentioStreamTests {
+    @Test func p2pStreamsCarryHashSizeAndTraits() async throws {
+        let transport = MockTransport()
+        await transport.stub("stream/movie/tt1160419.json", body: try Fixture.data("torrentio_streams_movie"))
+        let manifest = try JSONDecoder().decode(
+            StremioManifest.self,
+            from: Data(#"{"id":"com.stremio.torrentio.addon","name":"Torrentio","resources":["stream"],"types":["movie","series"],"idPrefixes":["tt"]}"#.utf8)
+        )
+        let addon = StremioAddon(manifestURL: URL(string: "https://torrentio.example/manifest.json")!, manifest: manifest, transport: transport)
+
+        let streams = try await addon.streams(type: .movie, id: "tt1160419")
+
+        let first = try #require(streams.first)
+        #expect(first.kind == .p2p)
+        #expect(first.infoHash == "799dbc6af33a8f32bf1406dc2ec68bbb6864affb")
+        #expect(first.fileIndex == 0)
+        #expect(first.size == 20_320_000_000)
+        #expect(first.title == "Dune.2021.2160p.HMAX.WEB-DL.DDP5.1.Atmos.HDR.HEVC-EVO.mkv")
+        #expect(first.librarySource == .magnet("magnet:?xt=urn:btih:799dbc6af33a8f32bf1406dc2ec68bbb6864affb"))
+        let group = StreamGroup.group([first])[0]
+        #expect(group.traits.resolution == "2160p")
+        #expect(group.traits.quality == "WEB-DL")
+    }
+
+    @Test func sizeIsReadFromTitleText() {
+        #expect(StremioText.size(in: "👤 239 💾 20.32 GB ⚙️ TPB") == 20_320_000_000)
+        #expect(StremioText.size(in: "💾 700 MB") == 700_000_000)
+        #expect(StremioText.size(in: "💾 1,5 TB") == 1_500_000_000_000)
+        #expect(StremioText.size(in: "no size here") == nil)
+    }
+
+    @Test func defaultSortIsLargestFirst() {
+        #expect(SourceFilter().sort == .sizeDescending)
     }
 }
