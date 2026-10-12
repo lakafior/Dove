@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<D:multistatus xmlns:D="DAV:">
+<D:response><D:href>http://localhost:8080/content/</D:href><D:propstat><D:prop><D:resourcetype><D:collection /></D:resourcetype></D:prop></D:propstat></D:response>
+<D:response><D:href>http://localhost:8080/content/Movies</D:href><D:propstat><D:prop><D:resourcetype><D:collection /></D:resourcetype></D:prop></D:propstat></D:response>
+<D:response><D:href>http://localhost:8080/content/Tv</D:href><D:propstat><D:prop><D:resourcetype><D:collection /></D:resourcetype></D:prop></D:propstat></D:response>
+</D:multistatus>

@@ -8,6 +8,11 @@ struct LibraryView: View {
     @Environment(AppModel.self) private var model
     @AppStorage("libraryMode") private var mode: Mode = .titles
     @State private var filter = LibraryFilter()
+    /// Files view: several items picked for one delete.
+    @State private var isSelecting = false
+    @State private var selection = Set<ShelfItem.ID>()
+    @State private var confirmDelete = false
+    @State private var deleting: (done: Int, total: Int)?
 
     enum Mode: String, CaseIterable {
         case titles, files
@@ -36,7 +41,11 @@ struct LibraryView: View {
                     .fixedSize()
                 }
                 ToolbarItem(placement: .primaryAction) { filterMenu }
+                if mode == .files {
+                    ToolbarItem(placement: .topBarLeading) { selectButton }
+                }
             }
+            .onChange(of: mode) { endSelecting() }
             .navigationDestination(for: TitleRoute.self) { LibraryTitleView(titleID: $0.id) }
             .navigationDestination(for: ShelfItem.self) { LibraryItemView(item: $0.item) }
             .refreshable { await library.refresh(using: model) }
@@ -90,13 +99,76 @@ struct LibraryView: View {
 
     private var filesView: some View {
         let items = filter.apply(to: library.items)
-        return List {
+        return List(selection: $selection) {
             failuresBanner
             ForEach(items) { item in
                 NavigationLink(value: item) { ShelfItemRow(item: item, showsBackend: true) }
                     .swipeActions { deleteButton(item) }
             }
         }
+        .environment(\.editMode, .constant(isSelecting ? .active : .inactive))
+        .safeAreaInset(edge: .bottom) {
+            if isSelecting { selectionBar(visible: items) }
+        }
+        .confirmationDialog(
+            "Delete \(selection.count) items?",
+            isPresented: $confirmDelete,
+            titleVisibility: .visible
+        ) {
+            Button("Delete from their services", role: .destructive) { deleteSelection() }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Each item is removed from its debrid or nzbdav, with its files. This cannot be undone.")
+        }
+    }
+
+    private var selectButton: some View {
+        Button(isSelecting ? "Done" : "Select") {
+            if isSelecting { endSelecting() } else { isSelecting = true }
+        }
+        .disabled(deleting != nil)
+    }
+
+    /// Select all of what the filters show (e.g. one service), or delete the picked ones.
+    private func selectionBar(visible items: [ShelfItem]) -> some View {
+        HStack {
+            Button(selection.count == items.count && !items.isEmpty ? "Select none" : "Select all") {
+                selection = selection.count == items.count ? [] : Set(items.map(\.id))
+            }
+            Spacer()
+            if let deleting {
+                ProgressView()
+                Text("Deleting \(deleting.done) of \(deleting.total)…").font(.footnote)
+            } else {
+                Button("Delete \(selection.count)", systemImage: "trash", role: .destructive) { confirmDelete = true }
+                    .buttonStyle(.borderedProminent)
+                    .tint(.red)
+                    .disabled(selection.isEmpty)
+            }
+        }
+        .padding(.horizontal)
+        .padding(.vertical, 10)
+        .background(.bar)
+        .disabled(deleting != nil)
+    }
+
+    /// One by one, so a failure (shown with the other failures) does not stop the rest.
+    private func deleteSelection() {
+        let picked = library.items.filter { selection.contains($0.id) }
+        deleting = (0, picked.count)
+        Task {
+            for item in picked {
+                await library.delete(item, using: model)
+                deleting?.done += 1
+            }
+            deleting = nil
+            endSelecting()
+        }
+    }
+
+    private func endSelecting() {
+        isSelecting = false
+        selection = []
     }
 
     // MARK: - Pieces

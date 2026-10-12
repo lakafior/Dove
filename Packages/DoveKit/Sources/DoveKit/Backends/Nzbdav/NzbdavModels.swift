@@ -91,18 +91,30 @@ struct LossyDouble: Decodable {
     }
 }
 
-/// `nzo:<uuid>`. The same ID covers the job in the queue and, later, in the history.
-struct NzbdavItemRef: Equatable {
-    let nzoID: String
-
-    init(nzoID: String) {
-        self.nzoID = nzoID
-    }
+/// `nzo:<uuid>` for a job (the same ID in the queue and, later, in the history), `dav:<path>` for a job folder
+/// under `/content` that has no history entry any more.
+enum NzbdavItemRef: Equatable {
+    case job(String)
+    case folder(String)
 
     init?(_ id: String) {
-        guard id.hasPrefix("nzo:"), id.count > 4 else { return nil }
-        nzoID = String(id.dropFirst(4))
+        if id.hasPrefix("nzo:"), id.count > 4 {
+            self = .job(String(id.dropFirst(4)))
+        } else if id.hasPrefix("dav:\(NzbdavBackend.contentRoot)/"), id.count > 4 + NzbdavBackend.contentRoot.count + 1 {
+            self = .folder(String(id.dropFirst(4)))
+        } else {
+            return nil
+        }
     }
 
-    var id: String { "nzo:\(nzoID)" }
+    init(nzoID: String) {
+        self = .job(nzoID)
+    }
+
+    var id: String {
+        switch self {
+        case .job(let nzoID): "nzo:\(nzoID)"
+        case .folder(let path): "dav:\(path)"
+        }
+    }
 }

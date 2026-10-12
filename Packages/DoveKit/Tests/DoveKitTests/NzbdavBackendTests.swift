@@ -44,10 +44,15 @@ struct NzbdavBackendTests {
         }
     }
 
-    @Test func itemsMergeQueueAndHistoryWithFolderDates() async throws {
+    private func stubContent(_ transport: MockTransport) async throws {
+        await transport.stub("/content", body: try Fixture.data("nzbdav_propfind_content", extension: "xml"), contentType: "text/xml")
+        await transport.stub("content/Movies", body: try Fixture.data("nzbdav_propfind_category", extension: "xml"), contentType: "text/xml")
+    }
+
+    @Test func itemsMergeQueueHistoryAndFoldersWithoutHistory() async throws {
         let (backend, transport) = makeBackend()
         try await stubLists(transport)
-        await transport.stub("content/Movies", body: try Fixture.data("nzbdav_propfind_category", extension: "xml"), contentType: "text/xml")
+        try await stubContent(transport)
 
         let items = try await backend.items()
 
@@ -56,7 +61,11 @@ struct NzbdavBackendTests {
             "nzo:11111111-1111-1111-1111-111111111111",
             "nzo:22222222-2222-2222-2222-222222222222",
             "nzo:33333333-3333-3333-3333-333333333333",
-        ])
+            "dav:/content/Movies/Orphan-Movie-2020-1080p-GRP",
+        ], "the history's folder is not listed twice; the Tv listing failed and is skipped")
+        #expect(items[4].status == .ready)
+        #expect(items[4].name == "Orphan-Movie-2020-1080p-GRP")
+        #expect(items[4].addedAt == Date(timeIntervalSince1970: 1_791_619_200))
         #expect(items[0].status == .downloading(progress: 0.42))
         #expect(items[0].size == Int64(2048 * 1_048_576))
         #expect(items[1].status == .ready)
@@ -181,8 +190,51 @@ struct NzbdavBackendTests {
     }
 
     @Test func itemRefs() {
-        #expect(NzbdavItemRef("nzo:abc")?.nzoID == "abc")
+        #expect(NzbdavItemRef("nzo:abc") == .job("abc"))
+        #expect(NzbdavItemRef("dav:/content/Tv/Show") == .folder("/content/Tv/Show"))
+        #expect(NzbdavItemRef("dav:/etc") == nil)
         #expect(NzbdavItemRef("torrent:1") == nil)
         #expect(NzbdavItemRef("nzo:") == nil)
+    }
+
+    @Test func folderItemListsItsFiles() async throws {
+        let (backend, transport) = makeBackend()
+        await transport.stub("Some-Show-S01-1080p-WEB-H264-GRP", body: try Fixture.data("nzbdav_propfind_show", extension: "xml"))
+        await transport.stub("Extras & More", body: try Fixture.data("nzbdav_propfind_extras", extension: "xml"))
+
+        let item = try await backend.item("dav:/content/Tv/Some-Show-S01-1080p-WEB-H264-GRP")
+
+        #expect(item.name == "Some-Show-S01-1080p-WEB-H264-GRP")
+        #expect(item.files.count == 2)
+        #expect(item.size == 2_000_000_300)
+        #expect(await transport.requests.allSatisfy { $0.httpMethod == "PROPFIND" }, "no API call for a folder")
+    }
+
+    @Test func folderIsDeletedOverWebDAV() async throws {
+        let (backend, transport) = makeBackend()
+        await transport.stub("Orphan Movie", status: 204, json: "")
+
+        try await backend.delete("dav:/content/Movies/Orphan Movie")
+
+        let sent = try #require(await transport.requests.last)
+        #expect(sent.httpMethod == "DELETE")
+        #expect(sent.url?.absoluteString == "https://nzb.example/content/Movies/Orphan%20Movie")
+        #expect(sent.value(forHTTPHeaderField: "Authorization")?.hasPrefix("Basic ") == true)
+    }
+
+    @Test func readOnlyNzbdavSaysWhatToChange() async {
+        let (backend, transport) = makeBackend()
+        await transport.stub("Orphan", status: 403, json: "")
+        await #expect(throws: BackendError.api(message: NzbdavBackend.readOnlyMessage)) {
+            try await backend.delete("dav:/content/Movies/Orphan")
+        }
+    }
+
+    @Test func onlyJobFoldersCanBeDeleted() async {
+        let (backend, transport) = makeBackend()
+        for id in ["dav:/content/Movies", "dav:/content/Movies/A/B", "dav:/content/../nzbs/x"] {
+            await #expect(throws: BackendError.notFound) { try await backend.delete(id) }
+        }
+        #expect(await transport.requests.isEmpty)
     }
 }

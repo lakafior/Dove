@@ -10,13 +10,16 @@ import Foundation
 ///   Errors are `{"status": false, "error": "…"}`, 401 for a wrong key.
 /// - Add: `mode=addurl` (`name` = NZB link, nzbdav fetches it) or `mode=addfile` (multipart `nzbFile`).
 ///   Without `cat` the job goes to nzbdav's manual-upload category. Answer: `nzo_ids`.
-/// - List: `mode=queue` (in progress) and `mode=history` (`Completed` / `Failed` with `fail_message`).
-///   History has no dates; the job folder's WebDAV modification time stands in.
+/// - List: `mode=queue` (in progress), `mode=history` (`Completed` / `Failed` with `fail_message`), and every job
+///   folder under `/content/{category}/`. nzbdav keeps a job's files after its history entry is cleared
+///   (without "delete files", or by another client), so the folders are the real library: a folder without a
+///   history entry is listed as its own item (`dav:` ID). History has no dates; folder modification times do.
 /// - Files: WebDAV `PROPFIND` under `/content/{category}/{job name}/`, Basic Auth. The category must match
 ///   the history's spelling (`Tv` and `TV` can both exist). `href`s carry the server's internal host.
 /// - Download: `GET` the WebDAV path with Basic Auth (ranges work). Infuse gets the same URL with the
 ///   credentials in it, since nzbdav's key-signed `/view` links need a key the SABnzbd API does not expose.
-/// - Delete: `mode=queue&name=delete` or `mode=history&name=delete&del_completed_files=1`.
+/// - Delete: `mode=queue&name=delete` or `mode=history&name=delete&del_completed_files=1`; a folder without a
+///   history entry with WebDAV `DELETE`, which nzbdav refuses (403) while "Enforce read-only" is on (its default).
 public struct NzbdavBackend: LibraryBackend {
     public let id: BackendID = .nzbdav
     public let supportedSources: Set<SourceKind> = [.nzb]
@@ -75,39 +78,84 @@ public struct NzbdavBackend: LibraryBackend {
         async let queued = queue()
         async let finished = history()
         let history = try await finished
-        let dates = await folderDates(for: history)
-        let items = try await queued.map(\.libraryItem)
-            + history.map { $0.libraryItem(addedAt: dates[$0.folderPath]) }
-        return items
+        let folders = await jobFolders()
+        let byPath = Dictionary(folders.map { (WebDAVClient.normalized($0.path), $0) }, uniquingKeysWith: { first, _ in first })
+        let inHistory = Set(history.map(\.folderPath))
+        let orphans = folders
+            .filter { !inHistory.contains(WebDAVClient.normalized($0.path)) }
+            .map { folder in
+                LibraryItem(
+                    id: NzbdavItemRef.folder(WebDAVClient.normalized(folder.path)).id,
+                    backend: .nzbdav,
+                    name: folder.name,
+                    status: .ready,
+                    addedAt: folder.modified
+                )
+            }
+        return try await queued.map(\.libraryItem)
+            + history.map { $0.libraryItem(addedAt: byPath[$0.folderPath]?.modified) }
+            + orphans
     }
 
     /// A job with its files. Queued jobs have none yet; failed ones never get any.
     public func item(_ itemID: LibraryItem.ID) async throws -> LibraryItem {
-        guard let ref = NzbdavItemRef(itemID) else { throw BackendError.notFound }
-        if let slot = try await queue().first(where: { $0.nzoId == ref.nzoID }) { return slot.libraryItem }
-        guard let slot = try await history(ids: [ref.nzoID]).first(where: { $0.nzoId == ref.nzoID }) else {
+        switch NzbdavItemRef(itemID) {
+        case .job(let nzoID):
+            if let slot = try await queue().first(where: { $0.nzoId == nzoID }) { return slot.libraryItem }
+            guard let slot = try await history(ids: [nzoID]).first(where: { $0.nzoId == nzoID }) else {
+                throw BackendError.notFound
+            }
+            guard slot.isCompleted else { return slot.libraryItem() }
+            return slot.libraryItem(files: try await files(under: slot.folderPath))
+        case .folder(let path):
+            let files = try await files(under: path)
+            return LibraryItem(
+                id: itemID,
+                backend: .nzbdav,
+                name: (path as NSString).lastPathComponent,
+                size: files.compactMap(\.size).reduce(0, +),
+                status: .ready,
+                files: files
+            )
+        case nil:
             throw BackendError.notFound
         }
-        guard slot.isCompleted else { return slot.libraryItem() }
-        let folder = slot.folderPath
-        let files = try await webDAV.files(under: folder)
-        return slot.libraryItem(files: files.map { file in
+    }
+
+    private func files(under folder: String) async throws -> [LibraryFile] {
+        try await webDAV.files(under: folder).map { file in
             LibraryFile(id: file.path, name: String(file.path.dropFirst(folder.count + 1)), size: file.size)
-        })
+        }
     }
 
     public func delete(_ itemID: LibraryItem.ID) async throws {
-        guard let ref = NzbdavItemRef(itemID) else { throw BackendError.notFound }
-        if try await queue().contains(where: { $0.nzoId == ref.nzoID }) {
-            _ = try await call("queue", [("name", "delete"), ("value", ref.nzoID)], as: NzbdavStatus.self)
-        } else {
-            _ = try await call(
-                "history",
-                [("name", "delete"), ("value", ref.nzoID), ("del_completed_files", "1")],
-                as: NzbdavStatus.self
-            )
+        switch NzbdavItemRef(itemID) {
+        case .job(let nzoID):
+            if try await queue().contains(where: { $0.nzoId == nzoID }) {
+                _ = try await call("queue", [("name", "delete"), ("value", nzoID)], as: NzbdavStatus.self)
+            } else {
+                _ = try await call(
+                    "history",
+                    [("name", "delete"), ("value", nzoID), ("del_completed_files", "1")],
+                    as: NzbdavStatus.self
+                )
+            }
+        case .folder(let path):
+            // Only a job folder (`/content/{category}/{job}`): never a category, never a way out of `/content`.
+            let parts = path.split(separator: "/")
+            guard parts.count == 3, parts[0] == "content", !parts.contains("..") else { throw BackendError.notFound }
+            do {
+                try await webDAV.delete(path)
+            } catch BackendError.http(status: 403) {
+                throw BackendError.api(message: Self.readOnlyMessage)
+            }
+        case nil:
+            throw BackendError.notFound
         }
     }
+
+    static let readOnlyMessage =
+        "nzbdav does not allow deleting over WebDAV. Turn off Settings → WebDAV → \"Enforce Read-Only\" in nzbdav, then delete again."
 
     /// File IDs are WebDAV paths, so no lookup is needed.
     public func downloadRequest(itemID: LibraryItem.ID, fileID: LibraryFile.ID) async throws -> URLRequest {
@@ -129,16 +177,18 @@ public struct NzbdavBackend: LibraryBackend {
         return try await call("history", fields, as: NzbdavHistoryResponse.self).history?.slots ?? []
     }
 
-    /// Modification times of finished job folders, one listing per category. Missing dates are fine.
-    private func folderDates(for history: [NzbdavHistorySlot]) async -> [String: Date] {
-        var dates: [String: Date] = [:]
-        for category in Set(history.filter(\.isCompleted).map(\.categoryName)) {
-            guard let entries = try? await webDAV.list("\(Self.contentRoot)/\(category)") else { continue }
-            for entry in entries where entry.isDirectory {
-                dates[WebDAVClient.normalized(entry.path)] = entry.modified
+    /// Every job folder under `/content/{category}/`: one listing for the categories, one per category.
+    /// A category that fails to list is skipped; the history still shows its jobs.
+    private func jobFolders() async -> [WebDAVEntry] {
+        guard let categories = try? await webDAV.list(Self.contentRoot) else { return [] }
+        return await withTaskGroup(of: [WebDAVEntry].self) { group in
+            for category in categories where category.isDirectory {
+                group.addTask { (try? await webDAV.list(category.path))?.filter(\.isDirectory) ?? [] }
             }
+            var folders: [WebDAVEntry] = []
+            for await batch in group { folders += batch }
+            return folders.sorted { ($0.modified ?? .distantPast) > ($1.modified ?? .distantPast) }
         }
-        return dates
     }
 
     private func query(_ mode: String, _ fields: [(String, String)]) -> [URLQueryItem] {

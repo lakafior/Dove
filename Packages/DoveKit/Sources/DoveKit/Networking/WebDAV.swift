@@ -56,6 +56,21 @@ struct WebDAVClient: Sendable {
         return WebDAVResponseParser.parse(data).filter { Self.normalized($0.path) != own }
     }
 
+    /// `DELETE` a file or folder. A refusal stays `.http(status: 403)` (the server forbids it, e.g. read-only),
+    /// apart from a wrong login (401).
+    func delete(_ path: String) async throws {
+        var request = URLRequest(url: url(for: path))
+        request.httpMethod = "DELETE"
+        request.setValue(authorization, forHTTPHeaderField: "Authorization")
+        let (_, response) = try await transport.send(request)
+        switch response.statusCode {
+        case 200..<300: return
+        case 401: throw BackendError.api(message: "WebDAV refused the user name or password.")
+        case 403: throw BackendError.http(status: 403)
+        default: throw response.backendError ?? BackendError.invalidResponse
+        }
+    }
+
     /// Every file under a directory, a few levels deep (season packs keep episodes in subfolders).
     func files(under path: String, depth: Int = 3) async throws -> [WebDAVEntry] {
         var result: [WebDAVEntry] = []
