@@ -44,7 +44,10 @@ final class AppModel {
         var addon: StremioAddon?
         var error: String?
         var id: String { url.absoluteString }
-        var isAIOStreams: Bool { AIOStreamsSearch.instance(from: url) != nil }
+        /// AIOStreams-shaped URL, and (once the manifest is in) an addon that actually serves streams.
+        var isAIOStreams: Bool {
+            AIOStreamsSearch.instance(from: url) != nil && (addon?.manifest.provides("stream") ?? true)
+        }
     }
 
     init() {
@@ -166,7 +169,7 @@ final class AppModel {
     func saveAIOStreamsPassword(_ password: String) async throws {
         let password = password.trimmingCharacters(in: .whitespacesAndNewlines)
         if !password.isEmpty {
-            guard let instance = addonEntries.lazy.compactMap({ AIOStreamsSearch.instance(from: $0.url) }).first else {
+            guard let instance = aioStreamsInstance else {
                 throw BackendError.api(message: "Add your AIOStreams addon first.")
             }
             try await AIOStreamsSearch(origin: instance.origin, uuid: instance.uuid, password: password).validate()
@@ -183,7 +186,7 @@ final class AppModel {
     func aioStreamsVariants() async throws -> [AIOStreamsSearch.Variant] {
         let password = aioStreamsPassword
         guard !password.isEmpty,
-              let instance = addonEntries.lazy.compactMap({ AIOStreamsSearch.instance(from: $0.url) }).first
+              let instance = aioStreamsInstance
         else { return [] }
         return try await AIOStreamsSearch(origin: instance.origin, uuid: instance.uuid, password: password).variants()
     }
@@ -192,7 +195,7 @@ final class AppModel {
     func createUnfilteredAIOStreamsVariant() async throws {
         let password = aioStreamsPassword
         guard !password.isEmpty,
-              let instance = addonEntries.lazy.compactMap({ AIOStreamsSearch.instance(from: $0.url) }).first
+              let instance = aioStreamsInstance
         else { throw BackendError.api(message: "Save your AIOStreams password first.") }
         try await AIOStreamsSearch(origin: instance.origin, uuid: instance.uuid, password: password).addVariant(
             id: AIOStreamsSearch.unfilteredVariantID,
@@ -202,11 +205,16 @@ final class AppModel {
         aioStreamsVariant = AIOStreamsSearch.unfilteredVariantID
     }
 
+    /// The first AIOStreams addon in the list (by URL shape and manifest).
+    private var aioStreamsInstance: (origin: URL, uuid: String, variant: String?)? {
+        addonEntries.lazy.filter(\.isAIOStreams).compactMap { AIOStreamsSearch.instance(from: $0.url) }.first
+    }
+
     private func rebuildAddonSet() {
         let addons = addonEntries.compactMap(\.addon)
         var search: AIOStreamsSearch?
         let password = aioStreamsPassword
-        if !password.isEmpty, let instance = addonEntries.lazy.compactMap({ AIOStreamsSearch.instance(from: $0.url) }).first {
+        if !password.isEmpty, let instance = aioStreamsInstance {
             let variant = aioStreamsVariant.isEmpty ? instance.variant : aioStreamsVariant
             search = AIOStreamsSearch(origin: instance.origin, uuid: instance.uuid, password: password, variant: variant)
         }

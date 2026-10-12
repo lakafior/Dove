@@ -31,8 +31,10 @@ public struct AIOStreamsSearch: Sendable {
     /// and returns its parts.
     public static func instance(from manifestURL: URL) -> (origin: URL, uuid: String, variant: String?)? {
         let parts = manifestURL.pathComponents.filter { $0 != "/" }
+        // `stremio`, uuid, config, …, `manifest.json`: the encrypted config segment is what tells AIOStreams apart
+        // from AIOMetadata and other addons that also use `/stremio/{uuid}/manifest.json`.
         guard let index = parts.firstIndex(of: "stremio"),
-              parts.count > index + 1,
+              parts.count >= index + 4,
               parts.last == "manifest.json",
               UUID(uuidString: parts[index + 1]) != nil,
               var components = URLComponents(url: manifestURL, resolvingAgainstBaseURL: false)

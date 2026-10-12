@@ -147,6 +147,8 @@ struct AIOStreamsSearchTests {
         #expect(instance.uuid == "12345678-90ab-4cde-8f01-23456789abcd")
         #expect(instance.variant == nil)
         #expect(AIOStreamsSearch.instance(from: URL(string: "https://v3-cinemeta.strem.io/manifest.json")!) == nil)
+        // AIOMetadata uses the same prefix, without the config segment.
+        #expect(AIOStreamsSearch.instance(from: URL(string: "https://aiometadata.example/stremio/12345678-90ab-4cde-8f01-23456789abcd/manifest.json")!) == nil)
     }
 
     @Test func variantIsReadFromPathOrQuery() throws {
