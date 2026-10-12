@@ -6,8 +6,10 @@ struct LibraryTitleView: View {
     @Environment(AppModel.self) private var model
     let titleID: String
     @State private var isFixingMatch = false
-    /// Full metadata (description, genres): search results often leave the description out.
+    /// Full metadata (description, genres, episodes): search results often leave the description out.
     @State private var detail: MediaDetail?
+    /// Files of packs whose service lists items without files (Real-Debrid, Offcloud), for episode counts.
+    @State private var packFiles: [ShelfItem.ID: [LibraryFile]] = [:]
 
     private var title: LibraryTitle? { model.library.title(id: titleID) }
 
@@ -20,7 +22,7 @@ struct LibraryTitleView: View {
                         .font(.footnote)
                 }
                 ForEach(title.seasons, id: \.season) { group in
-                    Section(sectionTitle(group.season, items: group.items, of: title)) {
+                    Section {
                         ForEach(group.items) { item in
                             NavigationLink(value: item) { ShelfItemRow(item: item) }
                                 .swipeActions {
@@ -28,6 +30,12 @@ struct LibraryTitleView: View {
                                         Task { try? await model.library.delete(item, using: model) }
                                     }
                                 }
+                        }
+                    } header: {
+                        Text(sectionTitle(group.season, items: group.items, of: title))
+                    } footer: {
+                        if let season = group.season, let summary = completeness(of: season, in: title) {
+                            Text(summary)
                         }
                     }
                 }
@@ -44,6 +52,7 @@ struct LibraryTitleView: View {
             guard let media = title?.media else { return }
             detail = try? await model.addonSet.detail(of: media)
         }
+        .task(id: titleID) { await loadPackFiles() }
     }
 
     private func header(_ title: LibraryTitle) -> some View {
@@ -72,6 +81,24 @@ struct LibraryTitleView: View {
                     Text("No match from your metadata addon yet.").font(.footnote).foregroundStyle(.secondary)
                 }
             }
+        }
+    }
+
+    /// "All 10 episodes" or "Missing E04, E07 · 8 of 10", once the metadata lists the season's episodes.
+    private func completeness(of season: Int, in title: LibraryTitle) -> String? {
+        guard title.type == .series, season > 0, let detail else { return nil }
+        let have = PackCompleteness.episodes(inSeason: season, items: title.items, files: packFiles)
+        return PackCompleteness.summary(have: have, aired: PackCompleteness.airedEpisodes(in: detail, season: season))
+    }
+
+    /// Packs listed without files get one detail call each: only this title's, so a handful at most.
+    private func loadPackFiles() async {
+        guard let title, title.type == .series else { return }
+        for item in title.items where item.guess.scope?.isPack == true && item.item.files.isEmpty {
+            guard let backend = model.backend(item.item.backend),
+                  let loaded = try? await backend.item(item.item.id) else { continue }
+            packFiles[item.id] = loaded.files
+            model.library.learnKind(from: loaded)
         }
     }
 

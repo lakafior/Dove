@@ -84,7 +84,7 @@ extension LibraryTitle {
     }
 
     /// 1,2,3,5 → "1–3, 5".
-    static func ranges(_ numbers: Set<Int>) -> String {
+    public static func ranges(_ numbers: Set<Int>) -> String {
         var parts: [String] = []
         var run: [Int] = []
         for number in numbers.sorted() {

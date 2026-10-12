@@ -244,8 +244,4 @@ struct TorrentioStreamTests {
         #expect(StremioText.size(in: "💾 1,5 TB") == 1_500_000_000_000)
         #expect(StremioText.size(in: "no size here") == nil)
     }
-
-    @Test func defaultSortIsLargestFirst() {
-        #expect(SourceFilter().sort == .sizeDescending)
-    }
 }

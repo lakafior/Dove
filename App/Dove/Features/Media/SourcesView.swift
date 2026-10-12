@@ -12,6 +12,9 @@ struct SourcesView: View {
     let id: String
     /// When set, only whole-season or whole-series packs are listed.
     var scope: PackScope?
+    /// What has aired, to flag packs that look incomplete: episodes of the season, or the series' seasons.
+    var airedEpisodes: Int?
+    var airedSeasons: [Int]?
 
     @State private var groups: [StreamGroup]?
     @State private var failures: [String] = []
@@ -26,8 +29,14 @@ struct SourcesView: View {
         var isError: Bool
     }
 
+    /// The user's configured debrids, for "Recommended" order and Real-Debrid warnings.
+    private var ranking: SourceRanking {
+        let configured = model.backends.map(\.id)
+        return SourceRanking(debrids: model.debridOrder.filter(configured.contains) + configured.filter { !model.debridOrder.contains($0) })
+    }
+
     private var visible: [StreamGroup] {
-        model.sourceFilter.apply(to: groups ?? [])
+        model.sourceFilter.apply(to: groups ?? [], ranking: ranking)
     }
 
     var body: some View {
@@ -68,6 +77,8 @@ struct SourcesView: View {
                         scope: scope,
                         isBusy: busy.contains(group.id),
                         downloadOnly: model.downloadOnly,
+                        warning: [ranking.realDebridWarning(for: group), completenessWarning(for: group)]
+                            .compactMap { $0 }.joined(separator: " · ").nilIfEmpty,
                         onPlay: group.playURL.map { url in { openInInfuse(url) } },
                         onAdd: group.librarySource.map { source in { add(source, of: group, only: nil) } }
                     )
@@ -135,6 +146,14 @@ struct SourcesView: View {
         .toggleStyle(.button)
         .labelStyle(.iconOnly)
         .accessibilityHint("Adds download the file to this iPhone, then remove it from the service.")
+    }
+
+    private func completenessWarning(for group: StreamGroup) -> String? {
+        switch scope {
+        case .season: airedEpisodes.flatMap { PackCompleteness.seasonPackWarning(for: group, aired: $0) }
+        case .series: airedSeasons.flatMap { PackCompleteness.seriesPackWarning(for: group, airedSeasons: $0) }
+        case nil: nil
+        }
     }
 
     /// Which files a download-only add fetches: the episode on screen, every video of a pack, or the movie.
@@ -221,6 +240,8 @@ private struct SourceRow: View {
     let scope: PackScope?
     let isBusy: Bool
     let downloadOnly: Bool
+    /// Real-Debrid refusing the name, a pack that looks incomplete.
+    let warning: String?
     let onPlay: (() -> Void)?
     let onAdd: (() -> Void)?
 
@@ -239,8 +260,9 @@ private struct SourceRow: View {
                 }
                 .font(.caption)
                 .foregroundStyle(.secondary)
-                if !group.appleTVWarnings.isEmpty {
-                    Label(group.appleTVWarnings.joined(separator: " · "), systemImage: "exclamationmark.triangle")
+                let warnings = group.appleTVWarnings + [warning].compactMap { $0 }
+                if !warnings.isEmpty {
+                    Label(warnings.joined(separator: " · "), systemImage: "exclamationmark.triangle")
                         .font(.caption2)
                         .foregroundStyle(.orange)
                 }
@@ -400,4 +422,8 @@ struct FlowLayout: Layout {
         }
         return rows.filter { !$0.indices.isEmpty }
     }
+}
+
+private extension String {
+    var nilIfEmpty: String? { isEmpty ? nil : self }
 }

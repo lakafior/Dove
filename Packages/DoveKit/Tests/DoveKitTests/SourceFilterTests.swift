@@ -34,6 +34,7 @@ struct SourceFilterTests {
 
     @Test func sdrMeansNoHDRTags() {
         var filter = SourceFilter()
+        filter.sort = .sizeDescending
         filter.toggle("SDR", in: .video)
         #expect(filter.apply(to: groups).map(\.id) == ["b", "c", "d"])
         filter = SourceFilter()

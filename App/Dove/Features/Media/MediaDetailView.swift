@@ -92,7 +92,8 @@ struct MediaDetailView: View {
                             title: "\(summary.name) S\(currentSeason.twoDigits)",
                             type: .series,
                             id: firstEpisode.id,
-                            scope: .season(currentSeason)
+                            scope: .season(currentSeason),
+                            airedEpisodes: PackCompleteness.airedEpisodes(in: detail, season: currentSeason).count
                         )
                     } label: {
                         Label("Whole season \(currentSeason)", systemImage: "square.stack")
@@ -118,7 +119,13 @@ struct MediaDetailView: View {
             if let pilot = detail.episodes(inSeason: detail.seasons.first { $0 > 0 } ?? 1).first, detail.seasons.filter({ $0 > 0 }).count > 1 {
                 Section {
                     NavigationLink {
-                        SourcesView(title: "\(summary.name) — all seasons", type: .series, id: pilot.id, scope: .series)
+                        SourcesView(
+                            title: "\(summary.name) — all seasons",
+                            type: .series,
+                            id: pilot.id,
+                            scope: .series,
+                            airedSeasons: PackCompleteness.airedSeasons(in: detail)
+                        )
                     } label: {
                         Label("Whole series", systemImage: "square.stack.3d.up")
                     }

@@ -20,6 +20,8 @@ public struct SourceFilter: Codable, Equatable, Sendable {
     }
 
     public enum Sort: String, Codable, CaseIterable, Sendable {
+        /// `SourceRanking`: usable, Apple TV friendly, cached, then quality.
+        case recommended
         /// As the addons ranked them (AIOStreams applies your sorting).
         case addon
         case sizeDescending
@@ -27,6 +29,7 @@ public struct SourceFilter: Codable, Equatable, Sendable {
 
         public var title: String {
             switch self {
+            case .recommended: "Recommended"
             case .addon: "Addon order"
             case .sizeDescending: "Largest first"
             case .sizeAscending: "Smallest first"
@@ -37,7 +40,7 @@ public struct SourceFilter: Codable, Equatable, Sendable {
     public var selected: [Dimension: Set<String>] = [:]
     /// Hide releases that play badly through Infuse on Apple TV (AV1, TrueHD Atmos).
     public var appleTVFriendly = false
-    public var sort: Sort = .sizeDescending
+    public var sort: Sort = .recommended
 
     public init() {}
 
@@ -74,9 +77,11 @@ public struct SourceFilter: Codable, Equatable, Sendable {
         return true
     }
 
-    public func apply(to groups: [StreamGroup]) -> [StreamGroup] {
+    /// - Parameter ranking: the user's services, for `.recommended`.
+    public func apply(to groups: [StreamGroup], ranking: SourceRanking = SourceRanking()) -> [StreamGroup] {
         let kept = groups.filter(matches)
         switch sort {
+        case .recommended: return ranking.sorted(kept)
         case .addon: return kept
         case .sizeDescending: return kept.sorted { ($0.size ?? 0) > ($1.size ?? 0) }
         case .sizeAscending: return kept.sorted { ($0.size ?? .max) < ($1.size ?? .max) }
@@ -139,6 +144,7 @@ public struct SourceFilter: Codable, Equatable, Sendable {
         let raw = try c.decodeIfPresent([String: Set<String>].self, forKey: .selected) ?? [:]
         selected = Dictionary(uniqueKeysWithValues: raw.compactMap { key, value in Dimension(rawValue: key).map { ($0, value) } })
         appleTVFriendly = try c.decodeIfPresent(Bool.self, forKey: .appleTVFriendly) ?? false
+        // Saves from before sorting existed meant largest first; new installs start on `.recommended`.
         sort = try c.decodeIfPresent(Sort.self, forKey: .sort) ?? .sizeDescending
     }
 
