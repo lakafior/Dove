@@ -228,7 +228,10 @@ struct LibraryItemView: View {
     @State private var message: String?
     @State private var isChoosingFiles = false
 
-    private var files: [LibraryFile] { (detail ?? item).files }
+    /// In name order, so episodes read E01, E02… (services list them in their own order).
+    private var files: [LibraryFile] {
+        (detail ?? item).files.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+    }
 
     /// Set when the service waits for the user to pick files (Real-Debrid).
     private var fileSelector: (any FileSelecting)? {
@@ -257,21 +260,22 @@ struct LibraryItemView: View {
             }
             Section("Files") {
                 ForEach(files) { file in
-                    HStack {
-                        VStack(alignment: .leading) {
-                            Text(file.name).font(.subheadline)
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text(file.name).font(.subheadline)
+                        HStack(spacing: 10) {
                             if let size = file.size {
                                 Text(size.formatted(.byteCount(style: .file))).font(.caption).foregroundStyle(.secondary)
                             }
+                            Spacer()
+                            Button { copyLink(file) } label: { Image(systemName: "link") }
+                                .accessibilityLabel("Copy link")
+                            downloadButton(file)
+                            Button { play(file) } label: { Image(systemName: "play.fill") }
+                                .accessibilityLabel("Play in Infuse")
                         }
-                        Spacer()
-                        Button {
-                            play(file)
-                        } label: {
-                            Image(systemName: "play.fill")
-                        }
+                        // Bordered buttons keep their own tap areas inside a list row.
                         .buttonStyle(.bordered)
-                        .accessibilityLabel("Play in Infuse")
+                        .controlSize(.small)
                     }
                     .contextMenu {
                         Button("Play in Infuse", systemImage: "play") { play(file) }
@@ -325,6 +329,29 @@ struct LibraryItemView: View {
         }
     }
 
+    /// Shows where the file stands on this device: download, progress, or done.
+    @ViewBuilder
+    private func downloadButton(_ file: LibraryFile) -> some View {
+        let record = model.downloads.records.first {
+            $0.isSameFile(backend: item.backend, itemID: item.id, fileID: file.id)
+        }
+        switch record?.state {
+        case .downloading:
+            Button {} label: {
+                ProgressRing(progress: record?.progress ?? 0)
+            }
+            .disabled(true)
+            .accessibilityLabel("Downloading")
+        case .finished:
+            Button {} label: { Image(systemName: "checkmark") }
+                .disabled(true)
+                .accessibilityLabel("Downloaded")
+        default:
+            Button { download(file) } label: { Image(systemName: "arrow.down") }
+                .accessibilityLabel("Download to phone")
+        }
+    }
+
     private func download(_ file: LibraryFile) {
         Task {
             do {
@@ -355,5 +382,21 @@ extension LibraryItem.Status {
         case .ready: "Ready"
         case .failed(let reason): "Failed: \(reason)"
         }
+    }
+}
+
+/// Small determinate ring; sized like an SF Symbol in a small button.
+private struct ProgressRing: View {
+    let progress: Double
+
+    var body: some View {
+        ZStack {
+            Circle().stroke(.quaternary, lineWidth: 2)
+            Circle()
+                .trim(from: 0, to: progress)
+                .stroke(.tint, style: StrokeStyle(lineWidth: 2, lineCap: .round))
+                .rotationEffect(.degrees(-90))
+        }
+        .frame(width: 13, height: 13)
     }
 }
