@@ -31,6 +31,12 @@ public struct AddonSet: Sendable {
         return try await interleave(movies, series)
     }
 
+    /// One type only, e.g. to match a library item whose release name says it is a series.
+    public func search(_ query: String, type: MediaType) async throws -> [MediaSummary] {
+        guard let addon = searchAddon else { return [] }
+        return try await addon.search(query, type: type)
+    }
+
     public func detail(of item: MediaSummary) async throws -> MediaDetail {
         for addon in addons where addon.manifest.accepts("meta", type: item.type, id: item.id) {
             if let detail = try? await addon.meta(type: item.type, id: item.id) { return detail }

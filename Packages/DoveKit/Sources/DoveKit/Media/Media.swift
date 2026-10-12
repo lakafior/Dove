@@ -7,7 +7,7 @@ public enum MediaType: String, Sendable, Codable, CaseIterable, Hashable {
 }
 
 /// One search result or catalog entry.
-public struct MediaSummary: Identifiable, Sendable, Hashable {
+public struct MediaSummary: Identifiable, Sendable, Hashable, Codable {
     /// Addon-scoped ID: `tt1160419`, `tmdb:693134`, `kitsu:1`…
     public let id: String
     public let type: MediaType

@@ -157,11 +157,8 @@ struct SourcesView: View {
         isCheckingCache = false
     }
 
-    /// Infuse plays any URL handed over with its x-callback scheme; debrid links resolve on the first request.
     private func openInInfuse(_ url: URL) {
-        var components = URLComponents(string: "infuse://x-callback-url/play")!
-        components.queryItems = [URLQueryItem(name: "url", value: url.absoluteString)]
-        if let infuse = components.url { openURL(infuse) }
+        if let infuse = Infuse.playURL(for: url) { openURL(infuse) }
     }
 
     /// Automatic: services that have it cached first, then the user's priority. Or one service only.

@@ -7,6 +7,7 @@ import Observation
 @Observable
 final class AppModel {
     let keychain = KeychainStore()
+    let library = LibraryModel()
     private(set) var backends: [any LibraryBackend] = []
 
     /// Debrid priority, highest first. "Automatic" adds try them in this order and fall through on any error.

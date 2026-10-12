@@ -26,7 +26,7 @@ Source (what)            Backend (where)                  Playback (how)
 
 The source type picks the backend family automatically; within it, the user orders their debrids and Dove falls through to the next one when an add fails.
 
-App tabs: **Search** (smart field + title search) · **Library** (Debrid | Usenet) · **Downloads** · **Settings**.
+App tabs: **Search** (smart field + title search) · **Library** (all services; titles with posters or raw files) · **Downloads** · **Settings**.
 
 ## Project layout
 
