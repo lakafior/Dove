@@ -99,7 +99,7 @@ struct AIOStreamsValidationTests {
         await transport.stub("api/v1/user", json: #"{"success":true,"data":{"userData":{"uuid":"u","services":[{"id":"torbox","credentials":{"apiKey":"enc:abc"}}],"variants":[{"id":"phone","enabled":true,"script":"set resultLimits.global = 10"}],"futureField":{"x":1}},"encryptedPassword":"e"}}"#)
         await transport.stub("api/v1/user", json: #"{"success":true,"detail":"User updated successfully","data":{"uuid":"u"}}"#)
 
-        try await client(transport).addVariant(id: "dove", name: "Dove", script: AIOStreamsSearch.unfilteredVariantScript)
+        try await client(transport).saveDoveVariant()
 
         let requests = await transport.requests
         #expect(requests.count == 2)
@@ -115,13 +115,48 @@ struct AIOStreamsValidationTests {
         #expect((variants.last?["script"] as? String)?.contains("clear excludedStreamExpressions") == true)
     }
 
-    @Test func addVariantDoesNothingWhenItExists() async throws {
+    @Test func existingDoveVariantIsRewrittenNotDuplicated() async throws {
         let transport = MockTransport()
-        await transport.stub("api/v1/user", json: #"{"success":true,"data":{"userData":{"variants":[{"id":"dove","script":""}]}}}"#)
+        await transport.stub("api/v1/user", json: #"{"success":true,"data":{"userData":{"variants":[{"id":"dove","name":"Mine","enabled":false,"script":"old"},{"id":"phone","script":"keep"}]}}}"#)
+        await transport.stub("api/v1/user", json: #"{"success":true,"data":{}}"#)
 
-        try await client(transport).addVariant(id: "dove", name: "Dove", script: "")
+        try await client(transport).saveDoveVariant()
 
-        #expect(await transport.requests.count == 1)
+        let put = try #require(await transport.requests.last)
+        let body = try #require(try JSONSerialization.jsonObject(with: put.httpBody ?? Data()) as? [String: Any])
+        let variants = try #require((body["config"] as? [String: Any])?["variants"] as? [[String: Any]])
+        #expect(variants.count == 2)
+        #expect(variants[0]["name"] as? String == "Mine", "the user's name stays")
+        #expect(variants[0]["enabled"] as? Bool == true)
+        #expect((variants[0]["script"] as? String)?.contains("excludedStreamTypes") == true)
+        #expect(variants[1]["script"] as? String == "keep")
+    }
+
+    @Test func doveScriptTurnsOffUsenetServicesAndUsenetOrHTTPAddons() {
+        let presets: [[String: Any]] = [
+            ["type": "usenet-streamer", "instanceId": "a1", "options": ["name": "Usenet Streamer"]],
+            ["type": "custom", "instanceId": "b2", "options": ["name": "My NZB thing", "manifestUrl": "https://x.example/manifest.json"]],
+            ["type": "custom", "instanceId": "c3", "options": ["name": "Something", "manifestUrl": "https://usenetstreamer.example/t/manifest.json"]],
+            ["type": "custom", "instanceId": "d4", "options": ["name": "Torrentio mirror", "manifestUrl": "https://t.example/manifest.json"]],
+            ["type": "custom", "instanceId": "e\"5", "options": ["name": "NZB with a quote"]],
+            ["type": "torrentio", "instanceId": "f6"],
+        ]
+        let lines = AIOStreamsSearch.doveVariantScript(presets: presets).split(separator: "\n").map(String.init)
+
+        #expect(lines.contains("disable services[id=nzbdav]"))
+        #expect(lines.contains("disable services[id=stremio_nntp]"))
+        #expect(lines.contains("disable presets[type=usenet-streamer]"))
+        #expect(lines.contains("disable presets[type=easynewsPlus]"))
+        #expect(lines.contains("disable presets[type=hdhub]"))
+        #expect(lines.contains("remove presets[*].options.services"))
+        #expect(lines.contains("remove presets[*].options.httpProviders"))
+        #expect(lines.filter { $0.hasPrefix("disable presets[instanceId=") } == [
+            #"disable presets[instanceId="b2"]"#,
+            #"disable presets[instanceId="c3"]"#,
+        ], "custom addons by name or manifest; a quote in an id would break the script")
+        #expect(lines.contains(#"set excludedStreamTypes = ["usenet", "stremio-usenet", "http", "live", "youtube", "external"]"#))
+        #expect(!lines.contains { $0.contains("p2p") }, "bare info hashes are still torrents Dove can add")
+        #expect(!lines.contains { $0.contains("torrentio") })
     }
 
     @Test func refusedSaveSurfacesTheServerMessage() async {
@@ -129,7 +164,7 @@ struct AIOStreamsValidationTests {
         await transport.stub("api/v1/user", json: #"{"success":true,"data":{"userData":{}}}"#)
         await transport.stub("api/v1/user", status: 400, json: #"{"success":false,"error":{"code":"USER_INVALID_CONFIG","message":"Config variant \"dove\" line 3: bad"}}"#)
         do {
-            try await client(transport).addVariant(id: "dove", name: "Dove", script: "x")
+            try await client(transport).saveDoveVariant()
             Issue.record("expected an error")
         } catch {
             #expect(error.localizedDescription.contains("line 3"))

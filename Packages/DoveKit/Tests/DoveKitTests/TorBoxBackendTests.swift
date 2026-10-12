@@ -117,4 +117,53 @@ struct TorBoxBackendTests {
         #expect(TorBoxItemRef("queued:4") == .queued(4))
         #expect(TorBoxItemRef("garbage") == nil)
     }
+
+    // MARK: - Usenet
+
+    @Test func usenetIsOffByDefault() async {
+        let (backend, transport) = makeBackend()
+        #expect(!backend.supportedSources.contains(.nzb))
+        await #expect(throws: BackendError.unsupportedSource(.nzb)) {
+            try await backend.add(.nzbURL(URL(string: "https://indexer.example/get/1")!))
+        }
+        #expect(await transport.requests.isEmpty)
+    }
+
+    @Test func usenetAddsListsDownloadsAndDeletes() async throws {
+        let transport = MockTransport()
+        let backend = TorBoxBackend(apiKey: "test-key", usenet: true, transport: transport)
+        #expect(backend.supportedSources.contains(.nzb))
+        await transport.stub("usenet/createusenetdownload", json: #"{"success":true,"data":{"usenetdownload_id":"77","hash":"h","auth_id":"a"}}"#)
+        await transport.stub("torrents/mylist", json: #"{"success":true,"data":[]}"#)
+        await transport.stub("webdl/mylist", json: #"{"success":true,"data":[]}"#)
+        await transport.stub("usenet/mylist", json: """
+            {"success":true,"data":[{"id":77,"name":"Show.S01E01.1080p","size":100,"download_state":"completed",
+            "download_finished":true,"download_present":true,"progress":1,"created_at":"2026-10-12T10:00:00Z",
+            "files":[{"id":0,"name":"Show.S01E01.1080p/Show.S01E01.1080p.mkv","short_name":"Show.S01E01.1080p.mkv","size":100}]}]}
+            """)
+        await transport.stub("usenet/requestdl", json: #"{"success":true,"data":"https://cdn.example/dl/abc"}"#)
+        await transport.stub("usenet/controlusenetdownload", json: #"{"success":true,"data":null}"#)
+
+        let id = try await backend.add(.nzbURL(URL(string: "https://indexer.example/get/1")!))
+        #expect(id == "usenet:77")
+        let create = try #require(await transport.requests.last)
+        #expect(String(decoding: create.httpBody ?? Data(), as: UTF8.self).contains("https://indexer.example/get/1"))
+
+        let items = try await backend.items()
+        #expect(items.map(\.id) == ["usenet:77"])
+        #expect(items[0].status == .ready)
+
+        let request = try await backend.downloadRequest(itemID: "usenet:77", fileID: "0")
+        #expect(request.url?.absoluteString == "https://cdn.example/dl/abc")
+        let requestdl = try #require(await transport.requests.last?.url)
+        let query = URLComponents(url: requestdl, resolvingAgainstBaseURL: false)?.queryItems ?? []
+        #expect(query.contains(URLQueryItem(name: "usenet_id", value: "77")))
+        #expect(query.contains(URLQueryItem(name: "token", value: "test-key")))
+
+        try await backend.delete("usenet:77")
+        let delete = try #require(await transport.requests.last)
+        let body = try JSONSerialization.jsonObject(with: delete.httpBody ?? Data()) as? [String: Any]
+        #expect(body?["usenet_id"] as? Int == 77)
+        #expect(body?["operation"] as? String == "delete")
+    }
 }

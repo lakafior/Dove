@@ -87,9 +87,14 @@ final class LibraryModel {
         }
     }
 
-    func delete(_ item: ShelfItem, using app: AppModel) async throws {
+    /// A failure stays on screen with the other load failures, so an item never just reappears.
+    func delete(_ item: ShelfItem, using app: AppModel) async {
         guard let backend = app.backend(item.item.backend) else { return }
-        try await backend.delete(item.item.id)
-        items.removeAll { $0.id == item.id }
+        do {
+            try await backend.delete(item.item.id)
+            items.removeAll { $0.id == item.id }
+        } catch {
+            failures.append("Could not delete \(item.item.name) from \(item.item.backend.displayName): \(error.localizedDescription)")
+        }
     }
 }

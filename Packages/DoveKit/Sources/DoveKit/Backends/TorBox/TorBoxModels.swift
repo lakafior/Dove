@@ -43,7 +43,25 @@ struct TorBoxCreateResult: Decodable {
     let webdownloadId: Int?
     /// Set instead of the ID above when the account has no free slot and TorBox queues the request.
     let queuedId: Int?
+    /// `usenet/createusenetdownload`; the SDK types it as a string, so both are accepted.
+    let usenetdownloadId: LossyInt?
     let hash: String?
+}
+
+/// An ID TorBox may send as a number or as a string.
+struct LossyInt: Decodable {
+    let value: Int
+
+    init(from decoder: any Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        if let number = try? container.decode(Int.self) {
+            value = number
+        } else if let text = try? container.decode(String.self), let number = Int(text) {
+            value = number
+        } else {
+            throw DecodingError.dataCorruptedError(in: container, debugDescription: "Not an ID")
+        }
+    }
 }
 
 /// Library item IDs are prefixed so one list can hold torrents and web downloads.
@@ -52,6 +70,8 @@ enum TorBoxItemRef: Equatable {
     case webDownload(Int)
     /// Waiting for a free slot. Not listed by `mylist`; TorBox moves it to torrents or web downloads later.
     case queued(Int)
+    /// An NZB job (`usenet/…`), with a Usenet plan.
+    case usenet(Int)
 
     init?(_ id: String) {
         let parts = id.split(separator: ":", maxSplits: 1)
@@ -60,6 +80,7 @@ enum TorBoxItemRef: Equatable {
         case "torrent": self = .torrent(number)
         case "webdl": self = .webDownload(number)
         case "queued": self = .queued(number)
+        case "usenet": self = .usenet(number)
         default: return nil
         }
     }
@@ -69,6 +90,7 @@ enum TorBoxItemRef: Equatable {
         case .torrent(let n): "torrent:\(n)"
         case .webDownload(let n): "webdl:\(n)"
         case .queued(let n): "queued:\(n)"
+        case .usenet(let n): "usenet:\(n)"
         }
     }
 }

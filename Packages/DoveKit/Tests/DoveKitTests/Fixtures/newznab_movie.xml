@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom" xmlns:newznab="http://www.newznab.com/DTD/2010/feeds/attributes/">
+<channel>
+  <title>Example Indexer</title>
+  <newznab:response offset="0" total="2"/>
+  <item>
+    <title>Some.Movie.2023.2160p.UHD.BluRay.REMUX.DV.HEVC-GRP</title>
+    <guid isPermaLink="true">https://indexer.example/details/aaa</guid>
+    <link>https://indexer.example/api?t=get&amp;id=aaa&amp;apikey=KEY</link>
+    <pubDate>Mon, 12 Oct 2026 10:00:00 +0000</pubDate>
+    <enclosure url="https://indexer.example/api?t=get&amp;id=aaa&amp;apikey=KEY" length="60000000000" type="application/x-nzb"/>
+    <newznab:attr name="category" value="2045"/>
+    <newznab:attr name="size" value="61000000000"/>
+    <newznab:attr name="grabs" value="12"/>
+  </item>
+  <item>
+    <title>Some.Movie.2023.1080p.WEB-DL.DDP5.1.H.264-OTHER</title>
+    <guid isPermaLink="false">bbb</guid>
+    <link>https://indexer.example/api?t=get&amp;id=bbb&amp;apikey=KEY</link>
+    <enclosure url="https://indexer.example/api?t=get&amp;id=bbb&amp;apikey=KEY" length="8000000000" type="application/x-nzb"/>
+  </item>
+</channel>
+</rss>

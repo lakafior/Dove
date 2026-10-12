@@ -196,12 +196,15 @@ struct AIOStreamsVariantSection: View {
             }
             .disabled(!hasPassword)
 
-            if hasPassword, loadError == nil, !hasDoveVariant {
+            if hasPassword, loadError == nil {
                 Button {
                     confirmCreate = true
                 } label: {
                     HStack {
-                        Label("Create an unfiltered variant for Dove", systemImage: "wand.and.stars")
+                        Label(
+                            hasDoveVariant ? "Update Dove's variant" : "Create a variant for Dove",
+                            systemImage: "wand.and.stars"
+                        )
                         if isCreating {
                             Spacer()
                             ProgressView()
@@ -219,14 +222,18 @@ struct AIOStreamsVariantSection: View {
         } header: {
             Text("Variant")
         } footer: {
-            Text("Your Stremio filters also apply to Dove. A variant lifts them for Dove's searches only; Stremio keeps your configuration as it is.")
+            Text("Your Stremio filters also apply to Dove. Dove's variant lifts them and leaves out Usenet and HTTP addons (Dove searches Usenet with its own indexers), for Dove's searches only; Stremio keeps your configuration as it is. Update it after you add or remove addons.")
         }
         .task(id: model.aioStreamsPasswordRevision) { await load() }
-        .confirmationDialog("Add a variant to AIOStreams?", isPresented: $confirmCreate, titleVisibility: .visible) {
-            Button("Add \"\(AIOStreamsSearch.unfilteredVariantID)\" variant") { create() }
+        .confirmationDialog(
+            hasDoveVariant ? "Update Dove's variant in AIOStreams?" : "Add a variant to AIOStreams?",
+            isPresented: $confirmCreate,
+            titleVisibility: .visible
+        ) {
+            Button(hasDoveVariant ? "Update" : "Add \"\(AIOStreamsSearch.unfilteredVariantID)\" variant") { create() }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("Dove adds a variant named \"\(AIOStreamsSearch.unfilteredVariantID)\" to your AIOStreams configuration. It lifts all filters and result limits, only for Dove's searches. You can edit or delete it in AIOStreams (Miscellaneous → Variants).")
+            Text("The \"\(AIOStreamsSearch.unfilteredVariantID)\" variant lifts all filters and result limits and turns off addons that only bring Usenet or HTTP streams, only for Dove's searches. Your base configuration and Stremio stay as they are. You can edit or delete it in AIOStreams (Miscellaneous → Variants).")
         }
     }
 

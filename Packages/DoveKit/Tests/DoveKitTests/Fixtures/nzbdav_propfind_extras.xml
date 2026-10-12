@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<d:multistatus xmlns:d="DAV:">
+<d:response><d:href>/content/Tv/Some-Show-S01-1080p-WEB-H264-GRP/Extras%20%26%20More/</d:href><d:propstat><d:prop><d:resourcetype><d:collection/></d:resourcetype></d:prop></d:propstat></d:response>
+<d:response><d:href>/content/Tv/Some-Show-S01-1080p-WEB-H264-GRP/Extras%20%26%20More/Behind%20the%20Scenes%20%231.mkv</d:href><d:propstat><d:prop><d:getcontentlength>300</d:getcontentlength><d:resourcetype/></d:prop></d:propstat></d:response>
+</d:multistatus>

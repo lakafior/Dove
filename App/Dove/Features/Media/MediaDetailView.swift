@@ -24,7 +24,7 @@ struct MediaDetailView: View {
             if item.type == .movie {
                 Section {
                     NavigationLink("Sources") {
-                        SourcesView(title: summary.name, type: .movie, id: summary.id)
+                        SourcesView(title: summary.name, type: .movie, id: summary.id, searchTitle: summary.name)
                     }
                     .disabled(!model.addonSet.hasStreams)
                 } footer: {
@@ -93,7 +93,8 @@ struct MediaDetailView: View {
                             type: .series,
                             id: firstEpisode.id,
                             scope: .season(currentSeason),
-                            airedEpisodes: PackCompleteness.airedEpisodes(in: detail, season: currentSeason).count
+                            airedEpisodes: PackCompleteness.airedEpisodes(in: detail, season: currentSeason).count,
+                            searchTitle: summary.name
                         )
                     } label: {
                         Label("Whole season \(currentSeason)", systemImage: "square.stack")
@@ -105,7 +106,8 @@ struct MediaDetailView: View {
                         SourcesView(
                             title: "\(summary.name) S\(episode.season.twoDigits)E\(episode.number.twoDigits)",
                             type: .series,
-                            id: episode.id
+                            id: episode.id,
+                            searchTitle: summary.name
                         )
                     } label: {
                         EpisodeRow(episode: episode)
@@ -124,7 +126,8 @@ struct MediaDetailView: View {
                             type: .series,
                             id: pilot.id,
                             scope: .series,
-                            airedSeasons: PackCompleteness.airedSeasons(in: detail)
+                            airedSeasons: PackCompleteness.airedSeasons(in: detail),
+                            searchTitle: summary.name
                         )
                     } label: {
                         Label("Whole series", systemImage: "square.stack.3d.up")

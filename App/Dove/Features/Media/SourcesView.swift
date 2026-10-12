@@ -15,6 +15,8 @@ struct SourcesView: View {
     /// What has aired, to flag packs that look incomplete: episodes of the season, or the series' seasons.
     var airedEpisodes: Int?
     var airedSeasons: [Int]?
+    /// The plain title, for indexers that cannot search by IMDb ID.
+    var searchTitle: String?
 
     @State private var groups: [StreamGroup]?
     @State private var failures: [String] = []
@@ -23,6 +25,8 @@ struct SourcesView: View {
     @State private var status: Status?
     @State private var busy: Set<String> = []
     @State private var isCheckingCache = false
+    /// nzbdav jobs added by Play, so tapping it again reuses the job.
+    @State private var usenetJobs: [StreamGroup.ID: LibraryItem.ID] = [:]
 
     struct Status: Equatable {
         var text: String
@@ -79,7 +83,7 @@ struct SourcesView: View {
                         downloadOnly: model.downloadOnly,
                         warning: [ranking.realDebridWarning(for: group), completenessWarning(for: group)]
                             .compactMap { $0 }.joined(separator: " · ").nilIfEmpty,
-                        onPlay: group.playURL.map { url in { openInInfuse(url) } },
+                        onPlay: playAction(for: group),
                         onAdd: group.librarySource.map { source in { add(source, of: group, only: nil) } }
                     )
                     .contextMenu { menu(for: group) }
@@ -188,17 +192,53 @@ struct SourcesView: View {
     }
 
     /// Shows the addons' answer at once, then fills in cache status from TorBox/Offcloud by info hash.
+    /// Addons and Dove's own Usenet indexers in parallel; addon results first, then the indexers'.
     private func load() async {
-        let result = await model.addonSet.streams(type: type, id: id)
-        let all = StreamGroup.group(result.candidates)
+        let newznab = model.newznab
+        let query = NewznabQuery(type: type, id: id, title: searchTitle, wholeSeason: scope != nil)
+        async let addonResult = model.addonSet.streams(type: type, id: id)
+        async let usenetResult = Self.search(newznab, query)
+        let result = await addonResult
+        let usenet = await usenetResult?.routed(to: model.usenetBackend)
+        let all = StreamGroup.group(result.candidates + (usenet?.candidates ?? []))
         let shown = scope.map { scope in all.filter(scope.matches) } ?? all
         groups = shown
-        failures = result.failures
+        failures = result.failures + (usenet?.failures ?? [])
         let checkers = model.cacheCheckers
         guard !checkers.isEmpty, shown.contains(where: { $0.infoHash != nil }) else { return }
         isCheckingCache = true
         groups = await CacheChecker.annotate(shown, using: checkers)
         isCheckingCache = false
+    }
+
+    private static func search(_ newznab: NewznabSearch, _ query: NewznabQuery?) async -> NewznabSearch.Results? {
+        guard let query else { return nil }
+        return await newznab.search(query)
+    }
+
+    /// NZBs play through Dove's own nzbdav job when nzbdav is set up: addon play links make Infuse wait
+    /// for nzbdav and time out. Everything else plays the addon's link.
+    private func playAction(for group: StreamGroup) -> (() -> Void)? {
+        if group.kind == .usenet, let source = group.librarySource, source.kind == .nzb, let nzbdav = model.backend(.nzbdav) {
+            return { playUsenet(group, source: source, on: nzbdav) }
+        }
+        return group.playURL.map { url in { openInInfuse(url) } }
+    }
+
+    private func playUsenet(_ group: StreamGroup, source: Source, on backend: any LibraryBackend) {
+        busy.insert(group.id)
+        status = Status(text: "Preparing in \(backend.id.displayName)…", isError: false)
+        Task {
+            defer { busy.remove(group.id) }
+            do {
+                let prepared = try await UsenetPlayback.prepare(source, itemID: usenetJobs[group.id], on: backend)
+                usenetJobs[group.id] = prepared.itemID
+                status = nil
+                openInInfuse(prepared.url)
+            } catch {
+                status = Status(text: error.localizedDescription, isError: true)
+            }
+        }
     }
 
     private func openInInfuse(_ url: URL) {
@@ -325,6 +365,7 @@ private struct SourceRow: View {
                     .foregroundStyle(availability.cached == true ? .primary : .secondary)
                 }
                 if group.kind == .usenet { Text("Usenet") }
+                if !group.indexers.isEmpty { Text("via " + group.indexers.joined(separator: " · ")).lineLimit(1) }
             }
         }
     }

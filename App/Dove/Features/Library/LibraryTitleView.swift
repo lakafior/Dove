@@ -27,7 +27,7 @@ struct LibraryTitleView: View {
                             NavigationLink(value: item) { ShelfItemRow(item: item) }
                                 .swipeActions {
                                     Button("Delete", systemImage: "trash", role: .destructive) {
-                                        Task { try? await model.library.delete(item, using: model) }
+                                        Task { await model.library.delete(item, using: model) }
                                     }
                                 }
                         }

@@ -18,6 +18,10 @@ public enum CredentialKey: String, Sendable, CaseIterable {
     /// JSON array of `BackendID` raw values, highest priority first. Not a secret: it lives here because the
     /// Keychain is the one store the share extension shares with the app without an App Group.
     case debridOrder
+    /// "1" when the TorBox plan includes Usenet. Not a secret; shared with the extension like `debridOrder`.
+    case torBoxUsenet
+    /// JSON array of `NewznabIndexer` (they carry API keys).
+    case newznabIndexers
 }
 
 public enum KeychainError: Error, Sendable {
@@ -113,13 +117,29 @@ public enum SharedConfiguration {
             list.append(RealDebridBackend(apiKey: key))
         }
         if let key = try? keychain.get(.torBoxAPIKey), !key.isEmpty {
-            list.append(TorBoxBackend(apiKey: key))
+            list.append(TorBoxBackend(apiKey: key, usenet: (try? keychain.get(.torBoxUsenet)) == "1"))
         }
         if let key = try? keychain.get(.offcloudAPIKey), !key.isEmpty {
             list.append(OffcloudBackend(apiKey: key))
         }
-        // TODO(stage-3): nzbdav (URL, API key, WebDAV user and password).
+        if let nzbdav = nzbdav(from: keychain) {
+            list.append(nzbdav)
+        }
         return list
+    }
+
+    /// nzbdav, when its URL, API key and WebDAV login are all set.
+    static func nzbdav(from keychain: KeychainStore) -> NzbdavBackend? {
+        let value = { (key: CredentialKey) in (try? keychain.get(key))?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "" }
+        guard let url = URL(string: value(.nzbdavURL)), url.scheme == "https" || url.scheme == "http",
+              !value(.nzbdavAPIKey).isEmpty, !value(.nzbdavWebDAVUser).isEmpty, !value(.nzbdavWebDAVPassword).isEmpty
+        else { return nil }
+        return NzbdavBackend(
+            baseURL: url,
+            apiKey: value(.nzbdavAPIKey),
+            webDAVUser: value(.nzbdavWebDAVUser),
+            webDAVPassword: value(.nzbdavWebDAVPassword)
+        )
     }
 
     public static let debrids = BackendID.allCases.filter { !$0.isUsenet }

@@ -3,24 +3,30 @@ import Foundation
 /// TorBox adapter. API docs: https://api-docs.torbox.app
 ///
 /// Auth: `Authorization: Bearer <key>` on every call, except `requestdl`, which takes `token=<key>` as a query item.
-/// Torrents and hoster links ("web downloads") live in separate endpoints; this adapter merges them into one library.
-/// TODO(stage-3): TorBox also accepts NZBs (`/usenet/createusenetdownload`); add `.nzb` to `supportedSources` when implemented.
+/// Torrents, hoster links ("web downloads") and NZBs ("usenet") live in separate endpoints with the same shape;
+/// this adapter merges them into one library. Usenet needs a paid plan, so it is off unless the user turns it on:
+/// otherwise every NZB would first fail here. Usenet endpoints follow the official SDK (`usenet/createusenetdownload`
+/// with `link` or `file`, `usenet/mylist`, `usenet/requestdl?usenet_id=`, `usenet/controlusenetdownload`).
 public struct TorBoxBackend: LibraryBackend {
     public let id: BackendID = .torBox
-    public let supportedSources: Set<SourceKind> = [.torrent, .hoster]
+    public let supportedSources: Set<SourceKind>
 
     private let apiKey: String
+    private let usenet: Bool
     private let transport: any HTTPTransport
     private let baseURL: URL
 
     public init(
         apiKey: String,
+        usenet: Bool = false,
         transport: any HTTPTransport = URLSession.shared,
         baseURL: URL = URL(string: "https://api.torbox.app/v1/api")!
     ) {
         self.apiKey = apiKey
+        self.usenet = usenet
         self.transport = transport
         self.baseURL = baseURL
+        supportedSources = usenet ? [.torrent, .hoster, .nzb] : [.torrent, .hoster]
     }
 
     // MARK: - LibraryBackend
@@ -60,8 +66,17 @@ public struct TorBoxBackend: LibraryBackend {
             if let id = result?.queuedId { return TorBoxItemRef.queued(id).id }
             throw BackendError.invalidResponse
 
-        case .nzbURL, .nzbFile:
-            throw BackendError.unsupportedSource(.nzb)
+        case .nzbURL(let url):
+            guard usenet else { throw BackendError.unsupportedSource(.nzb) }
+            var form = MultipartFormData()
+            form.addField("link", url.absoluteString)
+            return try await createUsenet(form)
+
+        case .nzbFile(let data, let filename):
+            guard usenet else { throw BackendError.unsupportedSource(.nzb) }
+            var form = MultipartFormData()
+            form.addFile("file", filename: filename, mimeType: "application/x-nzb", data: data)
+            return try await createUsenet(form)
         }
     }
 
@@ -72,8 +87,12 @@ public struct TorBoxBackend: LibraryBackend {
 
         let torrentItems = (try await torrents ?? []).map { $0.libraryItem(ref: .torrent($0.id)) }
         let webItems = (try await webDownloads ?? []).map { $0.libraryItem(ref: .webDownload($0.id)) }
+        let usenetItems = usenet
+            ? (try await perform(request("usenet/mylist", query: bypass), as: [TorBoxTransfer].self) ?? [])
+                .map { $0.libraryItem(ref: .usenet($0.id)) }
+            : []
 
-        return (torrentItems + webItems).sorted {
+        return (torrentItems + webItems + usenetItems).sorted {
             ($0.addedAt ?? .distantPast) > ($1.addedAt ?? .distantPast)
         }
     }
@@ -84,6 +103,7 @@ public struct TorBoxBackend: LibraryBackend {
         case .torrent(let id): ("torrents/controltorrent", ["torrent_id": id, "operation": "delete"])
         case .webDownload(let id): ("webdl/controlwebdownload", ["webdl_id": id, "operation": "delete"])
         case .queued(let id): ("queued/controlqueued", ["queued_id": id, "operation": "delete"])
+        case .usenet(let id): ("usenet/controlusenetdownload", ["usenet_id": id, "operation": "delete"])
         }
         let json = try JSONSerialization.data(withJSONObject: body)
         _ = try await perform(
@@ -97,6 +117,7 @@ public struct TorBoxBackend: LibraryBackend {
         let (path, idName, id): (String, String, Int) = switch ref {
         case .torrent(let id): ("torrents/requestdl", "torrent_id", id)
         case .webDownload(let id): ("webdl/requestdl", "web_id", id)
+        case .usenet(let id): ("usenet/requestdl", "usenet_id", id)
         case .queued: throw BackendError.api(message: "This download is still queued on TorBox.")
         }
         let query = [
@@ -122,6 +143,16 @@ public struct TorBoxBackend: LibraryBackend {
             as: TorBoxCreateResult.self
         )
         if let id = result?.torrentId { return TorBoxItemRef.torrent(id).id }
+        if let id = result?.queuedId { return TorBoxItemRef.queued(id).id }
+        throw BackendError.invalidResponse
+    }
+
+    private func createUsenet(_ form: MultipartFormData) async throws -> LibraryItem.ID {
+        let result = try await perform(
+            request("usenet/createusenetdownload", method: "POST", body: form.finalized(), contentType: form.contentType),
+            as: TorBoxCreateResult.self
+        )
+        if let id = result?.usenetdownloadId?.value { return TorBoxItemRef.usenet(id).id }
         if let id = result?.queuedId { return TorBoxItemRef.queued(id).id }
         throw BackendError.invalidResponse
     }

@@ -117,7 +117,8 @@ public struct AIOStreamsSearch: Sendable {
     /// Instructions that match nothing in a given configuration are skipped by AIOStreams.
     public static let unfilteredVariantID = "dove"
     public static let unfilteredVariantScript = """
-        # Added by Dove: every result, unfiltered. Dove filters on the phone; Stremio keeps the base config.
+        # Added by Dove: torrents and debrid, unfiltered. Dove filters on the phone and searches Usenet with its
+        # own indexers; Stremio keeps the base config.
         unset resultLimits
         unset size
         unset excludeSeederRange
@@ -135,7 +136,7 @@ public struct AIOStreamsSearch: Sendable {
         clear excludedAudioChannels
         clear excludedLanguages
         clear excludedSubtitles
-        clear excludedStreamTypes
+        set excludedStreamTypes = ["usenet", "stremio-usenet", "http", "live", "youtube", "external"]
         clear excludedReleaseGroups
         clear excludedKeywords
         clear excludedRegexPatterns
@@ -159,11 +160,61 @@ public struct AIOStreamsSearch: Sendable {
         clear syncedRequiredStreamExpressionUrls
         """
 
-    /// Adds a variant to the user's configuration, the way AIOStreams' own config page saves:
-    /// `GET /api/v1/user?raw=true`, append to `variants`, `PUT /api/v1/user` with `{"config": …}`.
+    /// Addon types that give only Usenet, plain HTTP or live streams (AIOStreams presets' `METADATA.ID` and
+    /// `SUPPORTED_STREAM_TYPES`; `hdhub` is mostly HTTP). Disabled by type, so addons added later are covered too.
+    static let nonTorrentPresetTypes = [
+        "usenet-streamer", "newznab", "nzbhydra", "streamnzb", "davex",
+        "easynews", "easynewsPlus", "easynewsPlusPlus", "easynews-search",
+        "astream", "webstreamr", "nuvio-streams", "stremio-gdrive", "yastream", "penguplay", "flix-streams", "hdhub",
+        "argentina-tv", "usa-tv", "usa-tv-next",
+    ]
+
+    /// Usenet services (and AIOStreams-as-a-service); with them off, no addon can turn a result into Usenet.
+    static let usenetServices = ["nzbdav", "altmount", "easynews", "stremio_nntp", "stremthru_newz", "aiostreams"]
+
+    /// Dove's variant: the unfiltered base, Usenet services and Usenet/HTTP addons off. Disabling (not just
+    /// excluding the results) keeps AIOStreams from querying them, so Dove's searches cost the user's indexers
+    /// nothing; Dove searches Usenet with its own indexers. Custom addons are matched by name or manifest.
+    /// P2P stays: a bare info hash is still a torrent Dove can send to a debrid.
+    public static func doveVariantScript(presets: [[String: Any]]) -> String {
+        var lines = [unfilteredVariantScript, "# Torrents and debrid only: Usenet services and Usenet/HTTP addons are off for Dove."]
+        lines += usenetServices.map { "disable services[id=\($0)]" }
+        // Addons limited to a service turned off above would be left with none: let them use the rest.
+        lines.append("remove presets[*].options.services")
+        lines.append("remove presets[*].options.httpProviders")
+        lines += nonTorrentPresetTypes.map { "disable presets[type=\($0)]" }
+        let customUsenet = presets.filter { preset in
+            guard preset["type"] as? String == "custom", let options = preset["options"] as? [String: Any] else { return false }
+            let text = [options["name"], options["manifestUrl"]].compactMap { $0 as? String }.joined(separator: " ").lowercased()
+            return ["usenet", "nzb", "newznab", "easynews"].contains { text.contains($0) }
+        }
+        let ids = customUsenet.compactMap { $0["instanceId"] as? String }.filter { !$0.contains("\"") }
+        if !ids.isEmpty {
+            lines.append("# Custom addons that look like Usenet.")
+            lines += ids.map { "disable presets[instanceId=\"\($0)\"]" }
+        }
+        return lines.joined(separator: "\n")
+    }
+
+    /// Creates Dove's variant, or rewrites its script (addons may have changed since). Saves the way AIOStreams'
+    /// own config page does: `GET /api/v1/user?raw=true`, edit `variants`, `PUT /api/v1/user` with `{"config": …}`.
     /// The configuration is handled as untyped JSON so every field the server sent goes back unchanged.
     /// AIOStreams validates the whole config (variant scripts included) and rejects the save if anything is off.
-    public func addVariant(id: String, name: String, script: String) async throws {
+    public func saveDoveVariant(name: String = "Dove") async throws {
+        try await editConfig { config in
+            let script = Self.doveVariantScript(presets: config["presets"] as? [[String: Any]] ?? [])
+            var variants = config["variants"] as? [[String: Any]] ?? []
+            if let index = variants.firstIndex(where: { ($0["id"] as? String)?.lowercased() == Self.unfilteredVariantID }) {
+                variants[index]["script"] = script
+                variants[index]["enabled"] = true
+            } else {
+                variants.append(["id": Self.unfilteredVariantID, "name": name, "enabled": true, "script": script])
+            }
+            config["variants"] = variants
+        }
+    }
+
+    private func editConfig(_ change: (inout [String: Any]) -> Void) async throws {
         var get = URLRequest(url: origin.appending(path: "api/v1/user").appending(queryItems: [URLQueryItem(name: "raw", value: "true")]))
         get.timeoutInterval = 20
         get.setValue(authorization, forHTTPHeaderField: "Authorization")
@@ -176,10 +227,7 @@ public struct AIOStreamsSearch: Sendable {
             if response.statusCode == 401 || response.statusCode == 403 { throw BackendError.unauthorized }
             throw BackendError.api(message: "AIOStreams did not return your configuration.")
         }
-        var variants = config["variants"] as? [[String: Any]] ?? []
-        guard !variants.contains(where: { ($0["id"] as? String)?.lowercased() == id.lowercased() }) else { return }
-        variants.append(["id": id, "name": name, "enabled": true, "script": script])
-        config["variants"] = variants
+        change(&config)
 
         var put = URLRequest(url: origin.appending(path: "api/v1/user"))
         put.httpMethod = "PUT"

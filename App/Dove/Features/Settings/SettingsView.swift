@@ -23,8 +23,22 @@ struct SettingsView: View {
                     Text("Torrents and links go to the first service. If it fails, Dove tries the next one.")
                 }
 
-                Section("Usenet") {
-                    Text("nzbdav: stage 3").foregroundStyle(.secondary)
+                Section {
+                    NavigationLink {
+                        NzbdavSettingsView()
+                    } label: {
+                        LabeledContent("nzbdav", value: model.isConfigured(.nzbdav) ? "Connected" : "Not set up")
+                    }
+                    TorBoxUsenetToggle()
+                    NavigationLink {
+                        NewznabIndexersView()
+                    } label: {
+                        LabeledContent("Indexers", value: "\(model.newznabIndexers.filter(\.enabled).count)")
+                    }
+                } header: {
+                    Text("Usenet")
+                } footer: {
+                    Text("NZBs go to nzbdav first, then to TorBox if your TorBox plan includes Usenet. Indexers are searched from your phone.")
                 }
 
                 Section {

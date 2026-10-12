@@ -38,6 +38,12 @@ public struct StreamGroup: Identifiable, Sendable, Hashable {
         candidates.lazy.compactMap(\.librarySource).first
     }
 
+    /// Dove's own indexers that found this release (their names are the candidates' labels).
+    public var indexers: [String] {
+        var seen = Set<String>()
+        return candidates.filter { $0.id.hasPrefix("newznab:") }.map(\.label).filter { seen.insert($0).inserted }
+    }
+
     public var isCached: Bool {
         availability.contains { $0.cached == true }
     }
@@ -80,12 +86,14 @@ public struct StreamGroup: Identifiable, Sendable, Hashable {
 
     // MARK: - Grouping
 
-    /// Merges candidates with the same info hash, keeping the addons' order.
+    /// Merges candidates with the same info hash, keeping the addons' order. NZBs from Dove's own indexers
+    /// have no hash: the same release name from several indexers becomes one row listing each indexer.
     public static func group(_ candidates: [StreamCandidate]) -> [StreamGroup] {
         var groups: [StreamGroup] = []
         var indexByKey: [String: Int] = [:]
         for candidate in candidates {
-            let key = candidate.infoHash?.lowercased() ?? candidate.id
+            let key = candidate.infoHash?.lowercased()
+                ?? (candidate.id.hasPrefix("newznab:") ? "nzb:" + MediaGuess.normalize(candidate.title) : candidate.id)
             if let index = indexByKey[key] {
                 groups[index].add(candidate)
             } else {

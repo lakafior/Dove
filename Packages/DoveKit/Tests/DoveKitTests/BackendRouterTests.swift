@@ -42,6 +42,17 @@ struct BackendRouterTests {
         #expect(router.candidates(for: magnet).map(\.id) == [.offcloud, .realDebrid, .torBox])
     }
 
+    @Test func nzbTriesUsenetBackendsBeforeDebridsThatTakeNZBs() {
+        let all: [any LibraryBackend] = [
+            FakeBackend(id: .torBox, supportedSources: [.torrent, .nzb]),
+            FakeBackend(id: .nzbdav, supportedSources: [.nzb]),
+        ]
+        let router = BackendRouter(backends: all, order: [.torBox, .realDebrid])
+        let nzb = Source.nzbURL(URL(string: "https://indexer.example/get/1")!)
+        #expect(router.candidates(for: nzb).map(\.id) == [.nzbdav, .torBox])
+        #expect(router.candidates(for: magnet).map(\.id) == [.torBox])
+    }
+
     @Test func throwsWhenNothingFits() {
         let router = BackendRouter(backends: [FakeBackend(id: .nzbdav, supportedSources: [.nzb])])
         #expect(throws: BackendError.unsupportedSource(.torrent)) {

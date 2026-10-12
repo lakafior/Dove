@@ -61,7 +61,11 @@ actor JobBackend: LibraryBackend {
     func failDeletes(_ error: BackendError?) { deleteError = error }
 
     func validateCredentials() async throws {}
-    func add(_ source: Source) async throws -> LibraryItem.ID { current.id }
+    private(set) var added = 0
+    func add(_ source: Source) async throws -> LibraryItem.ID {
+        added += 1
+        return current.id
+    }
     func items() async throws -> [LibraryItem] { [current] }
     func item(_ itemID: LibraryItem.ID) async throws -> LibraryItem { current }
 

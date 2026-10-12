@@ -12,12 +12,14 @@ public struct BackendRouter: Sendable {
         self.order = order
     }
 
-    /// Compatible backends, in priority order.
+    /// Compatible backends, in priority order. NZBs go to Usenet backends (nzbdav) before debrids that also
+    /// take them (TorBox with a Usenet plan).
     public func candidates(for source: Source) -> [any LibraryBackend] {
         let compatible = backends.filter { $0.supports(source) }
         let rank = { (id: BackendID) in order.firstIndex(of: id) ?? order.count }
+        let family = { (id: BackendID) in source.kind == .nzb && id.isUsenet ? 0 : 1 }
         return compatible.enumerated()
-            .sorted { (rank($0.element.id), $0.offset) < (rank($1.element.id), $1.offset) }
+            .sorted { (family($0.element.id), rank($0.element.id), $0.offset) < (family($1.element.id), rank($1.element.id), $1.offset) }
             .map(\.element)
     }
 

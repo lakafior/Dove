@@ -160,7 +160,7 @@ struct LibraryView: View {
 
     private func deleteButton(_ item: ShelfItem) -> some View {
         Button("Delete", systemImage: "trash", role: .destructive) {
-            Task { try? await library.delete(item, using: model) }
+            Task { await library.delete(item, using: model) }
         }
     }
 }
@@ -361,7 +361,8 @@ struct LibraryItemView: View {
     private func link(for file: LibraryFile) async -> URL? {
         guard let backend = model.backend(item.backend) else { return nil }
         do {
-            return try await backend.downloadRequest(itemID: item.id, fileID: file.id).url
+            // nzbdav's link carries the WebDAV login; players and copied links cannot send headers.
+            return try await backend.playbackURL(itemID: item.id, fileID: file.id)
         } catch {
             message = error.localizedDescription
             return nil

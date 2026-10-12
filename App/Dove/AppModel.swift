@@ -98,6 +98,7 @@ final class AppModel {
         }
         aioStreamsVariant = UserDefaults.standard.string(forKey: Self.variantKey) ?? ""
         reloadBackends()
+        reloadNewznab()
         addonEntries = storedAddonURLs().map { AddonEntry(url: $0) }
         downloads.requestProvider = { [weak self] record in
             guard let backend = self?.backend(record.backend) else {
@@ -135,6 +136,24 @@ final class AppModel {
         backends = SharedConfiguration.backends(from: keychain)
     }
 
+    // MARK: - Newznab indexers
+
+    /// Usenet indexers searched from the phone. Their API keys make the list a Keychain item.
+    private(set) var newznabIndexers: [NewznabIndexer] = []
+    /// Rebuilt whenever the list changes; usage and caps persist in its state file.
+    private(set) var newznab = NewznabSearch(indexers: [], stateURL: nil)
+    private static let newznabStateURL = URL.applicationSupportDirectory.appending(path: "Dove/newznab.json")
+
+    func reloadNewznab() {
+        newznabIndexers = SharedConfiguration.newznabIndexers(from: keychain)
+        newznab = NewznabSearch(indexers: newznabIndexers, stateURL: Self.newznabStateURL)
+    }
+
+    func saveNewznabIndexers(_ indexers: [NewznabIndexer]) throws {
+        try SharedConfiguration.saveNewznabIndexers(indexers, to: keychain)
+        reloadNewznab()
+    }
+
     var router: BackendRouter {
         BackendRouter(backends: backends, order: debridOrder)
     }
@@ -153,6 +172,12 @@ final class AppModel {
 
     func backend(_ id: BackendID) -> (any LibraryBackend)? {
         backends.first { $0.id == id }
+    }
+
+    /// Where NZBs go: nzbdav first, then TorBox with a Usenet plan (the router's order for NZBs).
+    var usenetBackend: BackendID? {
+        let takesNZB = backends.filter { $0.supportedSources.contains(.nzb) }
+        return (takesNZB.first { $0.id.isUsenet } ?? takesNZB.first)?.id
     }
 
     func isConfigured(_ id: BackendID) -> Bool {
@@ -253,11 +278,7 @@ final class AppModel {
         guard !password.isEmpty,
               let instance = aioStreamsInstance
         else { throw BackendError.api(message: "Save your AIOStreams password first.") }
-        try await AIOStreamsSearch(origin: instance.origin, uuid: instance.uuid, password: password).addVariant(
-            id: AIOStreamsSearch.unfilteredVariantID,
-            name: "Dove (unfiltered)",
-            script: AIOStreamsSearch.unfilteredVariantScript
-        )
+        try await AIOStreamsSearch(origin: instance.origin, uuid: instance.uuid, password: password).saveDoveVariant()
         aioStreamsVariant = AIOStreamsSearch.unfilteredVariantID
     }
 
