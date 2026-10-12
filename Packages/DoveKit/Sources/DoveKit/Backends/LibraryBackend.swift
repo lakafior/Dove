@@ -1,0 +1,38 @@
+import Foundation
+
+/// The single abstraction every storage service implements: debrid services and nzbdav alike.
+///
+/// Every backend supports the same three user-facing actions:
+/// add a source, expose files over WebDAV (handled by the service itself) and download a file to the phone.
+public protocol LibraryBackend: Sendable {
+    var id: BackendID { get }
+    var supportedSources: Set<SourceKind> { get }
+
+    /// Cheap authenticated call used by the "Test connection" button in Settings.
+    func validateCredentials() async throws
+
+    /// Adds a source and returns the new item's ID.
+    @discardableResult
+    func add(_ source: Source) async throws -> LibraryItem.ID
+
+    func items() async throws -> [LibraryItem]
+
+    /// One item with its file list. Backends whose list endpoint omits files override this.
+    func item(_ itemID: LibraryItem.ID) async throws -> LibraryItem
+
+    func delete(_ itemID: LibraryItem.ID) async throws
+
+    /// A ready-to-use request (URL plus any auth headers) for downloading one file to the device.
+    func downloadRequest(itemID: LibraryItem.ID, fileID: LibraryFile.ID) async throws -> URLRequest
+}
+
+extension LibraryBackend {
+    public func supports(_ source: Source) -> Bool {
+        supportedSources.contains(source.kind)
+    }
+
+    public func item(_ itemID: LibraryItem.ID) async throws -> LibraryItem {
+        guard let match = try await items().first(where: { $0.id == itemID }) else { throw BackendError.notFound }
+        return match
+    }
+}

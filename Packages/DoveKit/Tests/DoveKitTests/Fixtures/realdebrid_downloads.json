@@ -1,0 +1,13 @@
+[
+  {
+    "id": "DL777",
+    "filename": "archive.part1.rar",
+    "mimeType": "application/x-rar-compressed",
+    "filesize": 1073741824,
+    "link": "https://hoster.example/file/abc",
+    "host": "hoster.example",
+    "chunks": 16,
+    "download": "https://download.real-debrid.com/d/DL777/archive.part1.rar",
+    "generated": "2026-10-02T12:00:00.000Z"
+  }
+]

@@ -1,0 +1,46 @@
+{
+  "success": true,
+  "error": null,
+  "detail": "Torrents list retrieved successfully.",
+  "data": [
+    {
+      "id": 101,
+      "hash": "0123456789abcdef0123456789abcdef01234567",
+      "name": "Some.Show.S02.2160p.WEB-DL.DDP5.1.Atmos.DV.HEVC-GRP",
+      "size": 64424509440,
+      "progress": 1.0,
+      "download_state": "cached",
+      "download_finished": true,
+      "download_present": true,
+      "created_at": "2026-10-10T18:20:11.123456Z",
+      "files": [
+        { "id": 0, "name": "Some.Show.S02/Some.Show.S02E01.mkv", "short_name": "Some.Show.S02E01.mkv", "size": 6442450944 },
+        { "id": 1, "name": "Some.Show.S02/Some.Show.S02E02.mkv", "short_name": "Some.Show.S02E02.mkv", "size": 6442450944 }
+      ]
+    },
+    {
+      "id": 102,
+      "hash": "fedcba9876543210fedcba9876543210fedcba98",
+      "name": "Some.Movie.2024.1080p.BluRay.x264-GRP",
+      "size": 12884901888,
+      "progress": 0.42,
+      "download_state": "downloading",
+      "download_finished": false,
+      "download_present": false,
+      "created_at": "2026-10-11T09:00:00Z",
+      "files": []
+    },
+    {
+      "id": 103,
+      "hash": "1111111111111111111111111111111111111111",
+      "name": "Dead.Torrent",
+      "size": 1000,
+      "progress": 0.0,
+      "download_state": "stalled (no seeds)",
+      "download_finished": false,
+      "download_present": false,
+      "created_at": "2026-10-01T00:00:00Z",
+      "files": []
+    }
+  ]
+}

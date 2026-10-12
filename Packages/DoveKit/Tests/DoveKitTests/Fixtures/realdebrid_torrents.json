@@ -1,0 +1,41 @@
+[
+  {
+    "id": "ABCD1234",
+    "filename": "Some.Show.S02.1080p.WEB-DL",
+    "hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "bytes": 4294967296,
+    "host": "real-debrid.com",
+    "split": 2000,
+    "progress": 100,
+    "status": "downloaded",
+    "added": "2026-10-01T18:20:00.000Z",
+    "links": ["https://real-debrid.com/d/LINK1", "https://real-debrid.com/d/LINK2"],
+    "ended": "2026-10-01T18:20:05.000Z"
+  },
+  {
+    "id": "EFGH5678",
+    "filename": "Some.Movie.2160p",
+    "hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "bytes": 21474836480,
+    "host": "real-debrid.com",
+    "split": 2000,
+    "progress": 37.5,
+    "status": "downloading",
+    "added": "2026-10-03T09:00:00.000Z",
+    "links": [],
+    "speed": 1048576,
+    "seeders": 12
+  },
+  {
+    "id": "IJKL9012",
+    "filename": "Dead.Torrent",
+    "hash": "cccccccccccccccccccccccccccccccccccccccc",
+    "bytes": 0,
+    "host": "real-debrid.com",
+    "split": 2000,
+    "progress": 0,
+    "status": "magnet_error",
+    "added": "2026-09-20T09:00:00.000Z",
+    "links": []
+  }
+]

@@ -1,0 +1,19 @@
+{
+  "success": true,
+  "error": null,
+  "detail": "Web downloads list retrieved successfully.",
+  "data": [
+    {
+      "id": 7,
+      "hash": "abc",
+      "name": "file-from-hoster.mkv",
+      "size": 2147483648,
+      "progress": 1.0,
+      "download_state": "completed",
+      "download_finished": true,
+      "download_present": true,
+      "created_at": "2026-10-11T12:00:00Z",
+      "files": [ { "id": 0, "name": "file-from-hoster.mkv", "short_name": "file-from-hoster.mkv", "size": 2147483648 } ]
+    }
+  ]
+}
