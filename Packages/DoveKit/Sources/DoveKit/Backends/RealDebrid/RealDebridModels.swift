@@ -105,8 +105,6 @@ extension RealDebridDownload {
 }
 
 enum RealDebridFiles {
-    static let videoExtensions: Set<String> = ["mkv", "mp4", "m4v", "avi", "mov", "ts", "m2ts", "wmv", "webm"]
-
     /// File IDs to select: video files without samples. Falls back to every video, then to "all".
     static func selection(for files: [RealDebridFile]) -> String {
         let chosen = suggested(files)
@@ -116,8 +114,8 @@ enum RealDebridFiles {
 
     /// Video files without samples, or every video when all of them look like samples. Empty without videos.
     static func suggested(_ files: [RealDebridFile]) -> [RealDebridFile] {
-        let videos = files.filter { videoExtensions.contains(($0.path as NSString).pathExtension.lowercased()) }
-        let main = videos.filter { !$0.path.lowercased().contains("sample") }
+        let videos = files.filter { FileKind.isVideo($0.path) }
+        let main = videos.filter { !FileKind.isSample($0.path) }
         return main.isEmpty ? videos : main
     }
 }

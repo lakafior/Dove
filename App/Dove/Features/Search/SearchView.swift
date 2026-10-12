@@ -186,10 +186,17 @@ struct AddSourceSheet: View {
     let onFinish: (String) -> Void
 
     var body: some View {
+        @Bindable var model = model
         NavigationStack {
-            AddSourceView(source: source, router: model.router) { message in
-                onFinish(message ?? "")
-            }
+            AddSourceView(
+                source: source,
+                router: model.router,
+                onClose: { onFinish($0 ?? "") },
+                downloadOnly: $model.downloadOnly,
+                startDownloadOnly: { backend, itemID in
+                    await model.startDownloadOnly(itemID, on: backend, name: source.displayName, pick: .allVideos)
+                }
+            )
         }
         .presentationDetents([.medium, .large])
     }

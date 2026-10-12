@@ -67,6 +67,7 @@ struct SourcesView: View {
                         group: group,
                         scope: scope,
                         isBusy: busy.contains(group.id),
+                        downloadOnly: model.downloadOnly,
                         onPlay: group.playURL.map { url in { openInInfuse(url) } },
                         onAdd: group.librarySource.map { source in { add(source, of: group, only: nil) } }
                     )
@@ -86,6 +87,7 @@ struct SourcesView: View {
         .navigationTitle(title)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
+            ToolbarItem(placement: .primaryAction) { downloadOnlyButton }
             ToolbarItem(placement: .primaryAction) { filterButton }
             if isCheckingCache {
                 ToolbarItem(placement: .status) {
@@ -124,6 +126,29 @@ struct SourcesView: View {
         .accessibilityLabel("Filters")
     }
 
+    /// "Download only": + becomes ↓ — add, download to the phone, remove from the service.
+    private var downloadOnlyButton: some View {
+        @Bindable var model = model
+        return Toggle(isOn: $model.downloadOnly) {
+            Label("Download only", systemImage: model.downloadOnly ? "arrow.down.circle.fill" : "arrow.down.circle")
+        }
+        .toggleStyle(.button)
+        .labelStyle(.iconOnly)
+        .accessibilityHint("Adds download the file to this iPhone, then remove it from the service.")
+    }
+
+    /// Which files a download-only add fetches: the episode on screen, every video of a pack, or the movie.
+    private var pick: DownloadJob.Pick {
+        if scope != nil { return .allVideos }
+        if type == .movie { return .largestVideo }
+        // Episode IDs are `<series>:<season>:<episode>`.
+        let parts = id.split(separator: ":")
+        if parts.count >= 3, let season = Int(parts[parts.count - 2]), let episode = Int(parts[parts.count - 1]) {
+            return .episode(season: season, episode: episode)
+        }
+        return .allVideos
+    }
+
     @ViewBuilder
     private func menu(for group: StreamGroup) -> some View {
         if let url = group.playURL {
@@ -131,7 +156,7 @@ struct SourcesView: View {
             Button("Copy link", systemImage: "link") { UIPasteboard.general.url = url }
         }
         if let source = group.librarySource {
-            Section("Add only to") {
+            Section(model.downloadOnly ? "Download only, through" : "Add only to") {
                 ForEach(model.router.candidates(for: source).map(\.id), id: \.self) { backend in
                     let cached = group.cachedBackends().contains(backend)
                     Button(backend.displayName + (cached ? " ⚡" : "")) { add(source, of: group, only: backend) }
@@ -168,17 +193,22 @@ struct SourcesView: View {
         Task {
             defer { busy.remove(group.id) }
             do {
+                let added: BackendID
+                let itemID: LibraryItem.ID
+                var skipped: [String] = []
                 if let backend, let service = model.backend(backend) {
-                    try await service.add(source)
-                    status = Status(text: "Added to \(backend.displayName).", isError: false)
+                    itemID = try await service.add(source)
+                    added = backend
                 } else {
                     let result = try await model.router(preferring: group.cachedBackends()).add(source)
-                    let skipped = result.skipped.map { "\($0.backend.displayName): \($0.error.localizedDescription)" }
-                    status = Status(
-                        text: (["Added to \(result.backend.displayName)."] + skipped).joined(separator: "\n"),
-                        isError: false
-                    )
+                    added = result.backend
+                    itemID = result.itemID
+                    skipped = result.skipped.map { "\($0.backend.displayName): \($0.error.localizedDescription)" }
                 }
+                let message = model.downloadOnly
+                    ? await model.startDownloadOnly(itemID, on: added, name: group.folderName ?? group.title, pick: pick)
+                    : "Added to \(added.displayName)."
+                status = Status(text: ([message] + skipped).joined(separator: "\n"), isError: false)
             } catch {
                 status = Status(text: error.localizedDescription, isError: true)
             }
@@ -190,6 +220,7 @@ private struct SourceRow: View {
     let group: StreamGroup
     let scope: PackScope?
     let isBusy: Bool
+    let downloadOnly: Bool
     let onPlay: (() -> Void)?
     let onAdd: (() -> Void)?
 
@@ -288,13 +319,13 @@ private struct SourceRow: View {
             if let onAdd {
                 Button(action: onAdd) {
                     Group {
-                        if isBusy { ProgressView() } else { Image(systemName: "plus") }
+                        if isBusy { ProgressView() } else { Image(systemName: downloadOnly ? "arrow.down" : "plus") }
                     }
                     .frame(width: 22, height: 22)
                 }
                 .buttonStyle(.borderedProminent)
                 .disabled(isBusy)
-                .accessibilityLabel("Add to library")
+                .accessibilityLabel(downloadOnly ? "Download only" : "Add to library")
             }
         }
     }

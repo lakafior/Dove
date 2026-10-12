@@ -8,6 +8,10 @@ struct AddSourceView: View {
     let router: BackendRouter
     /// Called with the success message, or nil when cancelled. Failures stay on screen to try another service.
     let onClose: (String?) -> Void
+    /// The app's "download only" mode. Nil in the share extension, which closes before a download could run.
+    var downloadOnly: Binding<Bool>?
+    /// Hands an added item to the download-only jobs; returns the message to show.
+    var startDownloadOnly: ((BackendID, DoveKit.LibraryItem.ID) async -> String)?
     @State private var working: Target?
     @State private var error: String?
 
@@ -25,6 +29,13 @@ struct AddSourceView: View {
                     Text(source.displayName).lineLimit(3)
                 } icon: {
                     Image(systemName: icon)
+                }
+            }
+            if let downloadOnly, !candidates.isEmpty {
+                Section {
+                    Toggle("Download only", isOn: downloadOnly)
+                } footer: {
+                    Text("Downloads the files to this iPhone, then removes them from the service.")
                 }
             }
             if let error {
@@ -93,18 +104,26 @@ struct AddSourceView: View {
         Task {
             defer { working = nil }
             do {
+                let added: BackendID
+                let itemID: DoveKit.LibraryItem.ID
+                var skipped: [String] = []
                 switch target {
                 case .automatic:
                     let result = try await router.add(source)
-                    let skipped = result.skipped
-                        .map { "\($0.backend.displayName): \($0.error.localizedDescription)" }
-                        .joined(separator: "\n")
-                    onClose("Added to \(result.backend.displayName)." + (skipped.isEmpty ? "" : "\n\(skipped)"))
+                    added = result.backend
+                    itemID = result.itemID
+                    skipped = result.skipped.map { "\($0.backend.displayName): \($0.error.localizedDescription)" }
                 case .backend(let id):
                     guard let backend = router.backends.first(where: { $0.id == id }) else { return }
-                    try await backend.add(source)
-                    onClose("Added to \(id.displayName).")
+                    itemID = try await backend.add(source)
+                    added = id
                 }
+                let message = if downloadOnly?.wrappedValue == true, let startDownloadOnly {
+                    await startDownloadOnly(added, itemID)
+                } else {
+                    "Added to \(added.displayName)."
+                }
+                onClose(([message] + skipped).joined(separator: "\n"))
             } catch {
                 self.error = error.localizedDescription
             }

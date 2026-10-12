@@ -17,6 +17,8 @@ public final class DownloadManager: NSObject {
 
     /// Builds a fresh request for a record (the backend's `downloadRequest`). Set by the app.
     @ObservationIgnored public var requestProvider: (@MainActor (DownloadRecord) async throws -> URLRequest)?
+    /// Called when a download finishes or fails (`DownloadJobs` deletes items after their downloads).
+    @ObservationIgnored public var onSettled: (@MainActor (DownloadRecord) -> Void)?
     /// Handed over by the app delegate when iOS relaunches the app for this session; called once events are delivered.
     @ObservationIgnored public var backgroundEventsCompletion: (() -> Void)?
 
@@ -175,7 +177,7 @@ public final class DownloadManager: NSObject {
         guard let record = self[id] else { return }
         if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
             update(id) { $0.state = .failed(reason: "The server answered \(http.statusCode). Try again for a fresh link.") }
-            save()
+            settled(id)
             return
         }
         do {
@@ -200,7 +202,12 @@ public final class DownloadManager: NSObject {
         } catch {
             update(id) { $0.state = .failed(reason: "Could not save the file: \(error.localizedDescription)") }
         }
+        settled(id)
+    }
+
+    private func settled(_ id: DownloadRecord.ID) {
         save()
+        if let record = self[id] { onSettled?(record) }
     }
 
     private func complete(_ id: DownloadRecord.ID, error: (any Error)?) {
@@ -213,7 +220,7 @@ public final class DownloadManager: NSObject {
             store.setResumeData(data, for: id)
         }
         update(id) { $0.state = .failed(reason: error.localizedDescription) }
-        save()
+        settled(id)
     }
 
     private func progress(_ id: DownloadRecord.ID, written: Int64, expected: Int64) {

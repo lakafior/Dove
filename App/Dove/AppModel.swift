@@ -31,6 +31,14 @@ final class AppModel {
         directory: .documentsDirectory,
         store: DownloadStore(directory: .applicationSupportDirectory.appending(path: "Dove/Downloads"))
     )
+    /// "Download only" adds: wait for the service, download, delete from the service. Set up in `init`.
+    private(set) var downloadJobs: DownloadJobs!
+
+    private static let downloadOnlyKey = "addDownloadOnly"
+    /// Adds from search and the add sheet go through `downloadJobs` instead of staying in the library.
+    var downloadOnly = UserDefaults.standard.bool(forKey: AppModel.downloadOnlyKey) {
+        didSet { UserDefaults.standard.set(downloadOnly, forKey: Self.downloadOnlyKey) }
+    }
 
     /// Debrid priority, highest first. "Automatic" adds try them in this order and fall through on any error.
     /// NZBs always go to nzbdav. Not a secret, so it lives in UserDefaults.
@@ -97,6 +105,22 @@ final class AppModel {
             }
             return try await backend.downloadRequest(itemID: record.itemID, fileID: record.fileID)
         }
+        downloadJobs = DownloadJobs(
+            store: DownloadJobStore(fileURL: .applicationSupportDirectory.appending(path: "Dove/Downloads/jobs.json")),
+            downloads: downloads
+        ) { [weak self] id in self?.backend(id) }
+    }
+
+    /// After an add in "download only" mode: hand the item to `downloadJobs`. Returns the message to show.
+    func startDownloadOnly(
+        _ itemID: LibraryItem.ID,
+        on backend: BackendID,
+        name: String,
+        pick: DownloadJob.Pick
+    ) async -> String {
+        await downloadJobs.add(backend: backend, itemID: itemID, name: name, pick: pick)
+        // Starts with "Added", which the search field takes as success.
+        return "Added to \(backend.displayName). Dove downloads it to this iPhone, then removes it from \(backend.displayName)."
     }
 
     /// Asks the service for a link and starts downloading the file to the device.
