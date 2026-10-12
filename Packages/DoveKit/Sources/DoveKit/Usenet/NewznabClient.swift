@@ -1,10 +1,40 @@
 import Foundation
 
-/// What to look for: a movie, one episode, or a whole season (packs and its episodes).
+/// Newznab's top-level categories Dove searches outside movies and series (Search › Other).
+public enum NewznabCategory: String, CaseIterable, Sendable, Hashable, Codable {
+    /// No category: whatever the indexer finds for the words.
+    case all
+    case software
+    case music
+    case books
+
+    /// `cat=` values. Indexers match their subcategories (4000 covers 4010 Windows, 4050 PC games…).
+    var ids: [Int] {
+        switch self {
+        case .all: []
+        case .software: [4000]
+        case .music: [3000]
+        case .books: [7000]
+        }
+    }
+
+    public var displayName: String {
+        switch self {
+        case .all: "All"
+        case .software: "Software"
+        case .music: "Music"
+        case .books: "Books"
+        }
+    }
+}
+
+/// What to look for: a movie, one episode, a whole season (packs and its episodes), or free text in a category.
 public enum NewznabQuery: Sendable, Hashable {
     case movie(imdbID: String, title: String?)
     case episode(imdbID: String, season: Int, episode: Int, title: String?)
     case season(imdbID: String, season: Int, title: String?)
+    /// Search › Other: words, no IMDb ID, results from any category the user picked.
+    case text(String, category: NewznabCategory)
 
     /// From a Stremio stream ID (`tt123` or `tt123:2:5`). Nil for IDs indexers cannot search (kitsu…).
     public init?(type: MediaType, id: String, title: String?, wholeSeason: Bool) {
@@ -22,33 +52,52 @@ public enum NewznabQuery: Sendable, Hashable {
     }
 
     var function: String {
-        if case .movie = self { "movie" } else { "tvsearch" }
+        switch self {
+        case .movie: "movie"
+        case .episode, .season: "tvsearch"
+        case .text: "search"
+        }
     }
 
-    var imdbID: String {
+    var imdbID: String? {
         switch self {
         case .movie(let id, _), .episode(let id, _, _, _), .season(let id, _, _): id
+        case .text: nil
         }
     }
 
     var title: String? {
         switch self {
         case .movie(_, let title), .episode(_, _, _, let title), .season(_, _, let title): title
+        case .text(let words, _): words
+        }
+    }
+
+    /// Top-level categories a result must belong to. Movie and series searches ask for Movies (2000) or
+    /// TV (5000) only, so a title that matches software or music never turns up among a film's sources.
+    var categories: [Int] {
+        switch self {
+        case .movie: [2000]
+        case .episode, .season: [5000]
+        case .text(_, let category): category.ids
         }
     }
 
     /// Search parameters for an indexer: the IMDb ID when it takes one, the title otherwise.
     func parameters(supported: Set<String>) -> [URLQueryItem]? {
         var items: [URLQueryItem] = []
-        if supported.contains("imdbid") {
+        if let imdbID, supported.contains("imdbid") {
             items.append(URLQueryItem(name: "imdbid", value: String(imdbID.dropFirst(2))))
         } else if let title, !title.isEmpty {
             items.append(URLQueryItem(name: "q", value: title))
         } else {
             return nil
         }
+        if !categories.isEmpty {
+            items.append(URLQueryItem(name: "cat", value: categories.map(String.init).joined(separator: ",")))
+        }
         switch self {
-        case .movie:
+        case .movie, .text:
             break
         case .episode(_, let season, let episode, _):
             items.append(URLQueryItem(name: "season", value: String(season)))
@@ -67,7 +116,12 @@ public struct NewznabCaps: Codable, Sendable, Hashable {
     public var maxLimit: Int?
 
     func params(for query: NewznabQuery) -> Set<String> {
-        if case .movie = query { movieParams } else { tvParams }
+        switch query {
+        case .movie: movieParams
+        case .episode, .season: tvParams
+        // Every Newznab indexer has the plain `search` function, with `q`.
+        case .text: ["q"]
+        }
     }
 }
 
@@ -112,8 +166,11 @@ public struct NewznabClient: Sendable {
             [URLQueryItem(name: "t", value: query.function)] + parameters
                 + [URLQueryItem(name: "extended", value: "1"), URLQueryItem(name: "limit", value: String(limit))]
         )
+        let wanted = Set(query.categories)
         return document.items.enumerated().compactMap { index, item in
-            item.candidate(id: "newznab:\(indexer.id):\(item.guid ?? String(index))", indexer: indexer.name)
+            // Some indexers ignore `cat`: drop what is plainly from another category.
+            if !wanted.isEmpty, let category = item.category, !wanted.contains(category / 1000 * 1000) { return nil }
+            return item.candidate(id: "newznab:\(indexer.id):\(item.guid ?? String(index))", indexer: indexer)
         }
     }
 
@@ -141,19 +198,53 @@ struct NewznabItem {
     var enclosureURL: String?
     var enclosureLength: Int64?
     var attrs: [String: String] = [:]
+    /// Every `category` attribute, parent first (`3000`, `3010`).
+    var categories: [Int] = []
 
-    func candidate(id: String, indexer: String) -> StreamCandidate? {
-        guard let title, !title.isEmpty,
-              let nzb = (enclosureURL ?? link).flatMap(URL.init(string:)) else { return nil }
+    /// The most specific standard category the indexer gave. Jackett adds its trackers' own categories
+    /// (100000 and up); they say nothing Dove understands.
+    var category: Int? { categories.filter { $0 < 100_000 }.max() }
+
+    func candidate(id: String, indexer: NewznabIndexer) -> StreamCandidate? {
+        guard let title, !title.isEmpty else { return nil }
         let size = attrs["size"].flatMap(Int64.init) ?? enclosureLength
-        return StreamCandidate(
-            id: id,
-            kind: .usenet,
-            title: title,
-            label: indexer,
-            size: size,
-            nzbURL: nzb
-        )
+        let links = [enclosureURL, link].compactMap { $0.flatMap(URL.init(string:)) }
+        switch indexer.kind {
+        case .newznab:
+            guard let nzb = links.first else { return nil }
+            return StreamCandidate(id: id, kind: .usenet, title: title, label: indexer.name, size: size, nzbURL: nzb, category: category)
+        case .torznab:
+            // An info hash adds as a magnet (and shows cache status); otherwise the .torrent link, fetched later.
+            let magnet = ([attrs["magneturl"]] + links.map(\.absoluteString)).compactMap { $0 }.first { $0.hasPrefix("magnet:") }
+            let hash = attrs["infohash"].flatMap(Self.validHash) ?? magnet.flatMap(Self.hash(inMagnet:))
+            let torrent = links.first { $0.scheme == "http" || $0.scheme == "https" }
+            guard hash != nil || torrent != nil else { return nil }
+            return StreamCandidate(
+                id: id,
+                kind: .p2p,
+                title: title,
+                label: indexer.name,
+                size: size,
+                infoHash: hash,
+                category: category,
+                torrentURL: hash == nil ? torrent : nil,
+                seeders: attrs["seeders"].flatMap(Int.init)
+            )
+        }
+    }
+
+    /// 40 hex characters, lowercased.
+    static func validHash(_ text: String) -> String? {
+        let hash = text.trimmingCharacters(in: .whitespaces).lowercased()
+        return hash.count == 40 && hash.allSatisfy(\.isHexDigit) ? hash : nil
+    }
+
+    static func hash(inMagnet magnet: String) -> String? {
+        let topics = URLComponents(string: magnet)?.queryItems?.filter { $0.name.lowercased() == "xt" } ?? []
+        return topics.lazy.compactMap { $0.value }
+            .filter { $0.lowercased().hasPrefix("urn:btih:") }
+            .compactMap { validHash(String($0.dropFirst(9))) }
+            .first
     }
 }
 
@@ -204,8 +295,13 @@ final class NewznabParser: NSObject, XMLParserDelegate {
         case "enclosure":
             item?.enclosureURL = attributes["url"]
             item?.enclosureLength = attributes["length"].flatMap(Int64.init)
-        case "newznab:attr", "attr":
-            if let key = attributes["name"], let value = attributes["value"] { item?.attrs[key] = value }
+        case "newznab:attr", "torznab:attr", "attr":
+            guard let key = attributes["name"], let value = attributes["value"] else { break }
+            if key == "category" {
+                if let id = Int(value) { item?.categories.append(id) }
+            } else {
+                item?.attrs[key] = value
+            }
         case "movie-search", "tv-search":
             guard inCaps, attributes["available"]?.lowercased() != "no" else { break }
             let params = Set((attributes["supportedParams"] ?? "q").lowercased().split(separator: ",").map {

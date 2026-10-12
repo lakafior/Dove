@@ -56,6 +56,13 @@
 	<string>$(AppIdentifierPrefix)net.smigi.dove.shared</string>
 	<key>LSSupportsOpeningDocumentsInPlace</key>
 	<true/>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsLocalNetworking</key>
+		<true/>
+	</dict>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>Dove talks to servers you add on your home network, such as Jackett, Prowlarr or nzbdav.</string>
 	<key>UIFileSharingEnabled</key>
 	<true/>
 	<key>UTImportedTypeDeclarations</key>

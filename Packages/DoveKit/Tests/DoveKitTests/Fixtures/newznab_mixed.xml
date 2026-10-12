@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:newznab="http://www.newznab.com/DTD/2010/feeds/attributes/">
+<channel>
+  <title>Example Indexer</title>
+  <item>
+    <title>Some.Movie.2023.1080p.BluRay.x264-GRP</title>
+    <guid>m1</guid>
+    <enclosure url="https://indexer.example/api?t=get&amp;id=m1&amp;apikey=KEY" length="9000000000" type="application/x-nzb"/>
+    <newznab:attr name="category" value="2000"/>
+    <newznab:attr name="category" value="2040"/>
+  </item>
+  <item>
+    <title>Some.Movie.Game.v1.2-CODEX</title>
+    <guid>g1</guid>
+    <enclosure url="https://indexer.example/api?t=get&amp;id=g1&amp;apikey=KEY" length="40000000000" type="application/x-nzb"/>
+    <newznab:attr name="category" value="4000"/>
+    <newznab:attr name="category" value="4050"/>
+  </item>
+  <item>
+    <title>Some.Movie.OST.2023.FLAC</title>
+    <guid>a1</guid>
+    <enclosure url="https://indexer.example/api?t=get&amp;id=a1&amp;apikey=KEY" length="400000000" type="application/x-nzb"/>
+    <newznab:attr name="category" value="3040"/>
+  </item>
+  <item>
+    <title>Some.Movie.Unlabelled</title>
+    <guid>u1</guid>
+    <enclosure url="https://indexer.example/api?t=get&amp;id=u1&amp;apikey=KEY" length="1000" type="application/x-nzb"/>
+  </item>
+</channel>
+</rss>

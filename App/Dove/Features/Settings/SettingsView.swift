@@ -30,15 +30,10 @@ struct SettingsView: View {
                         LabeledContent("nzbdav", value: model.isConfigured(.nzbdav) ? "Connected" : "Not set up")
                     }
                     TorBoxUsenetToggle()
-                    NavigationLink {
-                        NewznabIndexersView()
-                    } label: {
-                        LabeledContent("Indexers", value: "\(model.newznabIndexers.filter(\.enabled).count)")
-                    }
                 } header: {
                     Text("Usenet")
                 } footer: {
-                    Text("NZBs go to nzbdav first, then to TorBox if your TorBox plan includes Usenet. Indexers are searched from your phone.")
+                    Text("NZBs go to nzbdav first, then to TorBox if your TorBox plan includes Usenet.")
                 }
 
                 Section {
@@ -47,10 +42,15 @@ struct SettingsView: View {
                     } label: {
                         LabeledContent("Stremio addons", value: "\(model.addonEntries.count)")
                     }
+                    NavigationLink {
+                        NewznabIndexersView()
+                    } label: {
+                        LabeledContent("Indexers", value: "\(model.newznabIndexers.filter(\.enabled).count)")
+                    }
                 } header: {
                     Text("Search")
                 } footer: {
-                    Text("Titles, metadata and sources come from your Stremio addons.")
+                    Text("Titles, metadata and sources come from your Stremio addons. Indexers (Newznab for Usenet, Torznab for torrents) are searched from your phone and add sources, and power Search › Other.")
                 }
 
                 FilesLocationSection()

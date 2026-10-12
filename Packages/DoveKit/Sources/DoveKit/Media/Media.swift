@@ -120,6 +120,13 @@ public struct StreamCandidate: Identifiable, Sendable, Hashable {
     public var cached: Bool?
     public var bingeGroup: String?
     public var traits: StreamTraits?
+    /// Newznab category (`3010`…) for results from Dove's own indexers.
+    public var category: Int?
+    /// A Torznab result's `.torrent` link, when it gave no info hash. It carries the indexer's API key and
+    /// may point to a host only the phone reaches: resolve it with `IndexerTorrent.prepare` before adding.
+    public var torrentURL: URL?
+    /// Torznab: seeders the indexer last saw.
+    public var seeders: Int?
 
     public init(
         id: String,
@@ -136,7 +143,10 @@ public struct StreamCandidate: Identifiable, Sendable, Hashable {
         service: String? = nil,
         cached: Bool? = nil,
         bingeGroup: String? = nil,
-        traits: StreamTraits? = nil
+        traits: StreamTraits? = nil,
+        category: Int? = nil,
+        torrentURL: URL? = nil,
+        seeders: Int? = nil
     ) {
         self.id = id
         self.kind = kind
@@ -153,6 +163,9 @@ public struct StreamCandidate: Identifiable, Sendable, Hashable {
         self.cached = cached
         self.bingeGroup = bingeGroup
         self.traits = traits
+        self.category = category
+        self.torrentURL = torrentURL
+        self.seeders = seeders
     }
 
     /// What "Add to library" sends to a backend: the torrent (whole, no file index) or the NZB.
@@ -161,6 +174,7 @@ public struct StreamCandidate: Identifiable, Sendable, Hashable {
             return .magnet("magnet:?xt=urn:btih:\(infoHash.lowercased())")
         }
         if let nzbURL { return .nzbURL(nzbURL) }
+        if let torrentURL { return .torrentURL(torrentURL) }
         return nil
     }
 

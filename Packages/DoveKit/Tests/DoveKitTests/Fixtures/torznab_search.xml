@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="1.0" xmlns:atom="http://www.w3.org/2005/Atom" xmlns:torznab="http://torznab.com/schemas/2015/feed">
+  <channel>
+    <title>AggregateSearch</title>
+    <item>
+      <title>Some.Movie.2023.1080p.BluRay.x264-GRP</title>
+      <guid>https://tracker.example/details/1</guid>
+      <jackettindexer id="publictracker">Public Tracker</jackettindexer>
+      <link>http://192.168.1.10:9117/dl/publictracker/?jackett_apikey=KEY&amp;path=abc&amp;file=Some.Movie</link>
+      <size>9000000000</size>
+      <enclosure url="http://192.168.1.10:9117/dl/publictracker/?jackett_apikey=KEY&amp;path=abc&amp;file=Some.Movie" length="9000000000" type="application/x-bittorrent" />
+      <torznab:attr name="category" value="2000" />
+      <torznab:attr name="category" value="100002" />
+      <torznab:attr name="seeders" value="120" />
+      <torznab:attr name="peers" value="140" />
+      <torznab:attr name="infohash" value="AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA" />
+      <torznab:attr name="magneturl" value="magnet:?xt=urn:btih:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA&amp;dn=Some.Movie" />
+    </item>
+    <item>
+      <title>Some.Album.2023.FLAC</title>
+      <guid>https://tracker.example/details/2</guid>
+      <link>magnet:?xt=urn:btih:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb&amp;dn=Some.Album</link>
+      <torznab:attr name="category" value="3040" />
+      <torznab:attr name="seeders" value="5" />
+    </item>
+    <item>
+      <title>Some.Program.v2.0.x64</title>
+      <guid>https://private.example/details/3</guid>
+      <link>http://192.168.1.10:9117/dl/private/?jackett_apikey=KEY&amp;path=xyz</link>
+      <enclosure url="http://192.168.1.10:9117/dl/private/?jackett_apikey=KEY&amp;path=xyz" length="300000000" type="application/x-bittorrent" />
+      <torznab:attr name="category" value="4000" />
+      <torznab:attr name="seeders" value="12" />
+    </item>
+    <item>
+      <title>Broken.Result</title>
+      <guid>https://tracker.example/details/4</guid>
+      <torznab:attr name="category" value="4000" />
+    </item>
+  </channel>
+</rss>

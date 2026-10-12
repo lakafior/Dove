@@ -1,10 +1,25 @@
 import Foundation
 
-/// One Newznab indexer the user searches from the phone (their own IP, so indexers that block shared
-/// AIOStreams servers still answer). Prowlarr and NZBHydra speak Newznab too and fit here as one entry.
-/// The whole list lives in the Keychain: the API keys are secrets.
+/// One Newznab or Torznab indexer the user searches from the phone (their own IP, so indexers that block
+/// shared AIOStreams servers still answer). Prowlarr, NZBHydra and Jackett speak these too and fit here as one
+/// entry each. The whole list lives in the Keychain: the API keys are secrets.
 public struct NewznabIndexer: Codable, Sendable, Identifiable, Hashable {
+    /// Same protocol, different results: Newznab finds NZBs (nzbdav, TorBox Usenet), Torznab finds torrents
+    /// (Jackett, Prowlarr; they go to the debrid services).
+    public enum Kind: String, Codable, Sendable, CaseIterable {
+        case newznab
+        case torznab
+
+        public var displayName: String {
+            switch self {
+            case .newznab: "Newznab (Usenet)"
+            case .torznab: "Torznab (torrents)"
+            }
+        }
+    }
+
     public var id: String
+    public var kind: Kind
     public var name: String
     /// Site root (`https://api.nzbgeek.info`); `apiPath` is appended.
     public var url: URL
@@ -16,6 +31,7 @@ public struct NewznabIndexer: Codable, Sendable, Identifiable, Hashable {
 
     public init(
         id: String = UUID().uuidString,
+        kind: Kind = .newznab,
         name: String,
         url: URL,
         apiPath: String = "/api",
@@ -24,12 +40,30 @@ public struct NewznabIndexer: Codable, Sendable, Identifiable, Hashable {
         dailyLimit: Int? = nil
     ) {
         self.id = id
+        self.kind = kind
         self.name = name
         self.url = url
         self.apiPath = apiPath
         self.apiKey = apiKey
         self.enabled = enabled
         self.dailyLimit = dailyLimit
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, kind, name, url, apiPath, apiKey, enabled, dailyLimit
+    }
+
+    /// Lists saved before Torznab existed have no `kind`: they are Newznab.
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(String.self, forKey: .id)
+        kind = try container.decodeIfPresent(Kind.self, forKey: .kind) ?? .newznab
+        name = try container.decode(String.self, forKey: .name)
+        url = try container.decode(URL.self, forKey: .url)
+        apiPath = try container.decode(String.self, forKey: .apiPath)
+        apiKey = try container.decode(String.self, forKey: .apiKey)
+        enabled = try container.decode(Bool.self, forKey: .enabled)
+        dailyLimit = try container.decodeIfPresent(Int.self, forKey: .dailyLimit)
     }
 
     /// Accepts what users paste: a site root, or a full `…/api` URL.

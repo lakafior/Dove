@@ -5,6 +5,17 @@ import Foundation
 public enum ContentKind: String, Codable, Sendable, CaseIterable, Hashable {
     case video, music, books, software, other
 
+    /// The kind of a Newznab category: 2000 movies and 5000 TV are video, 3000 audio, 4000 PC, 7000 books.
+    public init(newznabCategory category: Int) {
+        switch category / 1000 {
+        case 2, 5: self = .video
+        case 3: self = .music
+        case 4: self = .software
+        case 7: self = .books
+        default: self = .other
+        }
+    }
+
     public var displayName: String {
         switch self {
         case .video: "Video"

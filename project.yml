@@ -46,6 +46,11 @@ targets:
           - CFBundleTypeName: NZB file
             LSHandlerRank: Alternate
             LSItemContentTypes: [org.newzbin.nzb]
+        # Jackett/Prowlarr (Torznab) and other self-hosted servers often live on the home network, over plain HTTP.
+        # Local networking only (IPs, .local, single-label names): the internet stays HTTPS-only.
+        NSLocalNetworkUsageDescription: Dove talks to servers you add on your home network, such as Jackett, Prowlarr or nzbdav.
+        NSAppTransportSecurity:
+          NSAllowsLocalNetworking: true
         # Downloaded files (Documents) show in Files under On My iPhone › Dove.
         UIFileSharingEnabled: true
         LSSupportsOpeningDocumentsInPlace: true

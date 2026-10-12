@@ -16,6 +16,8 @@ public actor NewznabSearch {
         public func routed(to backend: BackendID?) -> Results {
             var routed = self
             routed.candidates = candidates.map { candidate in
+                // Torznab torrents go to the debrid services; their cache status comes from `CacheChecker`.
+                guard candidate.kind == .usenet else { return candidate }
                 var candidate = candidate
                 switch backend {
                 case .nzbdav:
@@ -71,7 +73,7 @@ public actor NewznabSearch {
         state = stateURL.flatMap { try? JSONDecoder().decode(State.self, from: Data(contentsOf: $0)) } ?? State()
     }
 
-    public var isEmpty: Bool { !indexers.contains(where: \.enabled) }
+    public nonisolated var isEmpty: Bool { !indexers.contains(where: \.enabled) }
 
     public func search(_ query: NewznabQuery) async -> Results {
         let active = indexers.filter(\.enabled)

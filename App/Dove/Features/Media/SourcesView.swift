@@ -252,6 +252,8 @@ struct SourcesView: View {
         Task {
             defer { busy.remove(group.id) }
             do {
+                // A Torznab result's .torrent link carries the indexer's key: fetch it here, never hand it over.
+                let source = try await IndexerTorrent.prepare(source)
                 let added: BackendID
                 let itemID: LibraryItem.ID
                 var skipped: [String] = []

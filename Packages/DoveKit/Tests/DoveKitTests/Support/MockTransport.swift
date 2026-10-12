@@ -9,6 +9,7 @@ actor MockTransport: HTTPTransport {
         var status: Int = 200
         var body: Data
         var contentType = "application/json"
+        var headers: [String: String] = [:]
     }
 
     private struct Key: Hashable {
@@ -36,6 +37,12 @@ actor MockTransport: HTTPTransport {
         stub(pathSuffix, bodyContains: bodyContains, queryContains: queryContains, status: status, body: Data(json.utf8))
     }
 
+    /// A bare response with headers (redirects: `Location`).
+    func stub(_ pathSuffix: String, queryContains: String? = nil, status: Int, headers: [String: String], body: Data = Data()) {
+        stubs[Key(path: pathSuffix, body: nil, query: queryContains), default: []]
+            .append(Stub(status: status, body: body, contentType: "application/octet-stream", headers: headers))
+    }
+
     func stub(_ pathSuffix: String, status: Int = 200, html: String) {
         stub(pathSuffix, status: status, body: Data(html.utf8), contentType: "text/html; charset=utf-8")
     }
@@ -58,7 +65,7 @@ actor MockTransport: HTTPTransport {
             url: request.url!,
             statusCode: match.status,
             httpVersion: nil,
-            headerFields: ["Content-Type": match.contentType]
+            headerFields: ["Content-Type": match.contentType].merging(match.headers) { $1 }
         )!
         return (match.body, response)
     }

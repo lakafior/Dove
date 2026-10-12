@@ -110,8 +110,8 @@ struct TorBoxUsenetToggle: View {
     }
 }
 
-/// Dove's own Newznab indexers (Prowlarr and NZBHydra count as one each): searched from the phone,
-/// so indexers that block shared AIOStreams servers still answer.
+/// Dove's own Newznab (Usenet) and Torznab (torrent) indexers; Prowlarr, NZBHydra and Jackett count as one each.
+/// Searched from the phone, so indexers that block shared AIOStreams servers still answer.
 struct NewznabIndexersView: View {
     @Environment(AppModel.self) private var model
     @State private var editing: NewznabIndexer?
@@ -159,6 +159,7 @@ struct NewznabIndexersView: View {
         VStack(alignment: .leading, spacing: 2) {
             HStack {
                 Text(indexer.name).foregroundStyle(indexer.enabled ? .primary : .secondary)
+                if indexer.kind == .torznab { Text("Torznab").font(.caption).foregroundStyle(.secondary) }
                 if !indexer.enabled { Text("off").font(.caption).foregroundStyle(.secondary) }
             }
             Text(usageText(indexer)).font(.caption).foregroundStyle(.secondary)
@@ -206,6 +207,7 @@ private struct NewznabIndexerEditor: View {
     let indexer: NewznabIndexer
     let onSave: (NewznabIndexer) -> Void
 
+    @State private var kind: NewznabIndexer.Kind = .newznab
     @State private var name = ""
     @State private var url = ""
     @State private var apiKey = ""
@@ -217,12 +219,17 @@ private struct NewznabIndexerEditor: View {
     var body: some View {
         Form {
             Section {
+                Picker("Type", selection: $kind) {
+                    ForEach(NewznabIndexer.Kind.allCases, id: \.self) { Text($0.displayName).tag($0) }
+                }
                 TextField("Name", text: $name)
-                TextField("https://api.indexer.example", text: $url)
+                TextField(kind == .newznab ? "https://api.indexer.example" : "http://jackett.lan:9117/api/v2.0/indexers/all/results/torznab", text: $url)
                     .keyboardType(.URL)
                 SecureField("API key", text: $apiKey)
             } footer: {
-                Text("The indexer's address (a full …/api link works too) and your API key from its profile page.")
+                Text(kind == .newznab
+                    ? "The indexer's address (a full …/api link works too) and your API key from its profile page. Results are NZBs for nzbdav or TorBox Usenet."
+                    : "The Torznab feed from Jackett (…/torznab) or Prowlarr (…/<id>/api) and its API key. Results are torrents for your debrid services; Dove fetches .torrent links on the phone, so a local address works.")
             }
             Section {
                 TextField("Daily API limit (optional)", text: $limit)
@@ -259,6 +266,7 @@ private struct NewznabIndexerEditor: View {
             }
         }
         .onAppear {
+            kind = indexer.kind
             name = indexer.name
             // A new indexer starts empty; an existing one shows its address (and a non-standard API path).
             url = indexer.apiKey.isEmpty ? "" : indexer.url.absoluteString + (indexer.apiPath == "/api" ? "" : indexer.apiPath)
@@ -274,6 +282,7 @@ private struct NewznabIndexerEditor: View {
         let key = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !key.isEmpty else { return nil }
         var result = indexer
+        result.kind = kind
         result.name = name.trimmingCharacters(in: .whitespaces).isEmpty ? (target.url.host() ?? "Indexer") : name
         result.url = target.url
         result.apiPath = target.apiPath

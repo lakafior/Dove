@@ -26,10 +26,45 @@ struct NewznabTests {
 
     @Test func parametersPreferIMDbAndFallBackToTheTitle() {
         let episode = NewznabQuery.episode(imdbID: "tt0903747", season: 2, episode: 5, title: "Breaking Bad")
-        #expect(episode.parameters(supported: ["q", "imdbid", "season", "ep"])?.map(\.name) == ["imdbid", "season", "ep"])
+        #expect(episode.parameters(supported: ["q", "imdbid", "season", "ep"])?.map(\.name) == ["imdbid", "cat", "season", "ep"])
         #expect(episode.parameters(supported: ["q", "imdbid"])?.first?.value == "0903747")
         #expect(episode.parameters(supported: ["q", "tvdbid", "season", "ep"])?.first == URLQueryItem(name: "q", value: "Breaking Bad"))
         #expect(NewznabQuery.season(imdbID: "tt1", season: 3, title: nil).parameters(supported: ["q"]) == nil)
+    }
+
+    @Test func moviesAndSeriesAskForTheirCategoryAndTextQueriesForThePickedOne() {
+        let cat = { (query: NewznabQuery, params: Set<String>) in
+            query.parameters(supported: params)?.first { $0.name == "cat" }?.value
+        }
+        #expect(cat(.movie(imdbID: "tt1", title: "A"), ["imdbid"]) == "2000")
+        #expect(cat(.season(imdbID: "tt1", season: 1, title: "A"), ["imdbid", "season"]) == "5000")
+        #expect(cat(.text("photoshop", category: .software), ["q"]) == "4000")
+        #expect(cat(.text("anything", category: .all), ["q"]) == nil)
+
+        let text = NewznabQuery.text("Some Album", category: .music)
+        #expect(text.function == "search")
+        #expect(text.parameters(supported: NewznabCaps(movieParams: [], tvParams: []).params(for: text))?.first
+            == URLQueryItem(name: "q", value: "Some Album"))
+    }
+
+    @Test func resultsFromOtherCategoriesAreDroppedFromMovieSearches() async throws {
+        let transport = MockTransport()
+        await transport.stub("/api", queryContains: "t=movie", body: try Fixture.data("newznab_mixed", extension: "xml"), contentType: "application/xml")
+        await transport.stub("/api", queryContains: "t=search", body: try Fixture.data("newznab_mixed", extension: "xml"), contentType: "application/xml")
+        let client = NewznabClient(indexer: indexer(), transport: transport)
+        let caps = NewznabCaps(movieParams: ["q", "imdbid"], tvParams: ["q"], maxLimit: 100)
+
+        let movie = try #require(try await client.search(.movie(imdbID: "tt1", title: "Some Movie"), caps: caps))
+        #expect(movie.map(\.title) == ["Some.Movie.2023.1080p.BluRay.x264-GRP", "Some.Movie.Unlabelled"], "uncategorized results stay")
+        #expect(movie[0].category == 2040)
+
+        let software = try #require(try await client.search(.text("Some Movie", category: .software), caps: caps))
+        #expect(software.map(\.title) == ["Some.Movie.Game.v1.2-CODEX", "Some.Movie.Unlabelled"])
+        #expect(query(try #require(await transport.requests.last))["cat"] == "4000")
+
+        let all = try #require(try await client.search(.text("Some Movie", category: .all), caps: caps))
+        #expect(all.count == 4)
+        #expect(all.compactMap(\.category).map(ContentKind.init(newznabCategory:)) == [.video, .software, .music])
     }
 
     @Test func normalizesPastedURLs() {

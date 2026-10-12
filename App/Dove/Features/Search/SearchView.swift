@@ -2,7 +2,9 @@ import DoveKit
 import SwiftUI
 
 /// The smart field: a magnet, info hash, .torrent/.nzb URL or hoster link opens the add sheet;
-/// anything else searches titles through the user's Stremio addons.
+/// anything else searches titles through the user's Stremio addons, or, in Other, names through Dove's
+/// own Newznab indexers in the picked category (software, music, books…). Movie and series searches never
+/// see those results: indexers are asked for Movies/TV only there.
 struct SearchView: View {
     @Environment(AppModel.self) private var model
     @State private var text = ""
@@ -11,6 +13,10 @@ struct SearchView: View {
     @State private var results: [MediaSummary] = []
     @State private var isSearching = false
     @State private var typeFilter: MediaType?
+    @AppStorage("searchScope") private var scope: SearchScope = .media
+    @AppStorage("otherCategory") private var category: NewznabCategory = .all
+    @State private var otherResults: [StreamCandidate] = []
+    @State private var busy: Set<StreamCandidate.ID> = []
     @Environment(\.scenePhase) private var scenePhase
     /// `UIPasteboard.changeCount` the banner was last answered for, so it does not come back for the same copy.
     @AppStorage("clipboardAnsweredChange") private var answeredChange = -1
@@ -29,11 +35,23 @@ struct SearchView: View {
                     clipboardBanner
                 }
                 Section {
-                    TextField("Title, magnet or link", text: $text)
+                    TextField(scope == .media ? "Title, magnet or link" : "Name, magnet or link", text: $text)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
                         .submitLabel(.search)
                         .onSubmit(handleSubmit)
+                    if scope == .other {
+                        Picker("Category", selection: $category) {
+                            ForEach(NewznabCategory.allCases, id: \.self) { Text($0.displayName).tag($0) }
+                        }
+                    }
+                } header: {
+                    Picker("Search", selection: $scope) {
+                        ForEach(SearchScope.allCases, id: \.self) { Text($0.label).tag($0) }
+                    }
+                    .pickerStyle(.segmented)
+                    .textCase(nil)
+                    .padding(.bottom, 4)
                 } footer: {
                     if let message { Text(message) }
                 }
@@ -43,7 +61,11 @@ struct SearchView: View {
                         .listRowBackground(Color.clear)
                 }
 
-                if !results.isEmpty {
+                if scope == .other, !otherResults.isEmpty {
+                    otherResultsSection
+                }
+
+                if scope == .media, !results.isEmpty {
                     Section {
                         ForEach(visibleResults) { item in
                             NavigationLink(value: item) { MediaRow(item: item) }
@@ -62,6 +84,8 @@ struct SearchView: View {
             }
             .navigationTitle("Dove")
             .navigationDestination(for: MediaSummary.self) { MediaDetailView(item: $0) }
+            .onChange(of: scope) { message = nil }
+            .onChange(of: category) { otherResults = [] }
             .onAppear(perform: checkPasteboard)
             .onChange(of: scenePhase) { if scenePhase == .active { checkPasteboard() } }
             .onReceive(NotificationCenter.default.publisher(for: UIPasteboard.changedNotification)) { _ in checkPasteboard() }
@@ -128,6 +152,7 @@ struct SearchView: View {
         }
         let query = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !query.isEmpty else { return }
+        if scope == .other { return searchOther(query) }
         guard model.addonSet.canSearch else {
             message = "Add a Stremio addon that can search (for example AIOMetadata or Cinemeta) in Settings."
             return
@@ -141,6 +166,75 @@ struct SearchView: View {
                 message = error.localizedDescription
             }
             isSearching = false
+        }
+    }
+}
+
+// MARK: - Other
+
+extension SearchView {
+    @ViewBuilder
+    var otherResultsSection: some View {
+        @Bindable var model = model
+        Section {
+            Toggle("Download only", isOn: $model.downloadOnly)
+            ForEach(otherResults) { candidate in
+                OtherResultRow(
+                    candidate: candidate,
+                    isBusy: busy.contains(candidate.id),
+                    downloadOnly: model.downloadOnly,
+                    onAdd: canAdd(candidate) ? { addOther(candidate) } : nil
+                )
+            }
+        } footer: {
+            if otherResults.contains(where: { !canAdd($0) }) {
+                Text("NZBs need nzbdav or TorBox Usenet, torrents a debrid service: set them up in Settings.")
+            }
+        }
+    }
+
+    /// Words in the picked category, through Dove's own indexers. Same release from several indexers: one row.
+    func searchOther(_ query: String) {
+        guard !model.newznab.isEmpty else {
+            message = "Add a Newznab or Torznab indexer in Settings › Search › Indexers to search beyond movies and series."
+            return
+        }
+        isSearching = true
+        otherResults = []
+        let search = model.newznab
+        let category = category
+        Task {
+            let found = await search.search(.text(query, category: category))
+            var seen = Set<String>()
+            otherResults = found.candidates.filter { seen.insert($0.title.lowercased()).inserted }
+            let failures = found.failures.joined(separator: "\n")
+            message = otherResults.isEmpty
+                ? (failures.isEmpty ? "Nothing found." : failures)
+                : (failures.isEmpty ? nil : failures)
+            isSearching = false
+        }
+    }
+
+    func canAdd(_ candidate: StreamCandidate) -> Bool {
+        candidate.kind == .usenet ? model.usenetBackend != nil : !model.backends(usenet: false).isEmpty
+    }
+
+    /// Adds through the priority order (NZBs: nzbdav, then TorBox Usenet; torrents: the debrid order);
+    /// "Download only" fetches every file.
+    func addOther(_ candidate: StreamCandidate) {
+        guard let source = candidate.librarySource else { return }
+        busy.insert(candidate.id)
+        Task {
+            defer { busy.remove(candidate.id) }
+            do {
+                // A Torznab result's .torrent link carries the indexer's key: fetch it here, never hand it over.
+                let result = try await model.router.add(try await IndexerTorrent.prepare(source))
+                message = model.downloadOnly
+                    ? await model.startDownloadOnly(result.itemID, on: result.backend, name: candidate.title, pick: .allVideos)
+                    : "Added to \(result.backend.displayName)."
+            } catch {
+                message = error.localizedDescription
+            }
         }
     }
 }
