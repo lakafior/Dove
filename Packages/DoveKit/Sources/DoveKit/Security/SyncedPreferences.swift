@@ -1,0 +1,35 @@
+import Foundation
+
+/// Settings that are not secrets but should survive a fresh install: stored as one Keychain item, so
+/// iCloud Keychain carries them with the keys. Every field decodes leniently, so older and newer builds
+/// read each other's saves.
+public struct SyncedPreferences: Codable, Sendable, Equatable {
+    public var downloadOnly = false
+    public var sourceFilter = SourceFilter()
+    /// AIOStreams variant for Dove's searches; empty for none.
+    public var aioStreamsVariant = ""
+
+    public init() {}
+
+    enum CodingKeys: String, CodingKey { case downloadOnly, sourceFilter, aioStreamsVariant }
+
+    public init(from decoder: any Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        downloadOnly = (try? c.decodeIfPresent(Bool.self, forKey: .downloadOnly)) ?? false
+        sourceFilter = (try? c.decodeIfPresent(SourceFilter.self, forKey: .sourceFilter)) ?? SourceFilter()
+        aioStreamsVariant = (try? c.decodeIfPresent(String.self, forKey: .aioStreamsVariant)) ?? ""
+    }
+}
+
+extension SharedConfiguration {
+    /// Nil when nothing was saved yet (first launch, or a build from before preferences moved here).
+    public static func preferences(from keychain: KeychainStore) -> SyncedPreferences? {
+        guard let json = try? keychain.get(.preferences) else { return nil }
+        return try? JSONDecoder().decode(SyncedPreferences.self, from: Data(json.utf8))
+    }
+
+    public static func savePreferences(_ preferences: SyncedPreferences, to keychain: KeychainStore) {
+        guard let data = try? JSONEncoder().encode(preferences) else { return }
+        try? keychain.set(String(decoding: data, as: UTF8.self), for: .preferences)
+    }
+}

@@ -22,6 +22,8 @@ public enum CredentialKey: String, Sendable, CaseIterable {
     case torBoxUsenet
     /// JSON array of `NewznabIndexer` (they carry API keys).
     case newznabIndexers
+    /// JSON of `SyncedPreferences`: settings that are not secrets, kept here so iCloud Keychain carries them too.
+    case preferences
 }
 
 public enum KeychainError: Error, Sendable {
@@ -33,13 +35,20 @@ public enum KeychainError: Error, Sendable {
 /// With an `accessGroup` (`<TeamID>.net.smigi.dove.shared`, from the `keychain-access-groups` entitlement),
 /// items are written there so the share extension can read them. Reads search every group the process can
 /// see, so items saved before the group existed are still found; `migrateToAccessGroup()` moves them over.
+///
+/// Items are written `synchronizable`: iCloud Keychain carries them, end-to-end encrypted, to the user's other
+/// devices and to a fresh install (when iCloud Keychain is on; only builds signed by the same team can read
+/// them). Reads and deletes match synced and device-only items alike, so older device-only items are still
+/// found until `migrateToAccessGroup()` rewrites them.
 public struct KeychainStore: Sendable {
     public let service: String
     public let accessGroup: String?
+    public let synchronizable: Bool
 
-    public init(service: String = "app.dove.credentials", accessGroup: String? = nil) {
+    public init(service: String = "app.dove.credentials", accessGroup: String? = nil, synchronizable: Bool = true) {
         self.service = service
         self.accessGroup = accessGroup
+        self.synchronizable = synchronizable
     }
 
     public func get(_ key: CredentialKey) throws -> String? {
@@ -71,7 +80,9 @@ public struct KeychainStore: Sendable {
 
         var add = baseQuery(key)
         add[kSecValueData as String] = Data(value.utf8)
+        // Synced items cannot be "this device only"; after first unlock keeps background downloads working.
         add[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlock
+        add[kSecAttrSynchronizable as String] = synchronizable
         if let accessGroup { add[kSecAttrAccessGroup as String] = accessGroup }
         var status = SecItemAdd(add as CFDictionary, nil)
         if status == errSecMissingEntitlement, accessGroup != nil {
@@ -79,12 +90,16 @@ public struct KeychainStore: Sendable {
             add[kSecAttrAccessGroup as String] = nil
             status = SecItemAdd(add as CFDictionary, nil)
         }
+        if status == errSecMissingEntitlement || status == errSecParam, synchronizable {
+            // No iCloud Keychain for this process (unsigned test runs): keep the value on the device.
+            add[kSecAttrSynchronizable as String] = false
+            status = SecItemAdd(add as CFDictionary, nil)
+        }
         guard status == errSecSuccess else { throw KeychainError.unexpectedStatus(status) }
     }
 
-    /// Rewrites every stored value so it lands in `accessGroup`. Safe to run more than once.
+    /// Rewrites every stored value so it lands in `accessGroup`, synchronizable. Safe to run more than once.
     public func migrateToAccessGroup() {
-        guard accessGroup != nil else { return }
         for key in CredentialKey.allCases {
             if let value = try? get(key) { try? set(value, for: key) }
         }
@@ -94,7 +109,9 @@ public struct KeychainStore: Sendable {
         [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
-            kSecAttrAccount as String: key.rawValue
+            kSecAttrAccount as String: key.rawValue,
+            // Match synced and device-only copies, so reads find old items and deletes leave no duplicate.
+            kSecAttrSynchronizable as String: kSecAttrSynchronizableAny
         ]
     }
 }

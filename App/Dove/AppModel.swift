@@ -34,14 +34,13 @@ final class AppModel {
     /// "Download only" adds: wait for the service, download, delete from the service. Set up in `init`.
     private(set) var downloadJobs: DownloadJobs!
 
-    private static let downloadOnlyKey = "addDownloadOnly"
     /// Adds from search and the add sheet go through `downloadJobs` instead of staying in the library.
-    var downloadOnly = UserDefaults.standard.bool(forKey: AppModel.downloadOnlyKey) {
-        didSet { UserDefaults.standard.set(downloadOnly, forKey: Self.downloadOnlyKey) }
+    var downloadOnly = false {
+        didSet { savePreferences() }
     }
 
     /// Debrid priority, highest first. "Automatic" adds try them in this order and fall through on any error.
-    /// NZBs always go to nzbdav. Not a secret, so it lives in UserDefaults.
+    /// NZBs always go to nzbdav. Not a secret; in the Keychain so the share extension and iCloud Keychain see it.
     var debridOrder: [BackendID] {
         didSet { SharedConfiguration.saveDebridOrder(debridOrder, to: keychain) }
     }
@@ -49,21 +48,33 @@ final class AppModel {
     /// Where the order lived before the share extension needed it.
     private static let legacyOrderKey = "debridOrder"
     private static let migratedKey = "keychainMovedToSharedGroup"
-    // v2: the default sort became "largest first"; older saves had "addon order" written in.
-    private static let filterKey = "sourceFilter.v2"
-    private static let variantKey = "aioStreamsVariant"
+    /// Set once every Keychain item was rewritten as synchronizable (iCloud Keychain).
+    private static let synchronizedKey = "keychainSynchronizable.v1"
+    // Where preferences lived before they moved to the synced Keychain item.
+    private static let legacyFilterKey = "sourceFilter.v2"
+    private static let legacyVariantKey = "aioStreamsVariant"
+    private static let legacyDownloadOnlyKey = "addDownloadOnly"
 
     /// Source list filters. Kept between screens and launches: "PL only, DV" is a standing preference.
     var sourceFilter = SourceFilter() {
-        didSet { UserDefaults.standard.set(try? JSONEncoder().encode(sourceFilter), forKey: Self.filterKey) }
+        didSet { savePreferences() }
     }
 
     /// AIOStreams config variant for Dove's searches (e.g. one without filters). Not a secret.
     var aioStreamsVariant: String = "" {
         didSet {
-            UserDefaults.standard.set(aioStreamsVariant, forKey: Self.variantKey)
+            savePreferences()
             rebuildAddonSet()
         }
+    }
+
+    /// Filters, variant and "download only" travel with the keys through iCloud Keychain.
+    private func savePreferences() {
+        var preferences = SyncedPreferences()
+        preferences.downloadOnly = downloadOnly
+        preferences.sourceFilter = sourceFilter
+        preferences.aioStreamsVariant = aioStreamsVariant
+        SharedConfiguration.savePreferences(preferences, to: keychain)
     }
     static let debrids = SharedConfiguration.debrids
 
@@ -91,12 +102,31 @@ final class AppModel {
             }
             UserDefaults.standard.set(true, forKey: Self.migratedKey)
         }
-        debridOrder = SharedConfiguration.debridOrder(from: keychain)
-        if let data = UserDefaults.standard.data(forKey: Self.filterKey),
-           let filter = try? JSONDecoder().decode(SourceFilter.self, from: data) {
-            sourceFilter = filter
+        // Items written before iCloud Keychain sync are rewritten as synchronizable, once.
+        if !UserDefaults.standard.bool(forKey: Self.synchronizedKey) {
+            keychain.migrateToAccessGroup()
+            UserDefaults.standard.set(true, forKey: Self.synchronizedKey)
         }
-        aioStreamsVariant = UserDefaults.standard.string(forKey: Self.variantKey) ?? ""
+        debridOrder = SharedConfiguration.debridOrder(from: keychain)
+        if let preferences = SharedConfiguration.preferences(from: keychain) {
+            downloadOnly = preferences.downloadOnly
+            sourceFilter = preferences.sourceFilter
+            aioStreamsVariant = preferences.aioStreamsVariant
+        } else {
+            // First launch of this build: bring the old UserDefaults values along, then save them synced.
+            // A fresh install has none: it saves nothing, so it cannot overwrite preferences that iCloud
+            // Keychain has not delivered yet.
+            let defaults = UserDefaults.standard
+            let legacyKeys = [Self.legacyDownloadOnlyKey, Self.legacyFilterKey, Self.legacyVariantKey]
+            let hasLegacy = legacyKeys.contains { defaults.object(forKey: $0) != nil }
+            downloadOnly = defaults.bool(forKey: Self.legacyDownloadOnlyKey)
+            if let data = defaults.data(forKey: Self.legacyFilterKey),
+               let filter = try? JSONDecoder().decode(SourceFilter.self, from: data) {
+                sourceFilter = filter
+            }
+            aioStreamsVariant = defaults.string(forKey: Self.legacyVariantKey) ?? ""
+            if hasLegacy { savePreferences() }
+        }
         reloadBackends()
         reloadNewznab()
         addonEntries = storedAddonURLs().map { AddonEntry(url: $0) }
