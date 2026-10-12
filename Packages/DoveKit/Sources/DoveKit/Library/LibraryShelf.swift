@@ -1,14 +1,17 @@
 import Foundation
 
-/// One library item with what Dove guessed from its name.
+/// One library item with what Dove guessed from its name (and files, when the service lists them).
 public struct ShelfItem: Identifiable, Sendable, Hashable {
     public let item: LibraryItem
     public let guess: MediaGuess
+    public let kind: ContentKind
     public var id: String { "\(item.backend.rawValue)/\(item.id)" }
 
-    public init(item: LibraryItem) {
+    /// - Parameter kind: what an earlier look at the item's files established; classified from the item otherwise.
+    public init(item: LibraryItem, kind: ContentKind? = nil) {
         self.item = item
         guess = ReleaseParser.guess(item.name)
+        self.kind = kind ?? ContentClassifier.classify(name: item.name, files: item.files)
     }
 }
 
@@ -36,14 +39,63 @@ public struct LibraryTitle: Identifiable, Sendable, Hashable {
         return .ready
     }
 
-    /// Items grouped by season for series ("Season 1", "Season 2", then unknown), episode order within.
+    /// Items grouped by season for series. Multi-season and complete packs (and items without a season)
+    /// come first under nil, then "Season 1", "Season 2"…, episode order within.
     public var seasons: [(season: Int?, items: [ShelfItem])] {
-        let grouped = Dictionary(grouping: items) { $0.guess.season }
+        let grouped = Dictionary(grouping: items) { item -> Int? in
+            switch item.guess.scope {
+            case .seasons, .complete, nil: nil
+            case .season, .episodes: item.guess.season
+            }
+        }
         return grouped.keys
-            .sorted { ($0 ?? .max) < ($1 ?? .max) }
+            .sorted { ($0 ?? .min) < ($1 ?? .min) }
             .map { season in
                 (season, grouped[season]!.sorted { ($0.guess.episode ?? -1, $0.item.name) < ($1.guess.episode ?? -1, $1.item.name) })
             }
+    }
+}
+
+extension LibraryTitle {
+    /// What the library holds of a series, for its card: "Complete", "S1–3", "S1–2 +3 ep", "S2E05", "S2 · 4 ep".
+    public var coverage: String? {
+        guard type == .series else { return nil }
+        let scopes = items.compactMap(\.guess.scope)
+        if scopes.contains(.complete) { return "Complete" }
+        var packSeasons = Set<Int>()
+        var episodes = Set<[Int]>()
+        for scope in scopes {
+            switch scope {
+            case .season(let season): packSeasons.insert(season)
+            case .seasons(let first, let last): packSeasons.formUnion(first...last)
+            case .episodes(let season, let numbers): numbers.forEach { episodes.insert([season, $0]) }
+            case .complete: break
+            }
+        }
+        let loose = episodes.filter { !packSeasons.contains($0[0]) }
+        if !packSeasons.isEmpty {
+            let packs = "S" + Self.ranges(packSeasons)
+            return loose.isEmpty ? packs : "\(packs) +\(loose.count) ep"
+        }
+        guard let first = loose.first else { return nil }
+        let seasons = Set(loose.map { $0[0] })
+        if loose.count == 1 { return SeriesScope.episodes(season: first[0], [first[1]]).label }
+        return seasons.count == 1 ? "S\(first[0]) · \(loose.count) ep" : "\(loose.count) ep"
+    }
+
+    /// 1,2,3,5 → "1–3, 5".
+    static func ranges(_ numbers: Set<Int>) -> String {
+        var parts: [String] = []
+        var run: [Int] = []
+        for number in numbers.sorted() {
+            if let last = run.last, number != last + 1 {
+                parts.append(run.count > 1 ? "\(run[0])–\(last)" : "\(run[0])")
+                run = []
+            }
+            run.append(number)
+        }
+        if let first = run.first, let last = run.last { parts.append(first == last ? "\(first)" : "\(first)–\(last)") }
+        return parts.joined(separator: ", ")
     }
 }
 
@@ -53,7 +105,7 @@ public enum LibraryShelf {
     public static func titles(_ items: [ShelfItem], matches: [String: MediaSummary]) -> [LibraryTitle] {
         var titles: [String: LibraryTitle] = [:]
         var order: [String] = []
-        for item in items {
+        for item in items where item.kind == .video {
             let media = matches[item.guess.key]
             let id = media.map { "media:\($0.type.rawValue):\($0.id)" } ?? "guess:\(item.guess.key)"
             if titles[id] == nil {
@@ -65,10 +117,42 @@ public enum LibraryShelf {
         return order.compactMap { titles[$0] }
             .sorted { ($0.latestAdded ?? .distantPast) > ($1.latestAdded ?? .distantPast) }
     }
+
+    /// Everything that is not video, newest first: listed by name, no titles or posters.
+    public static func others(_ items: [ShelfItem]) -> [ShelfItem] {
+        items.filter { $0.kind != .video }
+    }
 }
 
-/// Library filters: which debrids, movies or series, status, and a text query.
+/// Library filters: which debrids, what kind of content, status, and a text query.
 public struct LibraryFilter: Equatable, Sendable {
+    /// Movies and series split video; the other kinds map one to one.
+    public enum Category: String, CaseIterable, Sendable {
+        case movies, series, music, books, software, other
+
+        public var title: String {
+            switch self {
+            case .movies: "Movies"
+            case .series: "Series"
+            case .music: "Music"
+            case .books: "Books"
+            case .software: "Software"
+            case .other: "Other"
+            }
+        }
+
+        public func contains(_ item: ShelfItem) -> Bool {
+            switch self {
+            case .movies: item.kind == .video && item.guess.type == .movie
+            case .series: item.kind == .video && item.guess.type == .series
+            case .music: item.kind == .music
+            case .books: item.kind == .books
+            case .software: item.kind == .software
+            case .other: item.kind == .other
+            }
+        }
+    }
+
     public enum Status: String, CaseIterable, Sendable {
         case ready, active, failed
 
@@ -91,19 +175,19 @@ public struct LibraryFilter: Equatable, Sendable {
 
     /// Empty means every backend.
     public var backends: Set<BackendID> = []
-    public var type: MediaType?
+    public var category: Category?
     public var status: Status?
     public var query = ""
 
     public init() {}
 
     public var isActive: Bool {
-        !backends.isEmpty || type != nil || status != nil
+        !backends.isEmpty || category != nil || status != nil
     }
 
     public func matches(_ item: ShelfItem, title: String? = nil) -> Bool {
         if !backends.isEmpty && !backends.contains(item.item.backend) { return false }
-        if let type, item.guess.type != type { return false }
+        if let category, !category.contains(item) { return false }
         if let status, Status(of: item.item.status) != status { return false }
         return matchesQuery(item.item.name) || title.map(matchesQuery) == true
     }
@@ -111,7 +195,12 @@ public struct LibraryFilter: Equatable, Sendable {
     /// Keeps titles with at least one matching item, trimmed to those items.
     public func apply(to titles: [LibraryTitle]) -> [LibraryTitle] {
         titles.compactMap { title in
-            if let type, title.type != type { return nil }
+            switch category {
+            case nil: break
+            case .movies: if title.type != .movie { return nil }
+            case .series: if title.type != .series { return nil }
+            case .music, .books, .software, .other: return nil
+            }
             var title = title
             title.items = title.items.filter { item in
                 if !backends.isEmpty && !backends.contains(item.item.backend) { return false }
@@ -153,7 +242,7 @@ public enum LibraryLoader {
             var failures: [String] = []
             for await (id, result) in group {
                 switch result {
-                case .success(let list): items += list.map(ShelfItem.init)
+                case .success(let list): items += list.map { ShelfItem(item: $0) }
                 case .failure(let error): failures.append("\(id.displayName): \(error.localizedDescription)")
                 }
             }

@@ -114,7 +114,7 @@ struct LibraryShelfTests {
 
     @Test func filterByTypeStatusAndQuery() {
         var filter = LibraryFilter()
-        filter.type = .movie
+        filter.category = .movies
         #expect(filter.apply(to: items).count == 2)
         filter.status = .ready
         #expect(filter.apply(to: items).map(\.item.id) == ["torrent:R"])

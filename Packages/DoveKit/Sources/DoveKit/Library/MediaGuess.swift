@@ -7,6 +7,8 @@ public struct MediaGuess: Sendable, Hashable, Codable {
     public var type: MediaType
     public var season: Int?
     public var episode: Int?
+    /// For series: one or more episodes, a season, several seasons, or the complete series.
+    public var scope: SeriesScope?
 
     /// Groups items of the same title regardless of episode or release: `severance|series`, `dune|2021|movie`.
     public var key: String {
@@ -17,12 +19,20 @@ public struct MediaGuess: Sendable, Hashable, Codable {
         }
     }
 
-    public init(title: String, year: Int? = nil, type: MediaType, season: Int? = nil, episode: Int? = nil) {
+    public init(
+        title: String,
+        year: Int? = nil,
+        type: MediaType,
+        season: Int? = nil,
+        episode: Int? = nil,
+        scope: SeriesScope? = nil
+    ) {
         self.title = title
         self.year = year
         self.type = type
         self.season = season
         self.episode = episode
+        self.scope = scope
     }
 
     /// Lowercased letters and digits only, `&` as "and": "Marvel's Agents of S.H.I.E.L.D." → "marvelsagentsofshield".
@@ -32,6 +42,35 @@ public struct MediaGuess: Sendable, Hashable, Codable {
             .folding(options: .diacriticInsensitive, locale: nil)
             .filter { $0.isLetter || $0.isNumber }
     }
+}
+
+/// How much of a series a release holds.
+public enum SeriesScope: Sendable, Hashable, Codable {
+    case episodes(season: Int, [Int])
+    case season(Int)
+    case seasons(first: Int, last: Int)
+    /// "Complete series" without a season range in the name.
+    case complete
+
+    /// "S02E05", "S02E01–E03", "Season 2", "Seasons 1–3", "Complete series".
+    public var label: String {
+        switch self {
+        case .episodes(let season, let episodes):
+            let first = episodes.first ?? 0
+            let code = "S\(Self.two(season))E\(Self.two(first))"
+            guard let last = episodes.last, last != first else { return code }
+            return code + "–E\(Self.two(last))"
+        case .season(let season): return "Season \(season)"
+        case .seasons(let first, let last): return "Seasons \(first)–\(last)"
+        case .complete: return "Complete series"
+        }
+    }
+
+    public var isPack: Bool {
+        if case .episodes = self { false } else { true }
+    }
+
+    private static func two(_ value: Int) -> String { value < 10 ? "0\(value)" : String(value) }
 }
 
 extension ReleaseParser {
@@ -84,16 +123,29 @@ extension ReleaseParser {
             titleTokens.append(token)
         }
 
-        let (seasons, episodes) = seasonsAndEpisodes(in: spaced.lowercased())
+        let lower = spaced.lowercased()
+        let (seasons, episodes) = seasonsAndEpisodes(in: lower)
         var title = titleTokens.joined(separator: " ")
             .trimmingCharacters(in: CharacterSet(charactersIn: " -–:,"))
         if title.isEmpty { title = base }
+        let scope: SeriesScope? = if let season = seasons.first, !episodes.isEmpty {
+            .episodes(season: season, episodes)
+        } else if let first = seasons.first, let last = seasons.last, last > first {
+            .seasons(first: first, last: last)
+        } else if let season = seasons.first {
+            .season(season)
+        } else if lower.range(of: #"\bcomplete (series|seasons)\b|\b(series|seasons) complete\b"#, options: .regularExpression) != nil {
+            .complete
+        } else {
+            nil
+        }
         return MediaGuess(
             title: title,
             year: year,
-            type: seasons.isEmpty ? .movie : .series,
+            type: scope == nil ? .movie : .series,
             season: seasons.first,
-            episode: episodes.first
+            episode: episodes.first,
+            scope: scope
         )
     }
 

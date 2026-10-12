@@ -2,7 +2,8 @@ import DoveKit
 import SwiftUI
 
 /// Everything in every debrid, either as titles with posters (matched through the search addon)
-/// or as the raw list of torrents and downloads. Filters: services, type, status, text.
+/// or as the raw list of torrents and downloads. Music, books, software and the rest are listed by name
+/// under the posters. Filters: services, category, status, text.
 struct LibraryView: View {
     @Environment(AppModel.self) private var model
     @AppStorage("libraryMode") private var mode: Mode = .titles
@@ -49,6 +50,7 @@ struct LibraryView: View {
 
     private var titlesView: some View {
         let titles = filter.apply(to: library.titles)
+        let others = filter.apply(to: library.others)
         return ScrollView {
             failuresBanner.padding(.horizontal)
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 104), spacing: 12)], spacing: 16) {
@@ -61,6 +63,26 @@ struct LibraryView: View {
             }
             .padding(.horizontal)
             .padding(.bottom)
+            if !others.isEmpty {
+                LazyVStack(alignment: .leading, spacing: 0) {
+                    Text("Other files")
+                        .font(.headline)
+                        .padding(.bottom, 6)
+                    ForEach(others) { item in
+                        NavigationLink(value: item) {
+                            ShelfItemRow(item: item, showsBackend: true)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(.vertical, 8)
+                                .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .contextMenu { deleteButton(item) }
+                        Divider()
+                    }
+                }
+                .padding(.horizontal)
+                .padding(.bottom)
+            }
         }
     }
 
@@ -116,10 +138,11 @@ struct LibraryView: View {
                     ))
                 }
             }
-            Picker("Type", selection: $filter.type) {
-                Text("Movies and series").tag(MediaType?.none)
-                Text("Movies").tag(MediaType?.some(.movie))
-                Text("Series").tag(MediaType?.some(.series))
+            Picker("Type", selection: $filter.category) {
+                Text("Everything").tag(LibraryFilter.Category?.none)
+                ForEach(LibraryFilter.Category.allCases, id: \.self) {
+                    Text($0.title).tag(LibraryFilter.Category?.some($0))
+                }
             }
             Picker("Status", selection: $filter.status) {
                 Text("Any status").tag(LibraryFilter.Status?.none)
@@ -170,6 +193,16 @@ private struct TitleCard: View {
 
                 statusMark.padding(5)
             }
+            .overlay(alignment: .topLeading) {
+                if let coverage = title.coverage {
+                    Text(coverage)
+                        .font(.caption2.bold())
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(.ultraThinMaterial, in: Capsule())
+                        .padding(5)
+                }
+            }
             Text(title.name).font(.caption.weight(.medium)).lineLimit(1)
             HStack(spacing: 3) {
                 if let year = title.year { Text(year).font(.caption2).foregroundStyle(.secondary) }
@@ -198,7 +231,7 @@ private struct TitleCard: View {
     }
 }
 
-/// One torrent or download: name, service, status, size.
+/// One torrent or download: name, service, what it holds (episode, season, music…), status, size.
 struct ShelfItemRow: View {
     let item: ShelfItem
     var showsBackend = true
@@ -208,6 +241,11 @@ struct ShelfItemRow: View {
             Text(item.item.name).font(.subheadline).lineLimit(2)
             HStack(spacing: 8) {
                 if showsBackend { BackendBadge(backend: item.item.backend) }
+                if item.kind != .video {
+                    Label(item.kind.displayName, systemImage: item.kind.symbol)
+                } else if let scope = item.guess.scope {
+                    Text(scope.label).fontWeight(.medium)
+                }
                 Text(item.item.status.label)
                 if let size = item.item.size {
                     Text(size.formatted(.byteCount(style: .file)))
@@ -270,15 +308,20 @@ struct LibraryItemView: View {
                             Button { copyLink(file) } label: { Image(systemName: "link") }
                                 .accessibilityLabel("Copy link")
                             downloadButton(file)
-                            Button { play(file) } label: { Image(systemName: "play.fill") }
-                                .accessibilityLabel("Play in Infuse")
+                            // Infuse plays video; other files are for the link or the phone.
+                            if FileKind.isVideo(file.name) {
+                                Button { play(file) } label: { Image(systemName: "play.fill") }
+                                    .accessibilityLabel("Play in Infuse")
+                            }
                         }
                         // Bordered buttons keep their own tap areas inside a list row.
                         .buttonStyle(.bordered)
                         .controlSize(.small)
                     }
                     .contextMenu {
-                        Button("Play in Infuse", systemImage: "play") { play(file) }
+                        if FileKind.isVideo(file.name) {
+                            Button("Play in Infuse", systemImage: "play") { play(file) }
+                        }
                         Button("Copy link", systemImage: "link") { copyLink(file) }
                         Button("Download to phone", systemImage: "arrow.down.circle") { download(file) }
                     }
@@ -307,7 +350,9 @@ struct LibraryItemView: View {
     private func loadDetail() async {
         guard let backend = model.backend(item.backend) else { return }
         do {
-            detail = try await backend.item(item.id)
+            let loaded = try await backend.item(item.id)
+            detail = loaded
+            model.library.learnKind(from: loaded)
         } catch {
             message = error.localizedDescription
         }

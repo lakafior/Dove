@@ -20,7 +20,7 @@ struct LibraryTitleView: View {
                         .font(.footnote)
                 }
                 ForEach(title.seasons, id: \.season) { group in
-                    Section(sectionTitle(group.season, of: title)) {
+                    Section(sectionTitle(group.season, items: group.items, of: title)) {
                         ForEach(group.items) { item in
                             NavigationLink(value: item) { ShelfItemRow(item: item) }
                                 .swipeActions {
@@ -75,9 +75,11 @@ struct LibraryTitleView: View {
         }
     }
 
-    private func sectionTitle(_ season: Int?, of title: LibraryTitle) -> String {
+    private func sectionTitle(_ season: Int?, items: [ShelfItem], of title: LibraryTitle) -> String {
         guard title.type == .series else { return "Releases" }
-        return season.map { "Season \($0)" } ?? "Other"
+        if let season { return "Season \(season)" }
+        let hasMultiSeason = items.contains { $0.guess.scope?.isPack == true }
+        return hasMultiSeason ? "Several seasons" : "Other"
     }
 }
 
