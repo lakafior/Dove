@@ -35,3 +35,22 @@ extension Source: Identifiable {
         }
     }
 }
+
+extension Source {
+    /// Something readable for a confirmation screen: the magnet's name, a file name, or the link's host and path.
+    public var displayName: String {
+        switch self {
+        case .magnet(let magnet):
+            let items = URLComponents(string: magnet)?.queryItems ?? []
+            if let name = items.first(where: { $0.name.lowercased() == "dn" })?.value?.replacingOccurrences(of: "+", with: " "), !name.isEmpty {
+                return name
+            }
+            let topic = items.first { $0.name.lowercased() == "xt" }?.value ?? magnet
+            return topic.replacingOccurrences(of: "urn:btih:", with: "", options: .caseInsensitive)
+        case .torrentFile(_, let name), .nzbFile(_, let name):
+            return name
+        case .torrentURL(let url), .hosterURL(let url), .nzbURL(let url):
+            return (url.host() ?? "") + url.path()
+        }
+    }
+}

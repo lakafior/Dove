@@ -6,17 +6,20 @@ import Observation
 @MainActor
 @Observable
 final class AppModel {
-    let keychain = KeychainStore()
+    /// Shared with the share extension through the `keychain-access-groups` entitlement.
+    let keychain = SharedConfiguration.keychain()
     let library = LibraryModel()
     private(set) var backends: [any LibraryBackend] = []
 
     /// Debrid priority, highest first. "Automatic" adds try them in this order and fall through on any error.
     /// NZBs always go to nzbdav. Not a secret, so it lives in UserDefaults.
     var debridOrder: [BackendID] {
-        didSet { UserDefaults.standard.set(debridOrder.map(\.rawValue), forKey: Self.orderKey) }
+        didSet { SharedConfiguration.saveDebridOrder(debridOrder, to: keychain) }
     }
 
-    private static let orderKey = "debridOrder"
+    /// Where the order lived before the share extension needed it.
+    private static let legacyOrderKey = "debridOrder"
+    private static let migratedKey = "keychainMovedToSharedGroup"
     // v2: the default sort became "largest first"; older saves had "addon order" written in.
     private static let filterKey = "sourceFilter.v2"
     private static let variantKey = "aioStreamsVariant"
@@ -33,7 +36,7 @@ final class AppModel {
             rebuildAddonSet()
         }
     }
-    static let debrids = BackendID.allCases.filter { !$0.isUsenet }
+    static let debrids = SharedConfiguration.debrids
 
     /// Stremio addons in the user's order. Manifests load in the background (`loadAddons`).
     private(set) var addonEntries: [AddonEntry] = []
@@ -51,9 +54,15 @@ final class AppModel {
     }
 
     init() {
-        let stored = (UserDefaults.standard.stringArray(forKey: Self.orderKey) ?? []).compactMap(BackendID.init(rawValue:))
-        // Keep the stored order, append services added in later versions.
-        debridOrder = stored.filter(Self.debrids.contains) + Self.debrids.filter { !stored.contains($0) }
+        // Keys saved before the shared Keychain group existed move into it once, so the extension sees them.
+        if SharedConfiguration.keychainGroup != nil, !UserDefaults.standard.bool(forKey: Self.migratedKey) {
+            keychain.migrateToAccessGroup()
+            if let legacy = UserDefaults.standard.stringArray(forKey: Self.legacyOrderKey) {
+                SharedConfiguration.saveDebridOrder(legacy.compactMap(BackendID.init(rawValue:)), to: keychain)
+            }
+            UserDefaults.standard.set(true, forKey: Self.migratedKey)
+        }
+        debridOrder = SharedConfiguration.debridOrder(from: keychain)
         if let data = UserDefaults.standard.data(forKey: Self.filterKey),
            let filter = try? JSONDecoder().decode(SourceFilter.self, from: data) {
             sourceFilter = filter
@@ -65,18 +74,7 @@ final class AppModel {
 
     /// Rebuilds backends from the Keychain. Call after credentials change.
     func reloadBackends() {
-        var list: [any LibraryBackend] = []
-        if let key = try? keychain.get(.realDebridAPIKey), !key.isEmpty {
-            list.append(RealDebridBackend(apiKey: key))
-        }
-        if let key = try? keychain.get(.torBoxAPIKey), !key.isEmpty {
-            list.append(TorBoxBackend(apiKey: key))
-        }
-        if let key = try? keychain.get(.offcloudAPIKey), !key.isEmpty {
-            list.append(OffcloudBackend(apiKey: key))
-        }
-        // TODO(stage-3): nzbdav (URL, API key, WebDAV user and password).
-        backends = list
+        backends = SharedConfiguration.backends(from: keychain)
     }
 
     var router: BackendRouter {

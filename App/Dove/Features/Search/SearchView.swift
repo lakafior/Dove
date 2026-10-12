@@ -11,6 +11,11 @@ struct SearchView: View {
     @State private var results: [MediaSummary] = []
     @State private var isSearching = false
     @State private var typeFilter: MediaType?
+    @Environment(\.scenePhase) private var scenePhase
+    /// `UIPasteboard.changeCount` the banner was last answered for, so it does not come back for the same copy.
+    @AppStorage("clipboardAnsweredChange") private var answeredChange = -1
+    @State private var pasteboardChange = -1
+    @State private var pasteboardHasContent = false
 
     private var visibleResults: [MediaSummary] {
         guard let typeFilter else { return results }
@@ -20,6 +25,9 @@ struct SearchView: View {
     var body: some View {
         NavigationStack {
             List {
+                if pasteboardHasContent, pasteboardChange != answeredChange {
+                    clipboardBanner
+                }
                 Section {
                     TextField("Title, magnet or link", text: $text)
                         .textInputAutocapitalization(.never)
@@ -54,6 +62,9 @@ struct SearchView: View {
             }
             .navigationTitle("Dove")
             .navigationDestination(for: MediaSummary.self) { MediaDetailView(item: $0) }
+            .onAppear(perform: checkPasteboard)
+            .onChange(of: scenePhase) { if scenePhase == .active { checkPasteboard() } }
+            .onReceive(NotificationCenter.default.publisher(for: UIPasteboard.changedNotification)) { _ in checkPasteboard() }
             .sheet(item: $pendingSource) { source in
                 AddSourceSheet(source: source) { result in
                     pendingSource = nil
@@ -64,9 +75,53 @@ struct SearchView: View {
         }
     }
 
+    /// Offers what was copied in another app. Only `hasStrings`/`hasURLs` are read here, which iOS does not report
+    /// as pasting; the content itself comes through `PasteButton`, i.e. only when the user taps it.
+    private var clipboardBanner: some View {
+        Section {
+            HStack(spacing: 12) {
+                Image(systemName: "doc.on.clipboard").foregroundStyle(.secondary)
+                Text("Add what you copied?").font(.subheadline)
+                Spacer()
+                PasteButton(payloadType: String.self) { strings in
+                    Task { @MainActor in usePasted(strings.first ?? "") }
+                }
+                .labelStyle(.iconOnly)
+                .buttonBorderShape(.capsule)
+                Button {
+                    answeredChange = pasteboardChange
+                } label: {
+                    Image(systemName: "xmark").foregroundStyle(.secondary)
+                }
+                .buttonStyle(.borderless)
+                .accessibilityLabel("Dismiss")
+            }
+        }
+    }
+
+    private func checkPasteboard() {
+        let pasteboard = UIPasteboard.general
+        pasteboardChange = pasteboard.changeCount
+        pasteboardHasContent = pasteboard.hasURLs || pasteboard.hasStrings
+    }
+
+    /// A magnet or link (also inside longer text) opens the add sheet; anything else becomes a title search.
+    private func usePasted(_ pasted: String) {
+        answeredChange = pasteboardChange
+        let trimmed = pasted.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        if let source = SourceDetector.firstSource(in: trimmed) {
+            results = []
+            pendingSource = source
+        } else {
+            text = trimmed
+            handleSubmit()
+        }
+    }
+
     private func handleSubmit() {
         message = nil
-        if let source = SourceDetector.detect(text) {
+        if let source = SourceDetector.firstSource(in: text) {
             results = []
             pendingSource = source
             return
@@ -124,90 +179,18 @@ struct PosterImage: View {
     }
 }
 
-/// "Automatic" walks the priority list from Settings; picking a service sends it there only.
+/// The app's add sheet: the shared add screen with the app's configured services and priority.
 struct AddSourceSheet: View {
     @Environment(AppModel.self) private var model
     let source: Source
     let onFinish: (String) -> Void
-    @State private var working: Target?
-
-    enum Target: Hashable {
-        case automatic
-        case backend(BackendID)
-    }
 
     var body: some View {
         NavigationStack {
-            List {
-                let candidates = model.router.candidates(for: source).map(\.id)
-                if candidates.isEmpty {
-                    ContentUnavailableView(
-                        "No backend for this source",
-                        systemImage: "exclamationmark.triangle",
-                        description: Text("Add a service that accepts \(source.kind.rawValue) sources in Settings.")
-                    )
-                } else {
-                    if candidates.count > 1 {
-                        Section {
-                            row(.automatic) {
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text("Automatic")
-                                    Text(candidates.map(\.displayName).joined(separator: " → "))
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
-                                }
-                            }
-                        }
-                    }
-                    Section("Only to") {
-                        ForEach(candidates, id: \.self) { id in
-                            row(.backend(id)) { Text(id.displayName) }
-                        }
-                    }
-                }
-            }
-            .navigationTitle(source.kind.rawValue.capitalized)
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { onFinish("") }
-                }
+            AddSourceView(source: source, router: model.router) { message in
+                onFinish(message ?? "")
             }
         }
-        .presentationDetents([.medium])
-        .interactiveDismissDisabled(working != nil)
-    }
-
-    private func row(_ target: Target, @ViewBuilder label: () -> some View) -> some View {
-        Button { add(target) } label: {
-            HStack {
-                label()
-                Spacer()
-                if working == target { ProgressView() }
-            }
-        }
-        .disabled(working != nil)
-    }
-
-    private func add(_ target: Target) {
-        working = target
-        Task {
-            do {
-                switch target {
-                case .automatic:
-                    let result = try await model.router.add(source)
-                    let skipped = result.skipped
-                        .map { "\($0.backend.displayName): \($0.error.localizedDescription)" }
-                        .joined(separator: "\n")
-                    onFinish("Added to \(result.backend.displayName)." + (skipped.isEmpty ? "" : "\n\(skipped)"))
-                case .backend(let id):
-                    guard let backend = model.backend(id) else { return }
-                    try await backend.add(source)
-                    onFinish("Added to \(id.displayName).")
-                }
-            } catch {
-                onFinish(error.localizedDescription)
-            }
-        }
+        .presentationDetents([.medium, .large])
     }
 }

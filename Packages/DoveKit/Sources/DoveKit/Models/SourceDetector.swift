@@ -29,6 +29,25 @@ public enum SourceDetector {
         return .hosterURL(url)
     }
 
+    /// The first source anywhere in a longer text (a chat message, a web page excerpt): a magnet,
+    /// then a link Dove can use, then a bare info hash.
+    public static func firstSource(in text: String) -> Source? {
+        if let source = detect(text) { return source }
+        if let range = text.range(of: #"magnet:\?[^\s"'<>]+"#, options: [.regularExpression, .caseInsensitive]) {
+            return .magnet(String(text[range]))
+        }
+        if let detector = try? NSDataDetector(types: NSTextCheckingResult.CheckingType.link.rawValue) {
+            let matches = detector.matches(in: text, range: NSRange(text.startIndex..., in: text))
+            for match in matches {
+                if let url = match.url, let source = detect(url.absoluteString) { return source }
+            }
+        }
+        if let range = text.range(of: #"\b[0-9a-fA-F]{40}\b"#, options: .regularExpression) {
+            return detect(String(text[range]))
+        }
+        return nil
+    }
+
     /// 40-character hex BitTorrent v1 info hash.
     static func isInfoHash(_ text: String) -> Bool {
         text.count == 40 && text.allSatisfy(\.isHexDigit)

@@ -35,3 +35,30 @@ struct SourceDetectorTests {
         #expect(SourceDetector.detect(input) == nil)
     }
 }
+
+struct SourceInTextTests {
+    @Test func magnetInsideAMessage() {
+        let text = "check this out: magnet:?xt=urn:btih:1a07d876aaaebe797c21eff39df7436d2f739b7a&dn=Ubuntu+24.04 enjoy"
+        #expect(SourceDetector.firstSource(in: text) == .magnet("magnet:?xt=urn:btih:1a07d876aaaebe797c21eff39df7436d2f739b7a&dn=Ubuntu+24.04"))
+    }
+
+    @Test func linkInsideAMessage() {
+        let source = SourceDetector.firstSource(in: "Grab it from https://files.example.org/show.s01e01.torrent today")
+        #expect(source == .torrentURL(URL(string: "https://files.example.org/show.s01e01.torrent")!))
+    }
+
+    @Test func bareHashInsideText() {
+        #expect(SourceDetector.firstSource(in: "hash: 1A07D876AAAEBE797C21EFF39DF7436D2F739B7A")?.kind == .torrent)
+    }
+
+    @Test func plainTextHasNoSource() {
+        #expect(SourceDetector.firstSource(in: "Diuna część druga") == nil)
+    }
+
+    @Test func displayNames() {
+        #expect(Source.magnet("magnet:?xt=urn:btih:abc&dn=Ubuntu+24.04").displayName == "Ubuntu 24.04")
+        #expect(Source.magnet("magnet:?xt=urn:btih:ABC").displayName == "ABC")
+        #expect(Source.torrentFile(data: Data(), filename: "a.torrent").displayName == "a.torrent")
+        #expect(Source.hosterURL(URL(string: "https://host.example/f/1")!).displayName == "host.example/f/1")
+    }
+}
