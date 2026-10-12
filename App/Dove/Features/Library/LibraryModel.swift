@@ -58,6 +58,7 @@ final class LibraryModel {
             knownKinds[item.id].map { ShelfItem(item: item.item, kind: $0) } ?? item
         }
         failures = result.failures
+        FilesLocation.libraryChanged()
         matches = await store.all().compactMapValues(\.media)
         await matchMissing(using: app.addonSet)
     }
@@ -93,6 +94,7 @@ final class LibraryModel {
         do {
             try await backend.delete(item.item.id)
             items.removeAll { $0.id == item.id }
+            FilesLocation.libraryChanged()
         } catch {
             failures.append("Could not delete \(item.item.name) from \(item.item.backend.displayName): \(error.localizedDescription)")
         }

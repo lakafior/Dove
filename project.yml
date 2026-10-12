@@ -28,6 +28,7 @@ targets:
     dependencies:
       - package: DoveKit
       - target: DoveShare
+      - target: DoveFiles
     info:
       path: App/Dove/Info.plist
       properties:
@@ -66,6 +67,8 @@ targets:
       path: App/Dove/Dove.entitlements
       properties:
         keychain-access-groups: [$(AppIdentifierPrefix)net.smigi.dove.shared]
+        # The File Provider extension requires an App Group (NSExtensionFileProviderDocumentGroup).
+        com.apple.security.application-groups: [group.net.smigi.dove]
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: net.smigi.dove
@@ -112,6 +115,41 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: net.smigi.dove.share
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_CFBundleDisplayName: Dove
+        TARGETED_DEVICE_FAMILY: "1"
+        SKIP_INSTALL: YES
+        ENABLE_USER_SCRIPT_SANDBOXING: YES
+        SWIFT_STRICT_CONCURRENCY: complete
+
+  # The library as a location in the Files app (File Provider, replicated).
+  DoveFiles:
+    type: app-extension
+    platform: iOS
+    sources:
+      - App/DoveFiles
+    dependencies:
+      - package: DoveKit
+    info:
+      path: App/DoveFiles/Info.plist
+      properties:
+        CFBundleDisplayName: Dove
+        DoveKeychainGroup: $(AppIdentifierPrefix)net.smigi.dove.shared
+        # Read by FilesContext for the working set snapshot.
+        DoveAppGroup: group.net.smigi.dove
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.fileprovider-nonui
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).FileProviderExtension
+          NSExtensionFileProviderDocumentGroup: group.net.smigi.dove
+          NSExtensionFileProviderSupportsEnumeration: true
+    entitlements:
+      path: App/DoveFiles/DoveFiles.entitlements
+      properties:
+        keychain-access-groups: [$(AppIdentifierPrefix)net.smigi.dove.shared]
+        com.apple.security.application-groups: [group.net.smigi.dove]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: net.smigi.dove.files
         GENERATE_INFOPLIST_FILE: YES
         INFOPLIST_KEY_CFBundleDisplayName: Dove
         TARGETED_DEVICE_FAMILY: "1"

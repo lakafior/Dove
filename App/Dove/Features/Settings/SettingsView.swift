@@ -53,6 +53,7 @@ struct SettingsView: View {
                     Text("Titles, metadata and sources come from your Stremio addons.")
                 }
 
+                FilesLocationSection()
             }
             .navigationTitle("Settings")
         }
@@ -102,6 +103,37 @@ private struct APIKeyRow: View {
             } catch {
                 status = "❌ \(error.localizedDescription)"
             }
+        }
+    }
+}
+
+/// The "Dove" location in the Files app: re-register it when Files shows an error next to it.
+private struct FilesLocationSection: View {
+    @State private var status: String?
+    @State private var isResetting = false
+
+    var body: some View {
+        Section {
+            Button("Reset Files location") {
+                isResetting = true
+                Task {
+                    do {
+                        try await FilesLocation.reset()
+                        status = "Done. Open Files, tap Dove and turn it on."
+                    } catch {
+                        status = error.localizedDescription
+                    }
+                    isResetting = false
+                }
+            }
+            .disabled(isResetting)
+            if let status {
+                Text(status).foregroundStyle(.secondary)
+            }
+        } header: {
+            Text("Files app")
+        } footer: {
+            Text("Your services appear in Files under Locations › Dove. If Files shows an error there, reset it: Files forgets what it knew and lists everything again.")
         }
     }
 }

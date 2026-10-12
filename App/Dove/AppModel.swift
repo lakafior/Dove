@@ -164,6 +164,8 @@ final class AppModel {
     /// Rebuilds backends from the Keychain. Call after credentials change.
     func reloadBackends() {
         backends = SharedConfiguration.backends(from: keychain)
+        let hasServices = !backends.isEmpty
+        Task { await FilesLocation.update(hasServices: hasServices) }
     }
 
     // MARK: - Newznab indexers
