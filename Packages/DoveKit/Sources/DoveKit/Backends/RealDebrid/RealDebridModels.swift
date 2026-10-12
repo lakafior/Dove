@@ -115,3 +115,24 @@ enum RealDebridFiles {
         return chosen.map { String($0.id) }.joined(separator: ",")
     }
 }
+
+/// Real-Debrid's name filter (since May 2026): `451 infringing_file` for releases whose name contains these tags.
+/// The list follows Debrid Media Manager's measurements (`src/utils/deInfringe.ts`, re-measured 2026-10-10).
+/// An add is judged on the torrent's root name; `/unrestrict/link` on each file name.
+enum RealDebridNameFilter {
+    nonisolated(unsafe) private static let blocked =
+        #/web-dl|(?:web|bd|hd|dvd)rip|bluray\.x264|p\.bluray\.dts|hdtv\.(?:x264|xvid)|web\.(?:x264|h264)/#
+        .ignoresCase()
+
+    static func isBlocked(_ name: String) -> Bool {
+        name.contains(blocked)
+    }
+
+    /// The `dn` (display name) of a magnet, if it has one.
+    static func displayName(ofMagnet magnet: String) -> String? {
+        URLComponents(string: magnet)?.queryItems?
+            .first { $0.name.lowercased() == "dn" }?
+            .value?
+            .replacingOccurrences(of: "+", with: " ")
+    }
+}

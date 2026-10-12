@@ -10,8 +10,8 @@ Early scaffold. Stage 1 is in progress.
 
 | Stage | Scope | State |
 |---|---|---|
-| 1. Core | TorBox, Real-Debrid, Offcloud; add magnet / .torrent / hoster link; library; download to device; share extension | TorBox and Real-Debrid adapters done, rest in progress |
-| 2. Search | TMDB metadata (Polish titles), Stremio addon manifests or AIOStreams Search API as stream sources, "add whole season" | Planned |
+| 1. Core | TorBox, Real-Debrid, Offcloud; add magnet / .torrent / hoster link; library; download to device; share extension | TorBox, Real-Debrid and Offcloud adapters with priority fallback done, rest in progress |
+| 2. Search | Stremio addons for search, metadata and sources (AIOMetadata, Cinemeta, AIOStreams with its Search API), "add whole season" | In progress: search, details, sources, Infuse, add to library |
 | 3. Usenet | nzbdav via its SABnzbd-compatible API and WebDAV | Planned |
 
 ## How it fits together
@@ -24,7 +24,7 @@ Source (what)            Backend (where)                  Playback (how)
 📰 NZB                →  nzbdav                          →
 ```
 
-The source type picks the backend family automatically; the user only chooses a default debrid.
+The source type picks the backend family automatically; within it, the user orders their debrids and Dove falls through to the next one when an add fails.
 
 App tabs: **Search** (smart field + title search) · **Library** (Debrid | Usenet) · **Downloads** · **Settings**.
 

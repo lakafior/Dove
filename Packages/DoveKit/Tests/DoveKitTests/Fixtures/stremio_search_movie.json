@@ -1,0 +1,86 @@
+{
+  "metas": [
+    {
+      "id": "tt15239678",
+      "name": "Dune: Part Two",
+      "genres": [
+        "Science Fiction",
+        "Adventure"
+      ],
+      "poster": "https://image.tmdb.org/t/p/w600_and_h900_bestv2/6izwz7rsy95ARzTR3poZ8H6c5pp.jpg",
+      "background": "https://image.tmdb.org/t/p/original/eZ239CUp1d6OryZEBPnO2n87gMG.jpg",
+      "posterShape": "regular",
+      "imdbRating": "8.4",
+      "year": "2024",
+      "type": "movie",
+      "released": "2024-02-27T00:00:00.000Z",
+      "releaseInfo": "2024",
+      "description": "Follow the mythic journey of Paul Atreides as he unites with Chani and the Fremen while on a path of revenge against the conspirators who destroyed his family. Facing a choice between the love of his life and the fate of the known universe, Paul endeavors to prevent a terrible future only he can foresee.",
+      "popularity": 61.4206,
+      "vote_average": 8.1,
+      "vote_count": 8719,
+      "matchType": "title",
+      "logo": "https://image.tmdb.org/t/p/original/eYvF1LhPKuoBxOAmWjFTAK7EPWl.png",
+      "certification": "PG-13",
+      "imdb_id": "tt15239678",
+      "_tmdbId": "693134",
+      "_tvdbId": "290272",
+      "runtime": "2h47min"
+    },
+    {
+      "id": "tt1160419",
+      "name": "Dune",
+      "genres": [
+        "Science Fiction",
+        "Adventure"
+      ],
+      "poster": "https://image.tmdb.org/t/p/w600_and_h900_bestv2/v1tRXZ4JtD2Iv6fjkPvT4GiwslV.jpg",
+      "background": "https://image.tmdb.org/t/p/original/zRKQW58MBEY078AxkHxEJzUskCl.jpg",
+      "posterShape": "regular",
+      "imdbRating": "8",
+      "year": "2021",
+      "type": "movie",
+      "released": "2021-09-15T00:00:00.000Z",
+      "releaseInfo": "2021",
+      "description": "Paul Atreides, a brilliant and gifted young man born into a great destiny beyond his understanding, must travel to the most dangerous planet in the universe to ensure the future of his family and his people. As malevolent forces explode into conflict over the planet's exclusive supply of the most precious resource in existence - a commodity capable of unlocking humanity's greatest potential - only those who can conquer their fear will survive.",
+      "popularity": 37.2559,
+      "vote_average": 7.784,
+      "vote_count": 15698,
+      "matchType": "title",
+      "logo": "https://image.tmdb.org/t/p/original/2gk0HwLIAyQcwyUBI7oddJYOxpN.png",
+      "certification": "PG-13",
+      "imdb_id": "tt1160419",
+      "_tmdbId": "438631",
+      "_tvdbId": "6187",
+      "runtime": "2h35min"
+    },
+    {
+      "id": "tt0087182",
+      "name": "Dune",
+      "genres": [
+        "Action",
+        "Science Fiction",
+        "Adventure"
+      ],
+      "poster": "https://image.tmdb.org/t/p/w600_and_h900_bestv2/4kJmUCE7mkVJjXa7A0g2rY4IGTm.jpg",
+      "background": "https://image.tmdb.org/t/p/original/5wJ2tckpvwcxGCAgZiccodwEJpf.jpg",
+      "posterShape": "regular",
+      "imdbRating": "6.2",
+      "year": "1984",
+      "type": "movie",
+      "released": "1984-12-14T00:00:00.000Z",
+      "releaseInfo": "1984",
+      "description": "In the year 10,191, the most precious substance in the universe is the spice Melange. The spice extends life. The spice expands consciousness. The spice is vital to space travel.  The spice exists on only one planet in the entire universe, the vast desert planet Arrakis, also known as Dune.  Its native inhabitants, the Fremen, have long held a prophecy that a man would come, a messiah who would lead them to true freedom.",
+      "popularity": 16.3689,
+      "vote_average": 6.2,
+      "vote_count": 3575,
+      "matchType": "title",
+      "logo": "https://image.tmdb.org/t/p/original/hP6YQiAWlRv6lY5duQEtYicVh0L.png",
+      "certification": "PG-13",
+      "imdb_id": "tt0087182",
+      "_tmdbId": "841",
+      "_tvdbId": "1406",
+      "runtime": "2h16min"
+    }
+  ]
+}

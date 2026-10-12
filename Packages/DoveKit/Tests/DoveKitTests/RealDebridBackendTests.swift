@@ -5,7 +5,11 @@ import Testing
 struct RealDebridBackendTests {
     private func makeBackend() -> (RealDebridBackend, MockTransport) {
         let transport = MockTransport()
-        let backend = RealDebridBackend(apiKey: "test-key", transport: transport, selectionInterval: .zero)
+        let backend = RealDebridBackend(
+            apiKey: "test-key",
+            transport: transport,
+            selectionInterval: .zero
+        )
         return (backend, transport)
     }
 
@@ -132,12 +136,56 @@ struct RealDebridBackendTests {
         }
     }
 
-    @Test func knownErrorCodesGetReadableMessages() async {
+    @Test func blockedReleaseNameIsRefusedWithoutCallingRealDebrid() async {
         let (backend, transport) = makeBackend()
-        await transport.stub("torrents/addMagnet", status: 403, json: #"{"error":"infringing_file","error_code":35}"#)
-        await #expect(throws: BackendError.api(message: "Real-Debrid refused this file (infringing).")) {
-            try await backend.add(.magnet("magnet:?xt=urn:btih:abc"))
+        await #expect(throws: BackendError.api(message: RealDebridBackend.blockedNameMessage)) {
+            try await backend.add(.magnet("magnet:?xt=urn:btih:abc&dn=Some.Movie.2024.1080p.WEB-DL.DDP5.1.H.264-GRP"))
         }
+        #expect(await transport.requests.isEmpty)
+    }
+
+    @Test func infringingOnAddFailsAtOnceWithBothExplanations() async {
+        let (backend, transport) = makeBackend()
+        await transport.stub("torrents/addMagnet", status: 451, json: #"{"error":"infringing_file","error_code":35}"#)
+        await #expect(throws: BackendError.api(message: RealDebridBackend.refusedMessage)) {
+            try await backend.add(.magnet("magnet:?xt=urn:btih:1a07d876aaaebe797c21eff39df7436d2f739b7a"))
+        }
+        #expect(await transport.requests.count == 1)
+    }
+
+    @Test func requestsHaveATimeout() async throws {
+        let (backend, transport) = makeBackend()
+        await transport.stub("/user", json: "{}")
+        try await backend.validateCredentials()
+        #expect(await transport.requests.last?.timeoutInterval == 30)
+    }
+
+    @Test func unrestrictRefusalExplainsTheNameFilter() async {
+        let (backend, transport) = makeBackend()
+        await transport.stub("unrestrict/link", status: 451, json: #"{"error":"infringing_file","error_code":35}"#)
+        await #expect(throws: BackendError.api(message: RealDebridBackend.infringingMessage)) {
+            try await backend.add(.hosterURL(URL(string: "https://hoster.example/f")!))
+        }
+    }
+
+    @Test(arguments: [
+        ("Show.S01E01.1080p.WEB-DL.DDP5.1.H.264-GRP", true),
+        ("Movie.2023.720p.WEBRip.x264", true),
+        ("Movie.2010.1080p.BluRay.x264-GRP", true),
+        ("Movie.2010.1080p.BluRay.DTS-GRP", true),
+        ("Show.S02E03.HDTV.x264-LOL", true),
+        ("Movie.2024.2160p.WEB.H265-GRP", false),
+        ("Movie.2024.1080p.WEB.DL.DDP5.1", false),
+        ("Movie.2010.1080p.BluRay.REMUX.AVC.DTS-HD.MA", false),
+        ("Movie 2024 1080p WEB-DL", true),
+    ])
+    func nameFilter(name: String, blocked: Bool) {
+        #expect(RealDebridNameFilter.isBlocked(name) == blocked)
+    }
+
+    @Test func magnetDisplayNameIsDecoded() {
+        #expect(RealDebridNameFilter.displayName(ofMagnet: "magnet:?xt=urn:btih:abc&dn=Some+Movie%20WEB-DL") == "Some Movie WEB-DL")
+        #expect(RealDebridNameFilter.displayName(ofMagnet: "magnet:?xt=urn:btih:abc") == nil)
     }
 
     @Test func unknownErrorFallsBackToMessage() {

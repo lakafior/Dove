@@ -1,0 +1,561 @@
+{
+  "success": true,
+  "detail": null,
+  "data": {
+    "filtered": 0,
+    "results": [
+      {
+        "infoHash": null,
+        "url": "https://stream.example/play/4",
+        "nzbUrl": null,
+        "rarUrls": null,
+        "7zipUrls": null,
+        "zipUrls": null,
+        "tarUrls": null,
+        "tgzUrls": null,
+        "seeders": null,
+        "age": null,
+        "sources": null,
+        "ytId": null,
+        "externalUrl": null,
+        "fileIdx": null,
+        "proxied": false,
+        "filename": "Severance.S01E01.GERMAN.DUBBED.DL.1080p.BluRay.AVC.REMUX-TSCC",
+        "folderName": null,
+        "size": 15010910700,
+        "folderSize": null,
+        "message": "NZB Health: ✅",
+        "library": false,
+        "addon": "Usenet Streamer",
+        "type": "usenet",
+        "indexer": "Miatrix",
+        "duration": 0,
+        "bitrate": 33922962,
+        "videoHash": null,
+        "subtitles": [],
+        "countryWhitelist": [],
+        "requestHeaders": {},
+        "responseHeaders": {},
+        "parsedFile": {
+          "title": "Severance",
+          "seasons": [
+            1
+          ],
+          "episodes": [
+            1
+          ],
+          "resolution": "1080p",
+          "quality": "BluRay REMUX",
+          "encode": "AVC",
+          "releaseGroup": "TSCC",
+          "editions": [],
+          "visualTags": [],
+          "audioTags": [],
+          "audioChannels": [],
+          "languages": [
+            "Dubbed",
+            "German"
+          ],
+          "subtitles": [],
+          "subbed": false,
+          "dubbed": true,
+          "seasonPack": false
+        },
+        "service": "nzbdav",
+        "cached": true,
+        "servers": null,
+        "notWebReady": true,
+        "bingeGroup": "aiostreamsfortheweebsstable.midnightignite.me|1080p|BluRay REMUX|TSCC",
+        "private": false,
+        "seadexBest": null,
+        "seadex": null
+      },
+      {
+        "infoHash": "3133f1ac4b86226ca105e69b1c1374ef552380b5",
+        "url": "https://stream.example/play/5",
+        "nzbUrl": null,
+        "rarUrls": null,
+        "7zipUrls": null,
+        "zipUrls": null,
+        "tarUrls": null,
+        "tgzUrls": null,
+        "seeders": 10,
+        "age": null,
+        "sources": null,
+        "ytId": null,
+        "externalUrl": null,
+        "fileIdx": null,
+        "proxied": false,
+        "filename": "Severance S01E01 Good News About Hell BluRay 1080p DTS-HD MA 5 1 AVC REMUX-FraMeSToR.mkv",
+        "folderName": null,
+        "size": 12880464384,
+        "folderSize": 97766442091,
+        "message": null,
+        "library": false,
+        "addon": "Meteor",
+        "type": "debrid",
+        "indexer": "uindex,stremthru-corpus,zilean",
+        "duration": 0,
+        "bitrate": 29108394,
+        "videoHash": null,
+        "subtitles": [],
+        "countryWhitelist": [],
+        "requestHeaders": {},
+        "responseHeaders": {},
+        "parsedFile": {
+          "title": "Severance",
+          "episodeTitle": "Good News About Hell",
+          "seasons": [
+            1
+          ],
+          "episodes": [
+            1
+          ],
+          "resolution": "1080p",
+          "quality": "BluRay REMUX",
+          "encode": "AVC",
+          "releaseGroup": "FraMeSToR",
+          "editions": [],
+          "container": "mkv",
+          "extension": "mkv",
+          "visualTags": [],
+          "audioTags": [
+            "DTS-HD MA"
+          ],
+          "audioChannels": [
+            "5.1"
+          ],
+          "languages": [
+            "English"
+          ],
+          "subtitles": [
+            "English",
+            "Arabic"
+          ],
+          "audioTracks": [
+            {
+              "lang": "English",
+              "codec": "dts",
+              "tag": "DTS",
+              "channels": "5.1"
+            }
+          ],
+          "subtitleTracks": [
+            {
+              "lang": "English",
+              "codec": "srt"
+            },
+            {
+              "lang": "Arabic",
+              "codec": "srt"
+            },
+            {
+              "lang": "Bulgarian",
+              "codec": "srt"
+            },
+            {
+              "lang": "Chinese",
+              "codec": "srt"
+            },
+            {
+              "lang": "Chinese",
+              "codec": "srt"
+            },
+            {
+              "lang": "Chinese",
+              "codec": "srt"
+            },
+            {
+              "lang": "Czech",
+              "codec": "srt"
+            },
+            {
+              "lang": "Danish",
+              "codec": "srt"
+            },
+            {
+              "lang": "Dutch",
+              "codec": "srt"
+            },
+            {
+              "lang": "Estonian",
+              "codec": "srt"
+            },
+            {
+              "lang": "Finnish",
+              "codec": "srt"
+            },
+            {
+              "lang": "French",
+              "codec": "srt"
+            },
+            {
+              "lang": "French",
+              "codec": "srt"
+            },
+            {
+              "lang": "German",
+              "codec": "srt"
+            },
+            {
+              "lang": "Greek",
+              "codec": "srt"
+            },
+            {
+              "lang": "Hebrew",
+              "codec": "srt"
+            },
+            {
+              "lang": "Hindi",
+              "codec": "srt"
+            },
+            {
+              "lang": "Hungarian",
+              "codec": "srt"
+            },
+            {
+              "lang": "Indonesian",
+              "codec": "srt"
+            },
+            {
+              "lang": "Italian",
+              "codec": "srt"
+            },
+            {
+              "lang": "Japanese",
+              "codec": "srt"
+            },
+            {
+              "lang": "Korean",
+              "codec": "srt"
+            },
+            {
+              "lang": "Latvian",
+              "codec": "srt"
+            },
+            {
+              "lang": "Lithuanian",
+              "codec": "srt"
+            },
+            {
+              "lang": "Malay",
+              "codec": "srt"
+            },
+            {
+              "lang": "Norwegian",
+              "codec": "srt"
+            },
+            {
+              "lang": "Polish",
+              "codec": "srt"
+            },
+            {
+              "lang": "Portuguese",
+              "codec": "srt"
+            },
+            {
+              "lang": "Portuguese",
+              "codec": "srt"
+            },
+            {
+              "lang": "Russian",
+              "codec": "srt"
+            },
+            {
+              "lang": "Slovak",
+              "codec": "srt"
+            },
+            {
+              "lang": "Slovenian",
+              "codec": "srt"
+            },
+            {
+              "lang": "Spanish",
+              "codec": "srt"
+            },
+            {
+              "lang": "Spanish",
+              "codec": "srt"
+            },
+            {
+              "lang": "Swedish",
+              "codec": "srt"
+            },
+            {
+              "lang": "Tamil",
+              "codec": "srt"
+            },
+            {
+              "lang": "Telugu",
+              "codec": "srt"
+            },
+            {
+              "lang": "Thai",
+              "codec": "srt"
+            },
+            {
+              "lang": "Turkish",
+              "codec": "srt"
+            },
+            {
+              "lang": "Ukrainian",
+              "codec": "srt"
+            },
+            {
+              "lang": "Vietnamese",
+              "codec": "srt"
+            }
+          ],
+          "subbed": false,
+          "dubbed": false,
+          "seasonPack": false,
+          "mediaInfoQuality": "probe"
+        },
+        "service": "offcloud",
+        "cached": true,
+        "servers": null,
+        "notWebReady": null,
+        "bingeGroup": "aiostreamsfortheweebsstable.midnightignite.me|1080p|BluRay REMUX|FraMeSToR",
+        "private": false,
+        "seadexBest": null,
+        "seadex": null
+      },
+      {
+        "infoHash": "43769698196be768c3d9e6afd6896b00bc978d0c",
+        "url": "https://stream.example/play/6",
+        "nzbUrl": null,
+        "rarUrls": null,
+        "7zipUrls": null,
+        "zipUrls": null,
+        "tarUrls": null,
+        "tgzUrls": null,
+        "seeders": null,
+        "age": null,
+        "sources": null,
+        "ytId": null,
+        "externalUrl": null,
+        "fileIdx": 0,
+        "proxied": false,
+        "filename": "Severance.S01E01.Good.News.About.Hell.1080p.BluRay.REMUX.AVC.DTS-HD.MA.5.1-TRiToN.mkv",
+        "folderName": "Severance S01 1080p BluRay REMUX AVC DTS-HD MA 5 1-TRiToN",
+        "size": 97766746362,
+        "folderSize": 97710505984,
+        "message": null,
+        "library": false,
+        "addon": "MediaFusion",
+        "type": "debrid",
+        "indexer": "Zilean DMM",
+        "duration": 0,
+        "bitrate": 220941800,
+        "videoHash": null,
+        "subtitles": [],
+        "countryWhitelist": [],
+        "requestHeaders": {},
+        "responseHeaders": {},
+        "parsedFile": {
+          "title": "Severance",
+          "episodeTitle": "Good News About Hell",
+          "folderSeasons": [
+            1
+          ],
+          "seasons": [
+            1
+          ],
+          "episodes": [
+            1
+          ],
+          "resolution": "1080p",
+          "quality": "BluRay REMUX",
+          "encode": "AVC",
+          "releaseGroup": "TRiToN",
+          "editions": [],
+          "regraded": false,
+          "repack": false,
+          "proper": false,
+          "uncensored": false,
+          "unrated": false,
+          "upscaled": false,
+          "container": "mkv",
+          "extension": "mkv",
+          "visualTags": [],
+          "audioTags": [
+            "DTS-HD MA"
+          ],
+          "audioChannels": [
+            "5.1"
+          ],
+          "languages": [
+            "English"
+          ],
+          "subtitles": [
+            "English",
+            "Arabic"
+          ],
+          "subbed": false,
+          "dubbed": false,
+          "seasonPack": true,
+          "mediaInfoQuality": "probe"
+        },
+        "service": "realdebrid",
+        "cached": true,
+        "servers": null,
+        "notWebReady": false,
+        "bingeGroup": "aiostreamsfortheweebsstable.midnightignite.me|1080p|BluRay REMUX|TRiToN",
+        "private": false,
+        "seadexBest": null,
+        "seadex": null
+      },
+      {
+        "infoHash": "33b79650a9b6abb93f4821c3d7c8ac7832761806",
+        "url": "https://stream.example/play/7",
+        "nzbUrl": null,
+        "rarUrls": null,
+        "7zipUrls": null,
+        "zipUrls": null,
+        "tarUrls": null,
+        "tgzUrls": null,
+        "seeders": null,
+        "age": 489,
+        "sources": null,
+        "ytId": null,
+        "externalUrl": null,
+        "fileIdx": -1,
+        "proxied": false,
+        "filename": "Dune.Part.One.2021.HYBRiD.MULTi.VF2.4K.UHD.BluRay.REMUX.CUSTOM.DoVi.HDR10Plus.HEVC.TrueHD.Atmos.7.1-Tezcat74.mkv",
+        "folderName": null,
+        "size": 81804695212,
+        "folderSize": null,
+        "message": null,
+        "library": false,
+        "addon": "ComeTorz",
+        "type": "debrid",
+        "indexer": null,
+        "duration": 9326624,
+        "bitrate": 70168751,
+        "videoHash": "7098764afbc523f4",
+        "subtitles": [],
+        "countryWhitelist": [],
+        "requestHeaders": {},
+        "responseHeaders": {},
+        "parsedFile": {
+          "title": "Dune Part One",
+          "year": "2021",
+          "resolution": "2160p",
+          "quality": "BluRay REMUX",
+          "encode": "HEVC",
+          "releaseGroup": "Tezcat74",
+          "editions": [],
+          "container": "mkv",
+          "extension": "mkv",
+          "visualTags": [
+            "DV",
+            "HDR10",
+            "HDR10+"
+          ],
+          "audioTags": [
+            "TrueHD",
+            "DD+",
+            "DD",
+            "Atmos"
+          ],
+          "audioChannels": [
+            "7.1",
+            "5.1"
+          ],
+          "languages": [
+            "French",
+            "English"
+          ],
+          "subtitles": [
+            "French",
+            "English"
+          ],
+          "audioTracks": [
+            {
+              "lang": "French",
+              "codec": "truehd",
+              "title": "FR VFF : TrueHD Atmos 7.1",
+              "tag": "TrueHD",
+              "channels": "7.1",
+              "default": true
+            },
+            {
+              "lang": "French",
+              "codec": "eac3",
+              "title": "FR VFF : E-AC3 7.1",
+              "tag": "DD+",
+              "channels": "7.1"
+            }
+          ],
+          "subtitleTracks": [
+            {
+              "lang": "French",
+              "codec": "subrip",
+              "title": "FR Forced : SRT",
+              "default": true,
+              "forced": true
+            },
+            {
+              "lang": "French",
+              "codec": "subrip",
+              "title": "FR Full : SRT"
+            },
+            {
+              "lang": "English",
+              "codec": "subrip",
+              "title": "ENG Full : SRT"
+            },
+            {
+              "lang": "French",
+              "codec": "hdmv_pgs_subtitle",
+              "title": "FR Forced : PGS",
+              "forced": true
+            },
+            {
+              "lang": "French",
+              "codec": "hdmv_pgs_subtitle",
+              "title": "FR Full : PGS"
+            },
+            {
+              "lang": "English",
+              "codec": "hdmv_pgs_subtitle",
+              "title": "ENG Full SDH : PGS",
+              "hearingImpaired": true
+            }
+          ],
+          "subbed": false,
+          "dubbed": true,
+          "seasonPack": false,
+          "mediaInfoQuality": "probe",
+          "duration": 9326.624,
+          "bitrate": 70168751,
+          "hasChapters": true
+        },
+        "service": "torbox",
+        "cached": true,
+        "servers": null,
+        "notWebReady": null,
+        "bingeGroup": "aiostreamsfortheweebsstable.midnightignite.me|2160p|BluRay REMUX|Tezcat74",
+        "private": false,
+        "seadexBest": null,
+        "seadex": null
+      }
+    ],
+    "statistics": [],
+    "errors": [
+      {
+        "title": "[❌] ComeTorz",
+        "description": "[OC] (upstream_error) NOAUTH"
+      },
+      {
+        "title": "[❌] Knaben",
+        "description": "[OC] (upstream_error) NOAUTH"
+      },
+      {
+        "title": "[❌] Bitmagnet",
+        "description": "[OC] (upstream_error) NOAUTH"
+      }
+    ]
+  },
+  "error": null
+}

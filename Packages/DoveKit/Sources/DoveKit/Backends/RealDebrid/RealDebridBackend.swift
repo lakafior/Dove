@@ -12,6 +12,11 @@ import Foundation
 ///   `item(_:)` fetches `GET /torrents/info/{id}`.
 /// - Delete: `DELETE /torrents/delete/{id}` or `DELETE /downloads/delete/{id}`.
 /// - Download: the torrent's `links[i]` belongs to its i-th selected file → `POST /unrestrict/link` → `download`.
+///
+/// `451 infringing_file` (code 35) on an add means one of two things (measured by Debrid Media Manager):
+/// the release name matches RD's filter (`RealDebridNameFilter`, refused every time), or RD is pausing
+/// all adds on the account for 20 s to ~5 min. RD judges the torrent's real name, not the magnet's `dn`, so without
+/// a known blocked name the two cannot be told apart. Dove does not wait it out silently: it says so at once.
 public struct RealDebridBackend: LibraryBackend {
     public let id: BackendID = .realDebrid
     public let supportedSources: Set<SourceKind> = [.torrent, .hoster]
@@ -22,6 +27,7 @@ public struct RealDebridBackend: LibraryBackend {
     /// File selection needs the magnet converted first; poll this many times before leaving it to the user.
     private let selectionAttempts: Int
     private let selectionInterval: Duration
+    private let requestTimeout: TimeInterval
 
     static let pageSize = 1000
 
@@ -30,13 +36,15 @@ public struct RealDebridBackend: LibraryBackend {
         transport: any HTTPTransport = URLSession.shared,
         baseURL: URL = URL(string: "https://api.real-debrid.com/rest/1.0")!,
         selectionAttempts: Int = 5,
-        selectionInterval: Duration = .seconds(1)
+        selectionInterval: Duration = .seconds(1),
+        requestTimeout: TimeInterval = 30
     ) {
         self.apiKey = apiKey
         self.transport = transport
         self.baseURL = baseURL
         self.selectionAttempts = selectionAttempts
         self.selectionInterval = selectionInterval
+        self.requestTimeout = requestTimeout
     }
 
     // MARK: - LibraryBackend
@@ -49,17 +57,17 @@ public struct RealDebridBackend: LibraryBackend {
     public func add(_ source: Source) async throws -> LibraryItem.ID {
         switch source {
         case .magnet(let magnet):
-            let created = try await decode(
-                RealDebridCreated.self,
-                from: request("torrents/addMagnet", method: "POST", form: [("magnet", magnet)])
+            let created = try await addRefusingBlockedNames(
+                request("torrents/addMagnet", method: "POST", form: [("magnet", magnet)]),
+                name: RealDebridNameFilter.displayName(ofMagnet: magnet)
             )
             try await selectFilesWhenReady(created.id)
             return RealDebridItemRef.torrent(created.id).id
 
         case .torrentFile(let data, _):
-            let created = try await decode(
-                RealDebridCreated.self,
-                from: request("torrents/addTorrent", method: "PUT", body: data, contentType: "application/x-bittorrent")
+            let created = try await addRefusingBlockedNames(
+                request("torrents/addTorrent", method: "PUT", body: data, contentType: "application/x-bittorrent"),
+                name: nil
             )
             try await selectFilesWhenReady(created.id)
             return RealDebridItemRef.torrent(created.id).id
@@ -128,6 +136,23 @@ public struct RealDebridBackend: LibraryBackend {
 
     // MARK: - Helpers
 
+    static let blockedNameMessage =
+        "Real-Debrid blocks releases tagged WEB-DL, WEBRip, BDRip and similar. Pick another release or send it to TorBox."
+    static let refusedMessage =
+        "Real-Debrid refused this torrent. Either its release name is blocked (WEB-DL, WEBRip and similar), or Real-Debrid is pausing adds on your account for a few minutes. Try again in a minute, or send it to TorBox."
+
+    /// Sends an add (`addMagnet` / `addTorrent`). A known blocked name is refused before calling RD.
+    private func addRefusingBlockedNames(_ request: URLRequest, name: String?) async throws -> RealDebridCreated {
+        if let name, RealDebridNameFilter.isBlocked(name) {
+            throw BackendError.api(message: Self.blockedNameMessage)
+        }
+        do {
+            return try await decode(RealDebridCreated.self, from: request)
+        } catch BackendError.api(let message) where message == Self.infringingMessage {
+            throw BackendError.api(message: Self.refusedMessage)
+        }
+    }
+
     private func info(_ torrentID: String) async throws -> RealDebridTorrent {
         try await decode(RealDebridTorrent.self, from: request("torrents/info/\(torrentID)"))
     }
@@ -191,6 +216,7 @@ public struct RealDebridBackend: LibraryBackend {
         if !query.isEmpty { url.append(queryItems: query) }
         var request = URLRequest(url: url)
         request.httpMethod = method
+        request.timeoutInterval = requestTimeout
         request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
         if let form {
             request.httpBody = FormURLEncoded.encode(form)
@@ -222,6 +248,9 @@ public struct RealDebridBackend: LibraryBackend {
         }
     }
 
+    /// Code 35 outside adds: `/unrestrict/link` refuses file names matching RD's filter.
+    static let infringingMessage = "Real-Debrid blocks this file name, so it cannot be downloaded or streamed from Real-Debrid."
+
     static func map(errorCode: Int?, message: String?) -> BackendError? {
         switch errorCode {
         case 8, 12, 13: return .unauthorized
@@ -238,7 +267,7 @@ public struct RealDebridBackend: LibraryBackend {
         case 24: return .api(message: "The file is unavailable on the hoster.")
         case 29: return .api(message: "The torrent is too big for Real-Debrid.")
         case 30: return .api(message: "Real-Debrid says the torrent file is invalid.")
-        case 35: return .api(message: "Real-Debrid refused this file (infringing).")
+        case 35: return .api(message: infringingMessage)
         case 36: return .api(message: "Real-Debrid fair usage limit reached.")
         default:
             guard let message, !message.isEmpty else { return nil }

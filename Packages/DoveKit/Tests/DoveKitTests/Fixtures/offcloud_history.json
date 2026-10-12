@@ -1,0 +1,33 @@
+[
+  {
+    "requestId": "66f1a2b3c4d5e6f7a8b9c0d1",
+    "fileName": "Some.Show.S02.2160p.WEB.H265-GRP",
+    "status": "downloaded",
+    "originalLink": "magnet:?xt=urn:btih:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa&tr=udp://tracker.example:1337",
+    "createdOn": "2026-10-05T10:00:00.000Z",
+    "isDirectory": true,
+    "server": "fr-3"
+  },
+  {
+    "requestId": "66f1a2b3c4d5e6f7a8b9c0d2",
+    "fileName": "Some Movie (2024).mkv",
+    "status": "downloaded",
+    "originalLink": "https://hoster.example/file/abc",
+    "createdOn": "2026-10-07T08:30:00.000Z",
+    "isDirectory": false,
+    "server": "nl-1"
+  },
+  {
+    "requestId": "66f1a2b3c4d5e6f7a8b9c0d3",
+    "fileName": "Loading...",
+    "status": "created",
+    "originalLink": "magnet:?xt=urn:btih:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "createdOn": "2026-10-08T12:00:00.000Z"
+  },
+  {
+    "requestId": "66f1a2b3c4d5e6f7a8b9c0d4",
+    "fileName": "Broken.Torrent",
+    "status": "error",
+    "createdOn": "2026-09-30T12:00:00.000Z"
+  }
+]

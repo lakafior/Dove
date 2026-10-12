@@ -1,0 +1,253 @@
+{
+  "id": "aio-metadata",
+  "version": "3.4.1",
+  "logo": "https://aiometadatafortheweebs.midnightignite.me/logo.png",
+  "background": "https://aiometadatafortheweebs.midnightignite.me/background.png",
+  "name": "AIOMetadata",
+  "description": "A metadata addon for power users. AIOMetadata uses TMDB, TVDB, TVMaze, MyAnimeList, IMDB and Fanart.tv to provide accurate data for movies, series, and anime. You choose the source.",
+  "resources": [
+    "catalog",
+    "meta",
+    "subtitles"
+  ],
+  "types": [
+    "movie",
+    "series",
+    "anime.movie",
+    "anime.series",
+    "anime",
+    "Trakt",
+    "collection"
+  ],
+  "idPrefixes": [
+    "tmdb:",
+    "tt",
+    "tvdb:",
+    "mal:",
+    "tvmaze:",
+    "kitsu:",
+    "anidb:",
+    "anilist:",
+    "tvdbc:",
+    "upnext_",
+    "unwatched_",
+    "mdblist_upnext_",
+    "pmdb_resume_",
+    "simkl_upnext_",
+    "aiom.error.",
+    "aiom.collection:"
+  ],
+  "behaviorHints": {
+    "configurable": true,
+    "configurationRequired": false,
+    "newEpisodeNotifications": true
+  },
+  "catalogs": [
+    {
+      "id": "mdblist.136620",
+      "type": "movie",
+      "name": "Seasonal",
+      "pageSize": 50,
+      "extra": [
+        {
+          "name": "genre",
+          "options": [
+            "Action",
+            "Anime",
+            "Comedy",
+            "Crime",
+            "Documentary",
+            "Drama",
+            "Family",
+            "Fantasy",
+            "History",
+            "Holiday",
+            "Horror",
+            "Music",
+            "Musical",
+            "Mystery",
+            "Science Fiction",
+            "Short",
+            "Sporting Event",
+            "Superhero",
+            "Suspense",
+            "Thriller",
+            "War",
+            "Western",
+            "Animation",
+            "Adventure",
+            "Romance",
+            "Reality",
+            "Soap",
+            "News",
+            "Talk Show",
+            "Biography",
+            "Sci-Fi",
+            "Sport",
+            "Film Noir",
+            "Reality TV",
+            "Game Show",
+            "Special Interest",
+            "Children",
+            "Home and Garden",
+            "TV Movie",
+            "Donghua",
+            "Talk",
+            "Kids"
+          ],
+          "isRequired": false
+        },
+        {
+          "name": "skip"
+        }
+      ],
+      "showInHome": true
+    },
+    {
+      "id": "mdblist.88434",
+      "type": "series",
+      "name": "Trakt Trending",
+      "pageSize": 50,
+      "extra": [
+        {
+          "name": "genre",
+          "options": [
+            "Action",
+            "Anime",
+            "Comedy",
+            "Crime",
+            "Documentary",
+            "Drama",
+            "Family",
+            "Fantasy",
+            "History",
+            "Holiday",
+            "Horror",
+            "Music",
+            "Musical",
+            "Mystery",
+            "Science Fiction",
+            "Short",
+            "Sporting Event",
+            "Superhero",
+            "Suspense",
+            "Thriller",
+            "War",
+            "Western",
+            "Animation",
+            "Adventure",
+            "Romance",
+            "Reality",
+            "Soap",
+            "News",
+            "Talk Show",
+            "Biography",
+            "Sci-Fi",
+            "Sport",
+            "Film Noir",
+            "Reality TV",
+            "Game Show",
+            "Special Interest",
+            "Children",
+            "Home and Garden",
+            "TV Movie",
+            "Donghua",
+            "Talk",
+            "Kids"
+          ],
+          "isRequired": false
+        },
+        {
+          "name": "skip"
+        }
+      ],
+      "showInHome": true
+    },
+    {
+      "id": "search.movie",
+      "type": "movie",
+      "name": "Movies Search",
+      "extra": [
+        {
+          "name": "search",
+          "isRequired": true
+        },
+        {
+          "name": "skip"
+        }
+      ]
+    },
+    {
+      "id": "search.series",
+      "type": "series",
+      "name": "Series Search",
+      "extra": [
+        {
+          "name": "search",
+          "isRequired": true
+        },
+        {
+          "name": "skip"
+        }
+      ]
+    },
+    {
+      "id": "search.tvdb.collections.search",
+      "type": "collection",
+      "name": "TVDB Collections",
+      "extra": [
+        {
+          "name": "search",
+          "isRequired": true
+        },
+        {
+          "name": "skip"
+        }
+      ]
+    },
+    {
+      "id": "gemini.search",
+      "type": "other",
+      "name": "Smart Search",
+      "extra": [
+        {
+          "name": "search",
+          "isRequired": true
+        },
+        {
+          "name": "skip"
+        }
+      ]
+    },
+    {
+      "id": "people_search.people_search_movie",
+      "type": "movie",
+      "name": "People Search",
+      "extra": [
+        {
+          "name": "search",
+          "isRequired": true
+        },
+        {
+          "name": "skip"
+        }
+      ]
+    },
+    {
+      "id": "people_search.people_search_series",
+      "type": "series",
+      "name": "People Search",
+      "extra": [
+        {
+          "name": "search",
+          "isRequired": true
+        },
+        {
+          "name": "skip"
+        }
+      ]
+    }
+  ],
+  "configVersion": 1791622349406,
+  "language": "en-US"
+}

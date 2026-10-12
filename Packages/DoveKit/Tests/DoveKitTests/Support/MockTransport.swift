@@ -7,17 +7,22 @@ actor MockTransport: HTTPTransport {
     struct Stub {
         var status: Int = 200
         var body: Data
+        var contentType = "application/json"
     }
 
     private var stubs: [String: [Stub]] = [:]
     private(set) var requests: [URLRequest] = []
 
-    func stub(_ pathSuffix: String, status: Int = 200, body: Data) {
-        stubs[pathSuffix, default: []].append(Stub(status: status, body: body))
+    func stub(_ pathSuffix: String, status: Int = 200, body: Data, contentType: String = "application/json") {
+        stubs[pathSuffix, default: []].append(Stub(status: status, body: body, contentType: contentType))
     }
 
     func stub(_ pathSuffix: String, status: Int = 200, json: String) {
         stub(pathSuffix, status: status, body: Data(json.utf8))
+    }
+
+    func stub(_ pathSuffix: String, status: Int = 200, html: String) {
+        stub(pathSuffix, status: status, body: Data(html.utf8), contentType: "text/html; charset=utf-8")
     }
 
     func send(_ request: URLRequest) async throws -> (Data, HTTPURLResponse) {
@@ -27,7 +32,12 @@ actor MockTransport: HTTPTransport {
               let match = stubs[key]?.first
         else { throw URLError(.unsupportedURL) }
         if stubs[key]!.count > 1 { stubs[key]!.removeFirst() }
-        let response = HTTPURLResponse(url: request.url!, statusCode: match.status, httpVersion: nil, headerFields: nil)!
+        let response = HTTPURLResponse(
+            url: request.url!,
+            statusCode: match.status,
+            httpVersion: nil,
+            headerFields: ["Content-Type": match.contentType]
+        )!
         return (match.body, response)
     }
 }

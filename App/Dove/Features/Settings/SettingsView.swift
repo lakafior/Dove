@@ -5,30 +5,41 @@ struct SettingsView: View {
     @Environment(AppModel.self) private var model
 
     var body: some View {
-        @Bindable var model = model
         NavigationStack {
             Form {
-                Section {
+                Section("Debrid") {
                     APIKeyRow(backend: .realDebrid, key: .realDebridAPIKey)
                     APIKeyRow(backend: .torBox, key: .torBoxAPIKey)
-                } header: {
-                    Text("Debrid")
-                } footer: {
-                    Text("Offcloud is coming next.")
+                    APIKeyRow(backend: .offcloud, key: .offcloudAPIKey)
                 }
 
-                Section("Defaults") {
-                    Picker("Torrents and links go to", selection: $model.preferredDebrid) {
-                        ForEach(BackendID.allCases.filter { !$0.isUsenet }) { Text($0.displayName).tag($0) }
+                Section {
+                    NavigationLink {
+                        DebridPriorityView()
+                    } label: {
+                        LabeledContent("Priority", value: model.debridOrder.map(\.displayName).joined(separator: " → "))
                     }
+                } footer: {
+                    Text("Torrents and links go to the first service. If it fails, Dove tries the next one.")
                 }
 
                 Section("Usenet") {
                     Text("nzbdav: stage 3").foregroundStyle(.secondary)
                 }
 
-                Section("Search") {
-                    Text("Stremio addons, AIOStreams and TMDB: stage 2").foregroundStyle(.secondary)
+                Section {
+                    NavigationLink {
+                        AddonsView()
+                    } label: {
+                        LabeledContent("Stremio addons", value: "\(model.addonEntries.count)")
+                    }
+                    if model.addonEntries.contains(where: \.isAIOStreams) {
+                        AIOStreamsPasswordRow()
+                    }
+                } header: {
+                    Text("Search")
+                } footer: {
+                    Text("Titles, metadata and sources come from your Stremio addons. With your AIOStreams password Dove also gets info hashes and season packs, so sources can go to your library, not only play.")
                 }
             }
             .navigationTitle("Settings")

@@ -11,6 +11,10 @@ public enum CredentialKey: String, Sendable, CaseIterable {
     case nzbdavWebDAVUser
     case nzbdavWebDAVPassword
     case tmdbAPIKey
+    /// JSON array of Stremio addon manifest URLs, in the user's order (they embed tokens).
+    case stremioAddons
+    /// Password of the user's AIOStreams configuration, for its Search API.
+    case aioStreamsPassword
 }
 
 public enum KeychainError: Error, Sendable {

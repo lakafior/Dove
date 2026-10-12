@@ -1,13 +1,15 @@
 import DoveKit
 import SwiftUI
 
-/// Stage 1: the smart field accepts magnets, info hashes, .torrent/.nzb URLs and hoster links.
-/// Stage 2 adds title search (TMDB) and the source list sheet.
+/// The smart field: a magnet, info hash, .torrent/.nzb URL or hoster link opens the add sheet;
+/// anything else searches titles through the user's Stremio addons.
 struct SearchView: View {
     @Environment(AppModel.self) private var model
     @State private var text = ""
     @State private var pendingSource: Source?
     @State private var message: String?
+    @State private var results: [MediaSummary] = []
+    @State private var isSearching = false
 
     var body: some View {
         NavigationStack {
@@ -16,12 +18,23 @@ struct SearchView: View {
                     TextField("Title, magnet or link", text: $text)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
+                        .submitLabel(.search)
                         .onSubmit(handleSubmit)
                 } footer: {
                     if let message { Text(message) }
                 }
+
+                if isSearching {
+                    HStack { Spacer(); ProgressView(); Spacer() }
+                        .listRowBackground(Color.clear)
+                }
+
+                ForEach(results) { item in
+                    NavigationLink(value: item) { MediaRow(item: item) }
+                }
             }
             .navigationTitle("Dove")
+            .navigationDestination(for: MediaSummary.self) { MediaDetailView(item: $0) }
             .sheet(item: $pendingSource) { source in
                 AddSourceSheet(source: source) { result in
                     pendingSource = nil
@@ -33,25 +46,81 @@ struct SearchView: View {
     }
 
     private func handleSubmit() {
+        message = nil
         if let source = SourceDetector.detect(text) {
+            results = []
             pendingSource = source
-        } else {
-            message = "Title search arrives in stage 2."
+            return
+        }
+        let query = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !query.isEmpty else { return }
+        guard model.addonSet.canSearch else {
+            message = "Add a Stremio addon that can search (for example AIOMetadata or Cinemeta) in Settings."
+            return
+        }
+        isSearching = true
+        Task {
+            do {
+                results = try await model.addonSet.search(query)
+                if results.isEmpty { message = "Nothing found." }
+            } catch {
+                message = error.localizedDescription
+            }
+            isSearching = false
         }
     }
 }
 
-/// Lets the user confirm which compatible backend receives the source.
+struct MediaRow: View {
+    let item: MediaSummary
+
+    var body: some View {
+        HStack(spacing: 12) {
+            PosterImage(url: item.poster)
+                .frame(width: 46, height: 69)
+            VStack(alignment: .leading, spacing: 4) {
+                Text(item.name).font(.headline).lineLimit(2)
+                HStack(spacing: 6) {
+                    Text(item.type == .movie ? "Movie" : "Series")
+                    if let year = item.releaseInfo { Text(year) }
+                    if let rating = item.imdbRating { Text("★ \(rating)") }
+                }
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            }
+        }
+    }
+}
+
+struct PosterImage: View {
+    let url: URL?
+
+    var body: some View {
+        AsyncImage(url: url) { image in
+            image.resizable().scaledToFill()
+        } placeholder: {
+            Rectangle().fill(.quaternary)
+        }
+        .clipShape(RoundedRectangle(cornerRadius: 6))
+    }
+}
+
+/// "Automatic" walks the priority list from Settings; picking a service sends it there only.
 struct AddSourceSheet: View {
     @Environment(AppModel.self) private var model
     let source: Source
     let onFinish: (String) -> Void
-    @State private var isWorking = false
+    @State private var working: Target?
+
+    enum Target: Hashable {
+        case automatic
+        case backend(BackendID)
+    }
 
     var body: some View {
         NavigationStack {
             List {
-                let candidates = model.router.candidates(for: source)
+                let candidates = model.router.candidates(for: source).map(\.id)
                 if candidates.isEmpty {
                     ContentUnavailableView(
                         "No backend for this source",
@@ -59,10 +128,21 @@ struct AddSourceSheet: View {
                         description: Text("Add a service that accepts \(source.kind.rawValue) sources in Settings.")
                     )
                 } else {
-                    Section("Add to") {
-                        ForEach(candidates.map { $0.id }, id: \.self) { backendID in
-                            Button(backendID.displayName) { add(to: backendID) }
-                                .disabled(isWorking)
+                    if candidates.count > 1 {
+                        Section {
+                            row(.automatic) {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("Automatic")
+                                    Text(candidates.map(\.displayName).joined(separator: " → "))
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+                            }
+                        }
+                    }
+                    Section("Only to") {
+                        ForEach(candidates, id: \.self) { id in
+                            row(.backend(id)) { Text(id.displayName) }
                         }
                     }
                 }
@@ -76,15 +156,36 @@ struct AddSourceSheet: View {
             }
         }
         .presentationDetents([.medium])
+        .interactiveDismissDisabled(working != nil)
     }
 
-    private func add(to backendID: BackendID) {
-        guard let backend = model.backend(backendID) else { return }
-        isWorking = true
+    private func row(_ target: Target, @ViewBuilder label: () -> some View) -> some View {
+        Button { add(target) } label: {
+            HStack {
+                label()
+                Spacer()
+                if working == target { ProgressView() }
+            }
+        }
+        .disabled(working != nil)
+    }
+
+    private func add(_ target: Target) {
+        working = target
         Task {
             do {
-                try await backend.add(source)
-                onFinish("Added to \(backend.id.displayName).")
+                switch target {
+                case .automatic:
+                    let result = try await model.router.add(source)
+                    let skipped = result.skipped
+                        .map { "\($0.backend.displayName): \($0.error.localizedDescription)" }
+                        .joined(separator: "\n")
+                    onFinish("Added to \(result.backend.displayName)." + (skipped.isEmpty ? "" : "\n\(skipped)"))
+                case .backend(let id):
+                    guard let backend = model.backend(id) else { return }
+                    try await backend.add(source)
+                    onFinish("Added to \(id.displayName).")
+                }
             } catch {
                 onFinish(error.localizedDescription)
             }

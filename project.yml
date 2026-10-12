@@ -2,7 +2,7 @@
 # Dove.xcodeproj is generated and git-ignored; this file is the source of truth.
 name: Dove
 options:
-  bundleIdPrefix: ovh.mar
+  bundleIdPrefix: net.smigi
   deploymentTarget:
     iOS: "17.0"
   createIntermediateGroups: true
@@ -16,7 +16,7 @@ settings:
     SWIFT_VERSION: "6.0"
     MARKETING_VERSION: "0.1.0"
     CURRENT_PROJECT_VERSION: "1"
-    DEVELOPMENT_TEAM: ""   # set your team ID here or in Xcode
+    DEVELOPMENT_TEAM: 5TA8RF548P
 
 targets:
   Dove:
@@ -28,7 +28,7 @@ targets:
       - package: DoveKit
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: ovh.mar.dove
+        PRODUCT_BUNDLE_IDENTIFIER: net.smigi.dove
         GENERATE_INFOPLIST_FILE: YES
         INFOPLIST_KEY_CFBundleDisplayName: Dove
         INFOPLIST_KEY_UILaunchScreen_Generation: YES

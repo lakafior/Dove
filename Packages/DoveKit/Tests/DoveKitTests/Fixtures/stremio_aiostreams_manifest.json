@@ -1,0 +1,230 @@
+{
+  "name": "SELection",
+  "id": "aiostreamsfortheweebsstable.midnightignite.me.00000000-000",
+  "version": "2.35.9",
+  "description": "Custom AIOStreams powered by Tamtaro SEL Setup v3.2.9. Features advanced filtering with Stream Expression Language and smart sorting with Vidhin's Regex Patterns. Your personal all-in-one setup for the perfect streaming experience.",
+  "catalogs": [
+    {
+      "type": "library",
+      "id": "ae74bd7.aiostreams::library.torbox",
+      "name": "TorBox",
+      "extra": [
+        {
+          "name": "skip"
+        },
+        {
+          "name": "search"
+        },
+        {
+          "name": "genre",
+          "isRequired": true,
+          "options": [
+            "None",
+            "Date Added ↓",
+            "Date Added ↑",
+            "Title A-Z",
+            "Title Z-A",
+            "Actions"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "id": "ae74bd7.aiostreams::library.realdebrid",
+      "name": "Real-Debrid",
+      "extra": [
+        {
+          "name": "skip"
+        },
+        {
+          "name": "search"
+        },
+        {
+          "name": "genre",
+          "isRequired": true,
+          "options": [
+            "None",
+            "Date Added ↓",
+            "Date Added ↑",
+            "Title A-Z",
+            "Title Z-A",
+            "Actions"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "movie",
+      "id": "845e3b0.search.movie",
+      "name": "Movies Search",
+      "extra": [
+        {
+          "name": "search",
+          "isRequired": true
+        },
+        {
+          "name": "skip"
+        }
+      ]
+    },
+    {
+      "type": "series",
+      "id": "845e3b0.search.series",
+      "name": "Series Search",
+      "extra": [
+        {
+          "name": "search",
+          "isRequired": true
+        },
+        {
+          "name": "skip"
+        }
+      ]
+    }
+  ],
+  "resources": [
+    {
+      "name": "stream",
+      "types": [
+        "movie",
+        "series",
+        "anime",
+        "library",
+        "other",
+        "tv",
+        "events",
+        "channel"
+      ],
+      "idPrefixes": [
+        "tt",
+        "imdb",
+        "mal",
+        "tvdb",
+        "tmdb",
+        "kitsu",
+        "aiostreams::library.offcloud",
+        "aiostreams::library.realdebrid",
+        "aiostreams::library.nzbdav",
+        "aiostreams::library.torbox",
+        "kitsu:",
+        "mal:",
+        "meteor:",
+        "anilist",
+        "anidb",
+        "tmdb:",
+        "tvdb:",
+        "mf",
+        "dl",
+        "pt",
+        "porndb",
+        "tvmaze:",
+        "anilist:",
+        "anidb:",
+        "pp-live:",
+        "cnc:"
+      ]
+    },
+    {
+      "name": "catalog",
+      "types": [
+        "library",
+        "movie",
+        "series",
+        "collection",
+        "other"
+      ]
+    },
+    {
+      "name": "meta",
+      "types": [
+        "library",
+        "tv",
+        "movie",
+        "series",
+        "anime.movie",
+        "anime.series",
+        "anime",
+        "Trakt",
+        "collection",
+        "other"
+      ],
+      "idPrefixes": [
+        "aiostreams::library.offcloud",
+        "aiostreams::library.realdebrid",
+        "aiostreams::library.nzbdav",
+        "aiostreams::library.torbox",
+        "pp-live:",
+        "tmdb:",
+        "tt",
+        "tvdb:",
+        "mal:",
+        "tvmaze:",
+        "kitsu:",
+        "anidb:",
+        "anilist:",
+        "tvdbc:",
+        "upnext_",
+        "unwatched_",
+        "mdblist_upnext_",
+        "pmdb_resume_",
+        "simkl_upnext_",
+        "aiom.error.",
+        "aiom.collection:",
+        "realdebrid",
+        "offcloud",
+        "torbox",
+        "aiostreamserror"
+      ]
+    },
+    {
+      "name": "subtitles",
+      "types": [
+        "movie",
+        "series",
+        "anime.movie",
+        "anime.series",
+        "anime",
+        "Trakt",
+        "collection"
+      ],
+      "idPrefixes": [
+        "tt",
+        "tmdb:",
+        "tvdb:",
+        "mal:",
+        "kitsu:",
+        "tvmaze:",
+        "anilist:",
+        "anidb:",
+        "tvdbc:",
+        "upnext_",
+        "unwatched_",
+        "mdblist_upnext_",
+        "pmdb_resume_",
+        "simkl_upnext_",
+        "aiom.error.",
+        "aiom.collection:"
+      ]
+    }
+  ],
+  "types": [
+    "movie",
+    "series",
+    "anime",
+    "library",
+    "other",
+    "tv",
+    "events",
+    "channel",
+    "collection",
+    "anime.movie",
+    "anime.series",
+    "Trakt"
+  ],
+  "logo": "https://raw.githubusercontent.com/Tam-Taro/SEL-Filtering-and-Sorting/refs/heads/main/logo/aios.png",
+  "behaviorHints": {
+    "configurable": true,
+    "configurationRequired": false
+  }
+}

@@ -1,0 +1,39 @@
+{
+  "streams": [
+    {
+      "name": "1080P‍‍‍⁽ⁿᶻᵇ⁾‍‍‍‍⚡  〈Remux〉‍ ‍   ",
+      "description": "✎  Severance  s₀₁·ᴇ₀₁\n▣  AVC \n◈  15 GB · 33.9 ᴹᵇᵖˢ  · [ND ⛉ Usenet Streamer] · TSCC · Miatrix\n⛿ ᴅᴜʙ  »  ₅₀",
+      "url": "https://stream.example/play/1",
+      "behaviorHints": {
+        "notWebReady": true,
+        "filename": "Severance.S01E01.GERMAN.DUBBED.DL.1080p.BluRay.AVC.REMUX-TSCC",
+        "bingeGroup": "aiostreamsfortheweebsstable.midnightignite.me|1080p|BluRay REMUX|TSCC",
+        "videoSize": 15010910700
+      }
+    },
+    {
+      "name": "1080P‍‍    ‍‍‍⚡  〈Remux〉‍ ‍   ★★★",
+      "description": "✎  Severance  s₀₁·ᴇ₀₁\n▣  AVC ♬ DTS-HD MA  ♯ 5.1\n◈  12.9 / 97.8 GB · 29.1 ᴹᵇᵖˢ  · [OC ⛉ Meteor] · FraMeSToR · uindex,stremt…\n✓ ᴇɴ · sᴜʙ (ᴇɴ · ᴘʟ)  » ʀᴇᴍᴜx ᴛ₁ ₄₄₅₀",
+      "url": "https://stream.example/play/2",
+      "behaviorHints": {
+        "bingeGroup": "aiostreamsfortheweebsstable.midnightignite.me|1080p|BluRay REMUX|FraMeSToR",
+        "videoSize": 12880464384,
+        "filename": "Severance S01E01 Good News About Hell BluRay 1080p DTS-HD MA 5 1 AVC REMUX-FraMeSToR.mkv",
+        "folderName": "Severance S01E01 Good News About Hell BluRay 1080p DTS-HD MA 5 1 AVC REMUX-FraMeSToR mkv",
+        "folderSize": 12880465787,
+        "cached": true
+      }
+    },
+    {
+      "name": "1080P‍‍    ‍‍‍⚡  〈Remux〉‍ ‍   ★★★",
+      "description": "✎  Severance  s₀₁·ᴇ₀₁\n▣  AVC ♬ DTS-HD MA  ♯ 5.1\n❖  97.8 / 97.7 GB · 221 ᴹᵇᵖˢ  · [RD ⛉ MediaFusion] · TRiToN · Zilean DMM\n✓ ᴇɴ · sᴜʙ (ᴇɴ · ᴘʟ)  » ʀᴇᴍᴜx ᴛ₂ ₄₄₁₀",
+      "url": "https://stream.example/play/3",
+      "behaviorHints": {
+        "notWebReady": false,
+        "bingeGroup": "aiostreamsfortheweebsstable.midnightignite.me|1080p|BluRay REMUX|TRiToN",
+        "videoSize": 97766746362,
+        "filename": "Severance.S01E01.Good.News.About.Hell.1080p.BluRay.REMUX.AVC.DTS-HD.MA.5.1-TRiToN.mkv"
+      }
+    }
+  ]
+}

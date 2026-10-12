@@ -8,6 +8,7 @@ struct DoveApp: App {
         WindowGroup {
             RootView()
                 .environment(model)
+                .task { await model.loadAddons() }
         }
     }
 }
