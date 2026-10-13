@@ -22,6 +22,10 @@ struct ContentClassifierTests {
         ("Cyberpunk 2077 v2.1 - GOG", .software),
         ("Some.Game-FitGirl.Repack", .software),
         ("Ubuntu 24.04 Desktop amd64", .software),
+        // Adult markers win over video markers.
+        ("Some.Site.24.03.01.Name.XXX.1080p.MP4-GRP", .adult),
+        ("Studio - Title [XXX] 2160p", .adult),
+        ("Xxxholic.S01E01.1080p", .video),
         // Nothing to go on.
         ("random stuff", .other),
     ])
@@ -119,5 +123,40 @@ struct LibraryKindShelfTests {
         let item = LibraryItem(id: "torrent:1", backend: .realDebrid, name: "Album 2020", status: .ready)
         #expect(ShelfItem(item: item).kind == .video)
         #expect(ShelfItem(item: item, kind: .music).kind == .music)
+    }
+}
+
+struct KindOverridesTests {
+    private let rd = LibraryItem(id: "torrent:1", backend: .realDebrid, name: "Dune.2021.2160p", status: .ready)
+
+    @Test func manualBeatsLearnedBeatsTheClassifier() {
+        var overrides = KindOverrides()
+        #expect(overrides.kind(of: rd) == .video)
+        overrides.learned["realDebrid/torrent:1"] = .music
+        #expect(overrides.kind(of: rd) == .music)
+        overrides.manual["realDebrid/torrent:1"] = .adult
+        #expect(overrides.shelfItem(rd).kind == .adult)
+        #expect(ShelfItem(item: rd).id == "realDebrid/torrent:1")
+    }
+
+    @Test func oldLearnedKindsFileIsReadAndUnknownKindsAreDropped() throws {
+        let file = FileManager.default.temporaryDirectory.appending(path: "dove-kinds-\(UUID().uuidString).json")
+        defer { try? FileManager.default.removeItem(at: file) }
+        try Data(#"{"realDebrid/torrent:1":"music","torbox/torrent:2":"hologram"}"#.utf8).write(to: file)
+        #expect(KindOverrides.load(from: file) == KindOverrides(learned: ["realDebrid/torrent:1": .music]))
+
+        let saved = KindOverrides(learned: ["a": .books], manual: ["b": .adult])
+        try saved.save(to: file)
+        #expect(KindOverrides.load(from: file) == saved)
+    }
+
+    @Test func adultLibraryCategoryAndNewznabCategory() {
+        let item = ShelfItem(item: LibraryItem(id: "t", backend: .torBox, name: "x", status: .ready), kind: .adult)
+        var filter = LibraryFilter()
+        filter.category = .adult
+        #expect(filter.apply(to: [item]).count == 1)
+        #expect(LibraryShelf.titles([item], matches: [:]).isEmpty)
+        #expect(ContentKind(newznabCategory: 6010) == .adult)
+        #expect(NewznabCategory.adult.ids == [6000])
     }
 }

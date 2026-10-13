@@ -47,6 +47,10 @@ struct LibraryView: View {
                     }
                     .disabled(library.isRematching || !model.addonSet.canSearch)
                 }
+                ToolbarItem(placement: .secondaryAction) {
+                    @Bindable var model = model
+                    Toggle("Show adult content", systemImage: "eye", isOn: $model.showAdult)
+                }
                 if mode == .files {
                     ToolbarItem(placement: .topBarLeading) { selectButton }
                 }
@@ -68,21 +72,15 @@ struct LibraryView: View {
         let others = filter.apply(to: library.others)
         return ScrollView {
             failuresBanner.padding(.horizontal)
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 104), spacing: 12)], spacing: 16) {
-                ForEach(titles) { title in
-                    NavigationLink(value: TitleRoute(id: title.id)) {
-                        TitleCard(title: title)
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-            .padding(.horizontal)
-            .padding(.bottom)
+            titleGrid("Movies", titles.filter { $0.type == .movie })
+            titleGrid("Series", titles.filter { $0.type == .series })
             if !others.isEmpty {
                 LazyVStack(alignment: .leading, spacing: 0) {
-                    Text("Other files")
-                        .font(.headline)
-                        .padding(.bottom, 6)
+                    HStack(alignment: .firstTextBaseline) {
+                        Text("Other files").font(.title3.bold())
+                        Text("\(others.count)").font(.subheadline).foregroundStyle(.secondary)
+                    }
+                    .padding(.bottom, 6)
                     ForEach(others) { item in
                         NavigationLink(value: item) {
                             ShelfItemRow(item: item, showsBackend: true)
@@ -91,13 +89,40 @@ struct LibraryView: View {
                                 .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
-                        .contextMenu { deleteButton(item) }
+                        .contextMenu {
+                            kindMenu([item])
+                            deleteButton(item)
+                        }
                         Divider()
                     }
                 }
                 .padding(.horizontal)
                 .padding(.bottom)
             }
+        }
+    }
+
+    /// One kind of title under its own heading; nothing when there are none (e.g. filtered to the other kind).
+    @ViewBuilder
+    private func titleGrid(_ heading: String, _ titles: [LibraryTitle]) -> some View {
+        if !titles.isEmpty {
+            LazyVStack(alignment: .leading, spacing: 8) {
+                HStack(alignment: .firstTextBaseline) {
+                    Text(heading).font(.title3.bold())
+                    Text("\(titles.count)").font(.subheadline).foregroundStyle(.secondary)
+                }
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 104), spacing: 12)], spacing: 16) {
+                    ForEach(titles) { title in
+                        NavigationLink(value: TitleRoute(id: title.id)) {
+                            TitleCard(title: title)
+                        }
+                        .buttonStyle(.plain)
+                        .contextMenu { kindMenu(title.items) }
+                    }
+                }
+            }
+            .padding(.horizontal)
+            .padding(.bottom)
         }
     }
 
@@ -110,6 +135,10 @@ struct LibraryView: View {
             ForEach(items) { item in
                 NavigationLink(value: item) { ShelfItemRow(item: item, showsBackend: true) }
                     .swipeActions { deleteButton(item) }
+                    .contextMenu {
+                        kindMenu([item])
+                        deleteButton(item)
+                    }
             }
         }
         .environment(\.editMode, .constant(isSelecting ? .active : .inactive))
@@ -142,6 +171,10 @@ struct LibraryView: View {
                 selection = selection.count == items.count ? [] : Set(items.map(\.id))
             }
             Spacer()
+            if deleting == nil {
+                kindMenu(library.items.filter { selection.contains($0.id) })
+                    .disabled(selection.isEmpty)
+            }
             if let deleting {
                 ProgressView()
                 Text("Deleting \(deleting.done) of \(deleting.total)…").font(.footnote)
@@ -218,7 +251,7 @@ struct LibraryView: View {
             }
             Picker("Type", selection: $filter.category) {
                 Text("Everything").tag(LibraryFilter.Category?.none)
-                ForEach(LibraryFilter.Category.allCases, id: \.self) {
+                ForEach(LibraryFilter.Category.allCases.filter { $0 != .adult || model.showAdult }, id: \.self) {
                     Text($0.title).tag(LibraryFilter.Category?.some($0))
                 }
             }
@@ -231,6 +264,28 @@ struct LibraryView: View {
                     let query = filter.query
                     filter = LibraryFilter()
                     filter.query = query
+                }
+            }
+        }
+    }
+
+    /// "Change type": the kind for these items (a whole title, one row, or the selection). A checkmark marks
+    /// the kind the user already set; "Automatic" goes back to what the files and the name say.
+    private func kindMenu(_ items: [ShelfItem]) -> some View {
+        let manual = Set(items.map { library.manualKind(of: $0) })
+        let current = manual.count == 1 ? manual.first! : nil
+        return Menu("Change type", systemImage: "tag") {
+            Button {
+                Task { await library.setKind(nil, for: items, using: model) }
+            } label: {
+                if manual == [nil] { Label("Automatic", systemImage: "checkmark") } else { Text("Automatic") }
+            }
+            Divider()
+            ForEach(ContentKind.allCases, id: \.self) { kind in
+                Button {
+                    Task { await library.setKind(kind, for: items, using: model) }
+                } label: {
+                    Label(kind.displayName, systemImage: current == kind ? "checkmark" : kind.symbol)
                 }
             }
         }

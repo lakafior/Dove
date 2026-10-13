@@ -45,7 +45,11 @@ final class FilesContext: @unchecked Sendable {
             filesLog.info("No nzbdav: \(seen.joined(separator: " "), privacy: .public)")
         }
         filesLog.info("Services: \(backends.map(\.id.rawValue).joined(separator: ","), privacy: .public)")
-        return LibraryBrowser(backends: backends)
+        // Adult items stay out of Files unless the user shows them in Dove; kinds the user set come from the app.
+        let showAdult = SharedConfiguration.preferences(from: keychain)?.showAdult ?? false
+        guard !showAdult else { return LibraryBrowser(backends: backends) }
+        let kinds = KindOverrides.load(from: SharedConfiguration.kindsURL) ?? KindOverrides()
+        return LibraryBrowser(backends: backends, hides: { kinds.kind(of: $0) == .adult })
     }
 }
 

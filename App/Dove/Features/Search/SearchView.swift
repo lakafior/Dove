@@ -42,7 +42,9 @@ struct SearchView: View {
                         .onSubmit(handleSubmit)
                     if scope == .other {
                         Picker("Category", selection: $category) {
-                            ForEach(NewznabCategory.allCases, id: \.self) { Text($0.displayName).tag($0) }
+                            ForEach(NewznabCategory.allCases.filter { $0 != .adult || model.showAdult }, id: \.self) {
+                                Text($0.displayName).tag($0)
+                            }
                         }
                     }
                 } header: {
@@ -203,12 +205,18 @@ extension SearchView {
         isSearching = true
         otherResults = []
         let search = model.newznab
-        let category = category
+        // A remembered Adult category does not survive hiding adult content.
+        let category = category == .adult && !model.showAdult ? NewznabCategory.all : category
+        let showAdult = model.showAdult
         let usenet = model.usenetBackend
         let checkers = model.cacheCheckers
         Task {
             let found = await search.search(.text(query, category: category)).routed(to: usenet)
-            otherResults = StreamGroup.group(found.candidates)
+            // Adult results stay out unless shown: indexer category 6000, or a marker in the name.
+            let candidates = showAdult ? found.candidates : found.candidates.filter { candidate in
+                candidate.category.map(ContentKind.init(newznabCategory:)) != .adult && !ContentClassifier.isAdult(name: candidate.title)
+            }
+            otherResults = StreamGroup.group(candidates)
             let failures = found.failures.joined(separator: "\n")
             message = otherResults.isEmpty
                 ? (failures.isEmpty ? "Nothing found." : failures)
@@ -236,6 +244,9 @@ extension SearchView {
                 // A Torznab result's .torrent link carries the indexer's key: fetch it here, never hand it over.
                 let router = model.router(preferring: group.cachedBackends())
                 let result = try await router.add(try await IndexerTorrent.prepare(source))
+                if group.category.map(ContentKind.init(newznabCategory:)) == .adult {
+                    model.library.setKind(.adult, backend: result.backend, itemID: result.itemID)
+                }
                 message = model.downloadOnly
                     ? await model.startDownloadOnly(result.itemID, on: result.backend, name: group.title, pick: .allVideos)
                     : "Added to \(result.backend.displayName)."

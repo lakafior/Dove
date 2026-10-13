@@ -5,7 +5,10 @@ public struct ShelfItem: Identifiable, Sendable, Hashable {
     public let item: LibraryItem
     public let guess: MediaGuess
     public let kind: ContentKind
-    public var id: String { "\(item.backend.rawValue)/\(item.id)" }
+    public var id: String { Self.id(backend: item.backend, itemID: item.id) }
+
+    /// Stable across launches and shared with the Files extension (`KindOverrides` keys).
+    public static func id(backend: BackendID, itemID: LibraryItem.ID) -> String { "\(backend.rawValue)/\(itemID)" }
 
     /// - Parameter kind: what an earlier look at the item's files established; classified from the item otherwise.
     public init(item: LibraryItem, kind: ContentKind? = nil) {
@@ -128,7 +131,7 @@ public enum LibraryShelf {
 public struct LibraryFilter: Equatable, Sendable {
     /// Movies and series split video; the other kinds map one to one.
     public enum Category: String, CaseIterable, Sendable {
-        case movies, series, music, books, software, other
+        case movies, series, music, books, software, adult, other
 
         public var title: String {
             switch self {
@@ -137,6 +140,7 @@ public struct LibraryFilter: Equatable, Sendable {
             case .music: "Music"
             case .books: "Books"
             case .software: "Software"
+            case .adult: "Adult"
             case .other: "Other"
             }
         }
@@ -148,6 +152,7 @@ public struct LibraryFilter: Equatable, Sendable {
             case .music: item.kind == .music
             case .books: item.kind == .books
             case .software: item.kind == .software
+            case .adult: item.kind == .adult
             case .other: item.kind == .other
             }
         }
@@ -199,7 +204,7 @@ public struct LibraryFilter: Equatable, Sendable {
             case nil: break
             case .movies: if title.type != .movie { return nil }
             case .series: if title.type != .series { return nil }
-            case .music, .books, .software, .other: return nil
+            case .music, .books, .software, .adult, .other: return nil
             }
             var title = title
             title.items = title.items.filter { item in

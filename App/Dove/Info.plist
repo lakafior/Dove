@@ -52,6 +52,8 @@
 	</array>
 	<key>CFBundleVersion</key>
 	<string>1</string>
+	<key>DoveAppGroup</key>
+	<string>group.net.smigi.dove</string>
 	<key>DoveKeychainGroup</key>
 	<string>$(AppIdentifierPrefix)net.smigi.dove.shared</string>
 	<key>LSSupportsOpeningDocumentsInPlace</key>

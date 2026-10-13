@@ -2,15 +2,17 @@ import Foundation
 
 /// What a library item holds. Only `video` gets titles, posters and Infuse; the rest are listed by name.
 /// A separate kind per family leaves room for their own metadata later (music, games).
+/// `adult` is hidden everywhere (Library, Files, Search › Other) unless the user shows it.
 public enum ContentKind: String, Codable, Sendable, CaseIterable, Hashable {
-    case video, music, books, software, other
+    case video, music, books, software, adult, other
 
-    /// The kind of a Newznab category: 2000 movies and 5000 TV are video, 3000 audio, 4000 PC, 7000 books.
+    /// The kind of a Newznab category: 2000 movies and 5000 TV are video, 3000 audio, 4000 PC, 6000 XXX, 7000 books.
     public init(newznabCategory category: Int) {
         switch category / 1000 {
         case 2, 5: self = .video
         case 3: self = .music
         case 4: self = .software
+        case 6: self = .adult
         case 7: self = .books
         default: self = .other
         }
@@ -22,6 +24,7 @@ public enum ContentKind: String, Codable, Sendable, CaseIterable, Hashable {
         case .music: "Music"
         case .books: "Books"
         case .software: "Software"
+        case .adult: "Adult"
         case .other: "Other"
         }
     }
@@ -33,12 +36,14 @@ public enum ContentKind: String, Codable, Sendable, CaseIterable, Hashable {
         case .music: "music.note"
         case .books: "book"
         case .software: "shippingbox"
+        case .adult: "eye.slash"
         case .other: "doc"
         }
     }
 }
 
 /// Decides an item's kind, most reliable evidence first:
+/// 0. an adult marker (`XXX`) in the name: such releases are video files, and must not get posters or titles;
 /// 1. its files (or the item's own name, for a single file), weighed by size;
 /// 2. markers in the release name (`1080p`, `S01E02` → video; `FLAC` → music; `x64`, `GOG` → software…);
 /// 3. a year or a season in the name → video (how most releases are named); otherwise `other`.
@@ -61,6 +66,7 @@ public enum ContentClassifier {
     }
 
     public static func classify(name: String, files: [LibraryFile]) -> ContentKind {
+        if isAdult(name: name) { return .adult }
         if let kind = byFiles(files) ?? kind(ofFile: name) { return kind }
         return byName(name)
     }
@@ -82,6 +88,14 @@ public enum ContentClassifier {
         #"\b(epub|pdf|mobi|azw3|e-?books?|audiobooks?|comics?|cbz|cbr|magazine|retail ebook)\b"#
     private static let softwareMarkers =
         #"\b(x64|x86|amd64|arm64|win(dows)?|win64|win32|macos|mac os|linux|setup|installer|portable|multilingual|fitgirl|dodi|elamigos|gog|codex|skidrow|plaza|empress|tenoke|rune|flt|razor1911|repack|v\d+(\.\d+){1,3})\b"#
+
+    private static let adultMarkers = #"\bxxx\b"#
+
+    /// Release names that say they are adult content. Many are not marked: the user can change an item's kind.
+    public static func isAdult(name: String) -> Bool {
+        let text = name.lowercased().replacingOccurrences(of: #"[._\-\[\]\(\)]"#, with: " ", options: .regularExpression)
+        return text.range(of: adultMarkers, options: .regularExpression) != nil
+    }
 
     static func byName(_ name: String) -> ContentKind {
         let traits = ReleaseParser.parse(name)

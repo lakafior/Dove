@@ -68,12 +68,24 @@ final class AppModel {
         }
     }
 
+    /// Adult items (Library, Files) and the Adult search category. Hidden by default.
+    var showAdult = false {
+        didSet {
+            guard showAdult != oldValue else { return }
+            library.showAdult = showAdult
+            savePreferences()
+            // The Files extension re-reads the preference when the working set is signalled.
+            FilesLocation.libraryChanged()
+        }
+    }
+
     /// Filters, variant and "download only" travel with the keys through iCloud Keychain.
     private func savePreferences() {
         var preferences = SyncedPreferences()
         preferences.downloadOnly = downloadOnly
         preferences.sourceFilter = sourceFilter
         preferences.aioStreamsVariant = aioStreamsVariant
+        preferences.showAdult = showAdult
         SharedConfiguration.savePreferences(preferences, to: keychain)
     }
     static let debrids = SharedConfiguration.debrids
@@ -112,6 +124,7 @@ final class AppModel {
             downloadOnly = preferences.downloadOnly
             sourceFilter = preferences.sourceFilter
             aioStreamsVariant = preferences.aioStreamsVariant
+            showAdult = preferences.showAdult
         } else {
             // First launch of this build: bring the old UserDefaults values along, then save them synced.
             // A fresh install has none: it saves nothing, so it cannot overwrite preferences that iCloud
@@ -127,6 +140,8 @@ final class AppModel {
             aioStreamsVariant = defaults.string(forKey: Self.legacyVariantKey) ?? ""
             if hasLegacy { savePreferences() }
         }
+        // didSet does not run for assignments in init.
+        library.showAdult = showAdult
         reloadBackends()
         reloadNewznab()
         addonEntries = storedAddonURLs().map { AddonEntry(url: $0) }

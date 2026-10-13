@@ -7,6 +7,8 @@ public enum NewznabCategory: String, CaseIterable, Sendable, Hashable, Codable {
     case software
     case music
     case books
+    /// Hidden unless the user shows adult content.
+    case adult
 
     /// `cat=` values. Indexers match their subcategories (4000 covers 4010 Windows, 4050 PC games…).
     var ids: [Int] {
@@ -15,6 +17,7 @@ public enum NewznabCategory: String, CaseIterable, Sendable, Hashable, Codable {
         case .software: [4000]
         case .music: [3000]
         case .books: [7000]
+        case .adult: [6000]
         }
     }
 
@@ -24,6 +27,7 @@ public enum NewznabCategory: String, CaseIterable, Sendable, Hashable, Codable {
         case .software: "Software"
         case .music: "Music"
         case .books: "Books"
+        case .adult: "Adult"
         }
     }
 }

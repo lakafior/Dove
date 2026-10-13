@@ -101,6 +101,17 @@ struct LibraryBrowserTests {
         #expect(items.allSatisfy { $0.deletesItem && $0.parent == .backend(.torBox) })
     }
 
+    @Test func hiddenItemsAreLeftOutOfListsAndLookups() async throws {
+        let backend = BrowseBackend(id: .torBox, list: [
+            LibraryItem(id: "torrent:1", backend: .torBox, name: "Movie", status: .ready),
+            LibraryItem(id: "torrent:2", backend: .torBox, name: "Clip.XXX.1080p", status: .ready),
+        ])
+        let browser = LibraryBrowser(backends: [backend], hides: { ContentClassifier.isAdult(name: $0.name) })
+        #expect(try await browser.children(of: .backend(.torBox)).map(\.name) == ["Movie"])
+        #expect(await browser.topLevel().nodes.map(\.name) == ["TorBox", "Movie"])
+        await #expect(throws: BackendError.notFound) { try await browser.node(.item(.torBox, "torrent:2")) }
+    }
+
     @Test func itemContentsBecomeFoldersFromFilePaths() async throws {
         let browser = LibraryBrowser(backends: [BrowseBackend(id: .nzbdav, list: [pack])])
         let top = try await browser.children(of: .item(.nzbdav, "job:1"))

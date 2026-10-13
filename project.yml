@@ -34,6 +34,8 @@ targets:
       properties:
         # Read at runtime by SharedConfiguration.keychainGroup.
         DoveKeychainGroup: $(AppIdentifierPrefix)net.smigi.dove.shared
+        # Item kinds shared with the Files extension (SharedConfiguration.kindsURL).
+        DoveAppGroup: group.net.smigi.dove
         # Dove opens magnet links and .torrent/.nzb files ("Open in Dove"). iOS has no default-app
         # setting for schemes: with several magnet apps installed it picks one on its own.
         CFBundleURLTypes:

@@ -80,15 +80,3 @@ struct OtherResultRow: View {
         .padding(.vertical, 2)
     }
 }
-
-extension ContentKind {
-    var symbol: String {
-        switch self {
-        case .video: "film"
-        case .music: "music.note"
-        case .books: "book"
-        case .software: "shippingbox"
-        case .other: "doc"
-        }
-    }
-}

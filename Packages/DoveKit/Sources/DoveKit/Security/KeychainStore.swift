@@ -127,6 +127,17 @@ public enum SharedConfiguration {
         KeychainStore(accessGroup: keychainGroup)
     }
 
+    /// `DoveAppGroup` in the Info.plist: the container the app and the Files extension share.
+    public static var appGroupContainer: URL? {
+        (Bundle.main.object(forInfoDictionaryKey: "DoveAppGroup") as? String)
+            .flatMap { FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: $0) }
+    }
+
+    /// Learned and user-set item kinds (`KindOverrides`); the Files extension reads them to hide adult items.
+    public static var kindsURL: URL {
+        (appGroupContainer ?? .applicationSupportDirectory.appending(path: "Dove")).appending(path: "Library/kinds.json")
+    }
+
     /// Every configured library backend, from the Keychain. Shared by the app and the share extension.
     public static func backends(from keychain: KeychainStore) -> [any LibraryBackend] {
         var list: [any LibraryBackend] = []

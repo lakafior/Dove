@@ -6,7 +6,14 @@ import Observation
 @MainActor
 @Observable
 final class LibraryModel {
-    private(set) var items: [ShelfItem] = []
+    /// Everything the services listed. Views read `items`, which leaves adult content out unless it is shown.
+    private var allItems: [ShelfItem] = []
+    /// Set by `AppModel` from the synced preference.
+    var showAdult = false
+
+    var items: [ShelfItem] {
+        showAdult ? allItems : allItems.filter { $0.kind != .adult }
+    }
     private(set) var failures: [String] = []
     private(set) var matches: [String: MediaSummary] = [:]
     private(set) var isLoading = false
@@ -15,14 +22,22 @@ final class LibraryModel {
 
     /// Matches survive launches; they are not secrets.
     private let store = MatchStore(fileURL: URL.applicationSupportDirectory.appending(path: "Dove/library-matches.json"))
-    /// Kinds learned from an item's files once it was opened (Real-Debrid and Offcloud list items without files).
-    private var knownKinds: [ShelfItem.ID: ContentKind] = [:]
-    private static let kindsURL = URL.applicationSupportDirectory.appending(path: "Dove/library-kinds.json")
+    /// Kinds learned from an item's files once it was opened (Real-Debrid and Offcloud list items without files),
+    /// and kinds the user set. In the App Group container: the Files extension hides adult items with them.
+    private var kinds: KindOverrides
+    private static let kindsURL = SharedConfiguration.kindsURL
+    /// Where learned kinds lived before the user could set them and Files needed them.
+    private static let legacyKindsURL = URL.applicationSupportDirectory.appending(path: "Dove/library-kinds.json")
 
     init() {
-        if let data = try? Data(contentsOf: Self.kindsURL),
-           let kinds = try? JSONDecoder().decode([ShelfItem.ID: ContentKind].self, from: data) {
-            knownKinds = kinds
+        if let current = KindOverrides.load(from: Self.kindsURL) {
+            kinds = current
+        } else {
+            kinds = KindOverrides.load(from: Self.legacyKindsURL) ?? KindOverrides()
+            if FileManager.default.fileExists(atPath: Self.legacyKindsURL.path()) {
+                try? kinds.save(to: Self.kindsURL)
+                try? FileManager.default.removeItem(at: Self.legacyKindsURL)
+            }
         }
     }
 
@@ -39,12 +54,43 @@ final class LibraryModel {
     func learnKind(from detail: LibraryItem) {
         guard !detail.files.isEmpty else { return }
         let learned = ShelfItem(item: detail)
-        guard let index = items.firstIndex(where: { $0.id == learned.id }) else { return }
-        guard items[index].kind != learned.kind || knownKinds[learned.id] == nil else { return }
-        knownKinds[learned.id] = learned.kind
-        items[index] = ShelfItem(item: items[index].item, kind: learned.kind)
-        try? FileManager.default.createDirectory(at: Self.kindsURL.deletingLastPathComponent(), withIntermediateDirectories: true)
-        try? JSONEncoder().encode(knownKinds).write(to: Self.kindsURL, options: .atomic)
+        guard kinds.learned[learned.id] != learned.kind else { return }
+        kinds.learned[learned.id] = learned.kind
+        saveKinds()
+        // The user's own choice still wins.
+        guard kinds.manual[learned.id] == nil,
+              let index = allItems.firstIndex(where: { $0.id == learned.id })
+        else { return }
+        allItems[index] = ShelfItem(item: allItems[index].item, kind: learned.kind)
+    }
+
+    /// "Change type": the user's kind for these items; nil goes back to automatic (files, then the name).
+    /// Items that become video get looked up for a poster.
+    func setKind(_ kind: ContentKind?, for changed: [ShelfItem], using app: AppModel) async {
+        let ids = Set(changed.map(\.id))
+        for id in ids { kinds.manual[id] = kind }
+        saveKinds()
+        allItems = allItems.map { ids.contains($0.id) ? kinds.shelfItem($0.item) : $0 }
+        FilesLocation.libraryChanged()
+        await matchMissing(using: app.addonSet)
+    }
+
+    /// A kind known when the item was added (an indexer's adult category), kept like the user's choice.
+    func setKind(_ kind: ContentKind, backend: BackendID, itemID: LibraryItem.ID) {
+        let id = ShelfItem.id(backend: backend, itemID: itemID)
+        kinds.manual[id] = kind
+        saveKinds()
+        allItems = allItems.map { $0.id == id ? kinds.shelfItem($0.item) : $0 }
+        FilesLocation.libraryChanged()
+    }
+
+    /// The kind the user set for an item, if any (for the menu's checkmark).
+    func manualKind(of item: ShelfItem) -> ContentKind? {
+        kinds.manual[item.id]
+    }
+
+    private func saveKinds() {
+        try? kinds.save(to: Self.kindsURL)
     }
 
     func title(id: String) -> LibraryTitle? {
@@ -55,9 +101,7 @@ final class LibraryModel {
         isLoading = true
         defer { isLoading = false; hasLoaded = true }
         let result = await LibraryLoader.load(app.backends)
-        items = result.items.map { item in
-            knownKinds[item.id].map { ShelfItem(item: item.item, kind: $0) } ?? item
-        }
+        allItems = result.items.map { kinds.kind(for: $0.id) == nil ? $0 : kinds.shelfItem($0.item) }
         failures = result.failures
         FilesLocation.libraryChanged()
         matches = await store.all().compactMapValues(\.media)
@@ -103,7 +147,7 @@ final class LibraryModel {
         guard let backend = app.backend(item.item.backend) else { return }
         do {
             try await backend.delete(item.item.id)
-            items.removeAll { $0.id == item.id }
+            allItems.removeAll { $0.id == item.id }
             FilesLocation.libraryChanged()
         } catch {
             failures.append("Could not delete \(item.item.name) from \(item.item.backend.displayName): \(error.localizedDescription)")

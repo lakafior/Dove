@@ -8,16 +8,19 @@ public struct SyncedPreferences: Codable, Sendable, Equatable {
     public var sourceFilter = SourceFilter()
     /// AIOStreams variant for Dove's searches; empty for none.
     public var aioStreamsVariant = ""
+    /// Adult items and the Adult search category; hidden by default. The Files extension reads it too.
+    public var showAdult = false
 
     public init() {}
 
-    enum CodingKeys: String, CodingKey { case downloadOnly, sourceFilter, aioStreamsVariant }
+    enum CodingKeys: String, CodingKey { case downloadOnly, sourceFilter, aioStreamsVariant, showAdult }
 
     public init(from decoder: any Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         downloadOnly = (try? c.decodeIfPresent(Bool.self, forKey: .downloadOnly)) ?? false
         sourceFilter = (try? c.decodeIfPresent(SourceFilter.self, forKey: .sourceFilter)) ?? SourceFilter()
         aioStreamsVariant = (try? c.decodeIfPresent(String.self, forKey: .aioStreamsVariant)) ?? ""
+        showAdult = (try? c.decodeIfPresent(Bool.self, forKey: .showAdult)) ?? false
     }
 }
 

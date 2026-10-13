@@ -4,6 +4,7 @@ import Foundation
 ///
 /// Dove › one folder per configured service › one folder per ready item › its files (with subfolders when
 /// file names carry paths). Only ready items are listed: Files has no way to show a status.
+/// Items `hides` picks (adult content, unless the user shows it) are left out, as if the service had none.
 ///
 /// Files asks for the same entries many times while browsing, so service lists and item details are cached
 /// briefly and concurrent requests share one call (Real-Debrid allows 250 requests a minute).
@@ -11,6 +12,7 @@ public actor LibraryBrowser {
     private let backends: [any LibraryBackend]
     private let cacheLifetime: TimeInterval
     private let now: @Sendable () -> Date
+    private let hides: @Sendable (LibraryItem) -> Bool
 
     private var lists: [BackendID: (date: Date, task: Task<[LibraryItem], any Error>)] = [:]
     private var details: [DetailKey: (date: Date, task: Task<LibraryItem, any Error>)] = [:]
@@ -20,10 +22,16 @@ public actor LibraryBrowser {
         let item: LibraryItem.ID
     }
 
-    public init(backends: [any LibraryBackend], cacheLifetime: TimeInterval = 30, now: @escaping @Sendable () -> Date = Date.init) {
+    public init(
+        backends: [any LibraryBackend],
+        cacheLifetime: TimeInterval = 30,
+        now: @escaping @Sendable () -> Date = Date.init,
+        hides: @escaping @Sendable (LibraryItem) -> Bool = { _ in false }
+    ) {
         self.backends = backends
         self.cacheLifetime = cacheLifetime
         self.now = now
+        self.hides = hides
     }
 
     public var configured: [BackendID] { backends.map(\.id) }
@@ -171,7 +179,7 @@ public actor LibraryBrowser {
     }
 
     private func itemNodes(_ backend: BackendID) async throws -> [LibraryNode] {
-        let ready = try await items(backend).filter { $0.status == .ready }
+        let ready = try await items(backend).filter { $0.status == .ready && !hides($0) }
         let names = NodeNaming.unique(ready.map { (key: $0.id, name: $0.name, isFolder: true) })
         return ready.map { item in
             LibraryNode(
