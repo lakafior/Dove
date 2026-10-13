@@ -80,6 +80,8 @@ struct OffcloudBackendTests {
 
         #expect(items.map(\.status) == [.ready, .ready, .queued, .failed(reason: "error")])
         #expect(items[0].id == "cloud:66f1a2b3c4d5e6f7a8b9c0d1")
+        // The hash comes from the magnet the request was made with; hoster links have none.
+        #expect(items.map(\.infoHash) == [String(repeating: "a", count: 40), nil, String(repeating: "b", count: 40), nil])
     }
 
     @Test func folderFilesComeFromExplore() async throws {

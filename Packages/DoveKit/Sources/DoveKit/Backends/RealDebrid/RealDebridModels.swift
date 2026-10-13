@@ -75,7 +75,8 @@ extension RealDebridTorrent {
             files: selected.map {
                 LibraryFile(id: String($0.id), name: ($0.path as NSString).lastPathComponent, size: $0.bytes)
             },
-            addedAt: added.flatMap(APIDate.parse)
+            addedAt: added.flatMap(APIDate.parse),
+            infoHash: hash
         )
     }
 

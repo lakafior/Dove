@@ -18,6 +18,8 @@ struct OffcloudHistoryItem: Decodable {
     let isDirectory: Bool?
     /// Download host prefix: files live at `https://{server}.offcloud.com/cloud/download/{requestId}/{fileName}`.
     let server: String?
+    /// What was added: a magnet or a hoster link.
+    let originalLink: String?
 }
 
 struct OffcloudCacheResponse: Decodable {
@@ -59,7 +61,8 @@ extension OffcloudHistoryItem {
             name: fileName ?? requestId,
             status: libraryStatus,
             files: files,
-            addedAt: createdOn.flatMap(APIDate.parse)
+            addedAt: createdOn.flatMap(APIDate.parse),
+            infoHash: originalLink.flatMap(InfoHash.fromMagnet)
         )
     }
 
@@ -84,13 +87,6 @@ extension OffcloudHistoryItem {
 enum OffcloudMagnet {
     /// Offcloud accepts a garbage magnet and leaves it "Loading..." forever, so validate before adding.
     static func hasValidInfoHash(_ magnet: String) -> Bool {
-        guard let topic = URLComponents(string: magnet)?.queryItems?
-            .first(where: { $0.name.lowercased() == "xt" })?.value?
-            .lowercased(),
-            topic.hasPrefix("urn:btih:")
-        else { return false }
-        let hash = topic.dropFirst("urn:btih:".count)
-        let base32 = Set("abcdefghijklmnopqrstuvwxyz234567")
-        return (hash.count == 40 && hash.allSatisfy(\.isHexDigit)) || (hash.count == 32 && hash.allSatisfy(base32.contains))
+        InfoHash.fromMagnet(magnet) != nil
     }
 }

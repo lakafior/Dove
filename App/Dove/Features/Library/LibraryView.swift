@@ -42,6 +42,13 @@ struct LibraryView: View {
                 }
                 ToolbarItem(placement: .primaryAction) { filterMenu }
                 ToolbarItem(placement: .secondaryAction) {
+                    // Same as pulling the list down: every service's list, statuses included, one call each.
+                    Button(library.isLoading ? "Refreshing…" : "Refresh all statuses", systemImage: "arrow.clockwise") {
+                        Task { await library.refresh(using: model) }
+                    }
+                    .disabled(library.isLoading)
+                }
+                ToolbarItem(placement: .secondaryAction) {
                     Button(library.isRematching ? "Re-matching…" : "Re-match all titles", systemImage: "arrow.triangle.2.circlepath") {
                         Task { await library.rematchAll(using: model) }
                     }
@@ -394,10 +401,21 @@ struct ShelfItemRow: View {
 struct LibraryItemView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.openURL) private var openURL
+    @Environment(\.dismiss) private var dismiss
     let item: LibraryItem
     @State private var detail: LibraryItem?
     @State private var message: String?
     @State private var isChoosingFiles = false
+    @State private var confirmReinsert = false
+    @State private var pendingMove: BackendID?
+    @State private var isWorking = false
+
+    private var current: LibraryItem { detail ?? item }
+
+    /// Other debrids that take torrents, in priority order: where "Move to" can send this one.
+    private var moveTargets: [BackendID] {
+        model.backends(usenet: false).map(\.id).filter { $0 != item.backend }
+    }
 
     /// In name order, so episodes read E01, E02… (services list them in their own order).
     private var files: [LibraryFile] {
@@ -475,8 +493,98 @@ struct LibraryItemView: View {
         }
         .navigationTitle(item.name)
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) { actionsMenu }
+        }
+        .confirmationDialog("Add this torrent again?", isPresented: $confirmReinsert, titleVisibility: .visible) {
+            Button("Reinsert on \(item.backend.displayName)") { reinsert() }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Dove adds the same torrent to \(item.backend.displayName) again and deletes this item. Use it for dead, expired or stuck torrents.")
+        }
+        .confirmationDialog(
+            "Move to \(pendingMove?.displayName ?? "")?",
+            isPresented: Binding(get: { pendingMove != nil }, set: { if !$0 { pendingMove = nil } }),
+            titleVisibility: .visible,
+            presenting: pendingMove
+        ) { target in
+            Button("Move (delete from \(item.backend.displayName))") { move(to: target, deleteOriginal: true) }
+            Button("Copy (keep it here too)") { move(to: target, deleteOriginal: false) }
+            Button("Cancel", role: .cancel) {}
+        } message: { _ in
+            Text("Dove adds the torrent there first; it deletes this item only after that worked.")
+        }
+        .disabled(isWorking)
         .refreshable { await loadDetail() }
         .task { await loadDetail() }
+    }
+
+    /// DMM-style actions for torrents (by info hash), and a status refresh for everything.
+    private var actionsMenu: some View {
+        Menu("Actions", systemImage: "ellipsis.circle") {
+            if let magnet = current.magnet, let hash = current.infoHash {
+                Section {
+                    Button("Copy magnet", systemImage: "link") { copy(magnet, "Magnet copied.") }
+                    Button("Copy hash", systemImage: "number") { copy(hash, "Hash copied.") }
+                }
+                Section {
+                    Button("Reinsert", systemImage: "arrow.clockwise.circle") { confirmReinsert = true }
+                    if !moveTargets.isEmpty {
+                        Menu("Move to", systemImage: "arrow.right.circle") {
+                            ForEach(moveTargets, id: \.self) { target in
+                                Button(target.displayName) { pendingMove = target }
+                            }
+                        }
+                    }
+                }
+            }
+            Button("Refresh status", systemImage: "arrow.triangle.2.circlepath") {
+                Task {
+                    message = nil
+                    await loadDetail()
+                    if message == nil { message = "Status: \(current.status.label)." }
+                }
+            }
+        }
+    }
+
+    private func copy(_ text: String, _ confirmation: String) {
+        UIPasteboard.general.string = text
+        message = confirmation
+    }
+
+    private func reinsert() {
+        guard let backend = model.backend(item.backend) else { return }
+        run("Reinserting…") {
+            _ = try await LibraryActions.reinsert(current, on: backend)
+            return true
+        }
+    }
+
+    private func move(to target: BackendID, deleteOriginal: Bool) {
+        guard let source = model.backend(item.backend), let destination = model.backend(target) else { return }
+        run("Adding to \(target.displayName)…") {
+            _ = try await LibraryActions.move(current, from: source, to: destination, deleteOriginal: deleteOriginal)
+            if !deleteOriginal { message = "Added to \(target.displayName)." }
+            return deleteOriginal
+        }
+    }
+
+    /// Runs an action, refreshes the library, and leaves the screen when the item is gone.
+    private func run(_ progress: String, _ action: @escaping () async throws -> Bool) {
+        isWorking = true
+        message = progress
+        Task {
+            defer { isWorking = false }
+            do {
+                let removed = try await action()
+                await model.library.refresh(using: model)
+                if removed { dismiss() } else if message == progress { message = nil }
+            } catch {
+                message = error.localizedDescription
+                await model.library.refresh(using: model)
+            }
+        }
     }
 
     /// Some backends (Real-Debrid, Offcloud) only return files from a per-item call.

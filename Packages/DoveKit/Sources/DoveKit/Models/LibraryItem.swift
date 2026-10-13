@@ -41,6 +41,9 @@ public struct LibraryItem: Identifiable, Sendable, Hashable {
     public var status: Status
     public var files: [LibraryFile]
     public var addedAt: Date?
+    /// Torrents only, lowercased, when the service tells it (Real-Debrid, TorBox; Offcloud from the magnet it was
+    /// added with). Lets the user copy the magnet, add the torrent again or move it to another service.
+    public var infoHash: String?
 
     public init(
         id: String,
@@ -49,7 +52,8 @@ public struct LibraryItem: Identifiable, Sendable, Hashable {
         size: Int64? = nil,
         status: Status,
         files: [LibraryFile] = [],
-        addedAt: Date? = nil
+        addedAt: Date? = nil,
+        infoHash: String? = nil
     ) {
         self.id = id
         self.backend = backend
@@ -58,6 +62,37 @@ public struct LibraryItem: Identifiable, Sendable, Hashable {
         self.status = status
         self.files = files
         self.addedAt = addedAt
+        self.infoHash = infoHash.flatMap(InfoHash.normalized)
+    }
+
+    /// A magnet with the item's name, for copying or adding elsewhere. Nil without an info hash.
+    public var magnet: String? {
+        guard let infoHash else { return nil }
+        var allowed = CharacterSet.alphanumerics
+        allowed.insert(charactersIn: "-_.~")
+        let name = self.name.addingPercentEncoding(withAllowedCharacters: allowed) ?? ""
+        return "magnet:?xt=urn:btih:\(infoHash)" + (name.isEmpty ? "" : "&dn=\(name)")
+    }
+}
+
+/// BitTorrent v1 info hashes: 40 hex characters, or 32 base32 ones in older magnets.
+public enum InfoHash {
+    /// Lowercased hash, or nil when the text is not one.
+    public static func normalized(_ text: String) -> String? {
+        let hash = text.lowercased()
+        let base32 = Set("abcdefghijklmnopqrstuvwxyz234567")
+        let valid = (hash.count == 40 && hash.allSatisfy(\.isHexDigit)) || (hash.count == 32 && hash.allSatisfy(base32.contains))
+        return valid ? hash : nil
+    }
+
+    /// The hash in a magnet's `xt=urn:btih:` topic.
+    public static func fromMagnet(_ magnet: String) -> String? {
+        guard magnet.lowercased().hasPrefix("magnet:"),
+              let topic = URLComponents(string: magnet)?.queryItems?
+                .first(where: { $0.name.lowercased() == "xt" })?.value,
+              topic.lowercased().hasPrefix("urn:btih:")
+        else { return nil }
+        return normalized(String(topic.dropFirst("urn:btih:".count)))
     }
 }
 

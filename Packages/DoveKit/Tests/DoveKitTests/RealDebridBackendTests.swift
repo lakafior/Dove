@@ -31,6 +31,8 @@ struct RealDebridBackendTests {
         #expect(items[2].status == .ready)
         #expect(items[3].status == .failed(reason: "magnet error"))
         #expect(items[1].files.map(\.name) == ["archive.part1.rar"])
+        #expect(items[1].infoHash == nil)
+        #expect([items[0], items[2], items[3]].allSatisfy { $0.infoHash?.count == 40 })
         let sent = try #require(await transport.requests.first)
         let query = URLComponents(url: sent.url!, resolvingAgainstBaseURL: false)?.queryItems ?? []
         #expect(query.contains(URLQueryItem(name: "limit", value: "1000")))

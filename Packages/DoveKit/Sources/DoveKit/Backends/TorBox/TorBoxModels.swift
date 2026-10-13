@@ -106,7 +106,9 @@ extension TorBoxTransfer {
             files: (files ?? []).map {
                 LibraryFile(id: String($0.id), name: $0.shortName ?? $0.name ?? "file \($0.id)", size: $0.size)
             },
-            addedAt: createdAt.flatMap(APIDate.parse)
+            addedAt: createdAt.flatMap(APIDate.parse),
+            // Web downloads carry a hash of their URL, not a torrent's.
+            infoHash: ref == .torrent(id) ? hash : nil
         )
     }
 

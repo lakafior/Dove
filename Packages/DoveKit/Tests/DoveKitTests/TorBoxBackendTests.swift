@@ -21,6 +21,8 @@ struct TorBoxBackendTests {
         #expect(season.files.map(\.name) == ["Some.Show.S02E01.mkv", "Some.Show.S02E02.mkv"])
         #expect(items.first { $0.id == "torrent:102" }?.status == .downloading(progress: 0.42))
         #expect(items.first { $0.id == "torrent:103" }?.status == .failed(reason: "stalled (no seeds)"))
+        #expect(items.filter { $0.id.hasPrefix("torrent:") }.allSatisfy { $0.infoHash?.count == 40 })
+        #expect(items.first { $0.id == "webdl:7" }?.infoHash == nil)
     }
 
     @Test func addMagnetPostsMultipartWithBearerAuth() async throws {
