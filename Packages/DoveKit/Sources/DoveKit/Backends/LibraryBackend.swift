@@ -15,6 +15,11 @@ public protocol LibraryBackend: Sendable {
     @discardableResult
     func add(_ source: Source) async throws -> LibraryItem.ID
 
+    /// Adds a source filed under `category`, for services that sort jobs into category folders (nzbdav).
+    /// Everyone else ignores the category.
+    @discardableResult
+    func add(_ source: Source, category: AddCategory?) async throws -> LibraryItem.ID
+
     func items() async throws -> [LibraryItem]
 
     /// One item with its file list. Backends whose list endpoint omits files override this.
@@ -27,6 +32,11 @@ public protocol LibraryBackend: Sendable {
 }
 
 extension LibraryBackend {
+    @discardableResult
+    public func add(_ source: Source, category: AddCategory?) async throws -> LibraryItem.ID {
+        try await add(source)
+    }
+
     public func supports(_ source: Source) -> Bool {
         supportedSources.contains(source.kind)
     }

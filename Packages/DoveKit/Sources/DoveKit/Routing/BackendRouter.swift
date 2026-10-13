@@ -43,15 +43,15 @@ public struct BackendRouter: Sendable {
     }
 
     /// Tries compatible backends in priority order until one accepts the source.
-    /// Any error moves on to the next backend, except cancellation.
-    public func add(_ source: Source) async throws -> AddResult {
+    /// Any error moves on to the next backend, except cancellation. `category` files NZBs on nzbdav.
+    public func add(_ source: Source, category: AddCategory? = nil) async throws -> AddResult {
         let candidates = candidates(for: source)
         guard !candidates.isEmpty else { throw BackendError.unsupportedSource(source.kind) }
         var failures: [Failure] = []
         for backend in candidates {
             try Task.checkCancellation()
             do {
-                let id = try await backend.add(source)
+                let id = try await backend.add(source, category: category)
                 return AddResult(backend: backend.id, itemID: id, skipped: failures)
             } catch is CancellationError {
                 throw CancellationError()

@@ -13,8 +13,9 @@ import Foundation
 ///   delete `value`s only from there (checked live: in the body they arrive empty, and a delete "succeeds"
 ///   without deleting). The NZB link therefore lands in the query, as with Sonarr and Radarr.
 ///   Errors are `{"status": false, "error": "…"}`, 401 for a wrong key.
-/// - Add: `mode=addurl` (`name` = NZB link, nzbdav fetches it) or `mode=addfile` (multipart `nzbFile`).
-///   Without `cat` the job goes to nzbdav's manual-upload category. Answer: `nzo_ids`.
+/// - Add: `mode=addurl` (`name` = NZB link, nzbdav fetches it) or `mode=addfile` (multipart `nzbFile`), with
+///   `cat` (`AddCategory`: the caller's, else guessed from the NZB's file name). Without one the job goes to the
+///   manual-upload category (`uncategorized`); nzbdav makes a folder for any category it is sent. Answer: `nzo_ids`.
 /// - List: `mode=queue` (in progress), `mode=history` (`Completed` / `Failed` with `fail_message`), and every job
 ///   folder under `/content/{category}/`. nzbdav keeps a job's files after its history entry is cleared
 ///   (without "delete files", or by another client), so the folders are the real library: a folder without a
@@ -84,16 +85,23 @@ public struct NzbdavBackend: LibraryBackend {
 
     @discardableResult
     public func add(_ source: Source) async throws -> LibraryItem.ID {
+        try await add(source, category: nil)
+    }
+
+    @discardableResult
+    public func add(_ source: Source, category: AddCategory?) async throws -> LibraryItem.ID {
         let created: NzbdavAdded
         switch source {
         case .nzbURL(let url):
-            created = try await call("addurl", [("name", url.absoluteString)], as: NzbdavAdded.self)
+            let cat = category.map { [("cat", $0.rawValue)] } ?? []
+            created = try await call("addurl", [("name", url.absoluteString)] + cat, as: NzbdavAdded.self)
         case .nzbFile(let data, let filename):
             var form = MultipartFormData()
             form.addField("apikey", apiKey)
             form.addFile("nzbFile", filename: filename, mimeType: "application/x-nzb", data: data)
+            let cat = (category ?? AddCategory(releaseName: filename)).map { [("cat", $0.rawValue)] } ?? []
             created = try await decode(NzbdavAdded.self, from: apiRequest(
-                query: query("addfile", []),
+                query: query("addfile", cat),
                 body: form.finalized(),
                 contentType: form.contentType
             ))

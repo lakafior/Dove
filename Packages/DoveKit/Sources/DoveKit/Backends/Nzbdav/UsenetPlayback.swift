@@ -13,16 +13,17 @@ public enum UsenetPlayback {
     }
 
     /// - Parameters:
-    ///   - itemID: a job added earlier (Play tapped twice); nil adds `source`.
+    ///   - itemID: a job added earlier (Play tapped twice); nil adds `source`, filed under `category`.
     public static func prepare(
         _ source: Source,
         itemID: LibraryItem.ID? = nil,
+        category: AddCategory? = nil,
         on backend: any LibraryBackend,
         timeout: Duration = .seconds(120),
         interval: Duration = .seconds(2)
     ) async throws -> Prepared {
         let id: LibraryItem.ID
-        if let itemID { id = itemID } else { id = try await backend.add(source) }
+        if let itemID { id = itemID } else { id = try await backend.add(source, category: category) }
         let deadline = ContinuousClock.now + timeout
         while true {
             let item = try await backend.item(id)

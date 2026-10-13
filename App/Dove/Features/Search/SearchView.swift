@@ -243,7 +243,9 @@ extension SearchView {
             do {
                 // A Torznab result's .torrent link carries the indexer's key: fetch it here, never hand it over.
                 let router = model.router(preferring: group.cachedBackends())
-                let result = try await router.add(try await IndexerTorrent.prepare(source))
+                // NZBs are filed by the indexer's category (audio, software, books, xxx…).
+                let category = group.category.flatMap(AddCategory.init(newznabCategory:))
+                let result = try await router.add(try await IndexerTorrent.prepare(source), category: category)
                 if group.category.map(ContentKind.init(newznabCategory:)) == .adult {
                     model.library.setKind(.adult, backend: result.backend, itemID: result.itemID)
                 }

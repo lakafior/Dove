@@ -231,7 +231,9 @@ struct SourcesView: View {
         Task {
             defer { busy.remove(group.id) }
             do {
-                let prepared = try await UsenetPlayback.prepare(source, itemID: usenetJobs[group.id], on: backend)
+                let prepared = try await UsenetPlayback.prepare(
+                    source, itemID: usenetJobs[group.id], category: AddCategory(mediaType: type), on: backend
+                )
                 usenetJobs[group.id] = prepared.itemID
                 status = nil
                 openInInfuse(prepared.url)
@@ -257,11 +259,13 @@ struct SourcesView: View {
                 let added: BackendID
                 let itemID: LibraryItem.ID
                 var skipped: [String] = []
+                // NZBs land in nzbdav's `movies` or `tv` folder.
+                let category = AddCategory(mediaType: type)
                 if let backend, let service = model.backend(backend) {
-                    itemID = try await service.add(source)
+                    itemID = try await service.add(source, category: category)
                     added = backend
                 } else {
-                    let result = try await model.router(preferring: group.cachedBackends()).add(source)
+                    let result = try await model.router(preferring: group.cachedBackends()).add(source, category: category)
                     added = result.backend
                     itemID = result.itemID
                     skipped = result.skipped.map { "\($0.backend.displayName): \($0.error.localizedDescription)" }

@@ -140,6 +140,37 @@ struct NzbdavBackendTests {
         #expect(query(sent)["name"] == nzb.absoluteString)
         #expect(sent.url?.query?.contains("t%3Dget%26id%3Dabc") == true)
         #expect(form(sent) == ["apikey": "test-key"])
+        #expect(query(sent)["cat"] == nil, "no category: the server's manual-upload category")
+
+        _ = try await backend.add(.nzbURL(nzb), category: .tv)
+        #expect(query(try #require(await transport.requests.last))["cat"] == "tv")
+    }
+
+    @Test func routerPassesTheCategoryToNzbdav() async throws {
+        let (backend, transport) = makeBackend()
+        await transport.stub("/api", queryContains: "mode=addurl", json: #"{"status":true,"nzo_ids":["55555555-5555-5555-5555-555555555555"]}"#)
+        let router = BackendRouter(backends: [backend], order: [])
+
+        let result = try await router.add(.nzbURL(URL(string: "https://indexer.example/get/1")!), category: .movies)
+
+        #expect(result.backend == .nzbdav)
+        #expect(query(try #require(await transport.requests.last))["cat"] == "movies")
+    }
+
+    /// Without a category, the NZB's file name decides; an explicit one wins.
+    @Test func addFileFilesTheNZBByItsName() async throws {
+        let (backend, transport) = makeBackend()
+        await transport.stub("/api", queryContains: "mode=addfile", json: #"{"status":true,"nzo_ids":["66666666-6666-6666-6666-666666666666"]}"#)
+        let nzb = Data("<nzb/>".utf8)
+
+        _ = try await backend.add(.nzbFile(data: nzb, filename: "Some.Show.S01E02.1080p.WEB.nzb"))
+        #expect(query(try #require(await transport.requests.last))["cat"] == "tv")
+        _ = try await backend.add(.nzbFile(data: nzb, filename: "Dune.2021.2160p.UHD.nzb"))
+        #expect(query(try #require(await transport.requests.last))["cat"] == "movies")
+        _ = try await backend.add(.nzbFile(data: nzb, filename: "random stuff.nzb"))
+        #expect(query(try #require(await transport.requests.last))["cat"] == nil)
+        _ = try await backend.add(.nzbFile(data: nzb, filename: "random stuff.nzb"), category: .books)
+        #expect(query(try #require(await transport.requests.last))["cat"] == "books")
     }
 
     @Test func addFileUploadsMultipart() async throws {
