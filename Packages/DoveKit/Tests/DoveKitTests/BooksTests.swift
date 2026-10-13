@@ -166,7 +166,7 @@ struct BookShelfTests {
         #expect(ContentClassifier.classify(name: "Daft Punk - Discovery", files: mp3s) == .music)
         #expect(ContentKind(newznabCategory: 3030) == .audiobooks)
         #expect(ContentKind(newznabCategory: 3010) == .music)
-        #expect(AddCategory(releaseName: "Andy Weir - Project Hail Mary (Unabridged).nzb") == .books)
+        #expect(AddCategory(releaseName: "Andy Weir - Project Hail Mary (Unabridged).nzb") == .audiobooks)
     }
 
     @Test func groupsReleasesOfOneBookPerFormatAndLeavesThemOutOfOthers() {

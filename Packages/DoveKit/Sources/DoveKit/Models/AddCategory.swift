@@ -4,14 +4,16 @@ import Foundation
 /// `/content/{category}/…`). Lowercase, matching InfiniDysk's default category names; the user's server lists
 /// them under Settings › SABnzbd › Categories. Nil means the server's manual-upload category (`uncategorized`).
 public enum AddCategory: String, Sendable, CaseIterable, Hashable {
-    case movies, tv, audio, books, software, xxx
+    case movies, tv, audio, audiobooks, books, software, xxx
 
     public init(mediaType: MediaType) {
         self = mediaType == .movie ? .movies : .tv
     }
 
     /// From a Newznab/Torznab category (2000 movies, 5000 TV, 3000 audio, 4000 PC, 6000 XXX, 7000 books).
+    /// Audiobooks (3030) get their own folder, apart from music.
     public init?(newznabCategory category: Int) {
+        if category == 3030 { self = .audiobooks; return }
         switch category / 1000 {
         case 2: self = .movies
         case 5: self = .tv
@@ -29,7 +31,8 @@ public enum AddCategory: String, Sendable, CaseIterable, Hashable {
         switch ContentClassifier.classify(name: base, files: []) {
         case .video: self.init(mediaType: ReleaseParser.guess(base).type)
         case .music: self = .audio
-        case .books, .audiobooks: self = .books
+        case .books: self = .books
+        case .audiobooks: self = .audiobooks
         case .software: self = .software
         case .adult: self = .xxx
         case .other: return nil

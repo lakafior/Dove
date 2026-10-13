@@ -40,6 +40,7 @@ struct NewznabTests {
         #expect(cat(.season(imdbID: "tt1", season: 1, title: "A"), ["imdbid", "season"]) == "5000")
         #expect(cat(.text("photoshop", category: .software), ["q"]) == "4000")
         #expect(cat(.text("anything", category: .all), ["q"]) == nil)
+        #expect(cat(.text("project hail mary", category: .audiobooks), ["q"]) == "3030")
 
         let text = NewznabQuery.text("Some Album", category: .music)
         #expect(text.function == "search")
@@ -61,6 +62,12 @@ struct NewznabTests {
         let software = try #require(try await client.search(.text("Some Movie", category: .software), caps: caps))
         #expect(software.map(\.title) == ["Some.Movie.Game.v1.2-CODEX", "Some.Movie.Unlabelled"])
         #expect(query(try #require(await transport.requests.last))["cat"] == "4000")
+
+        // A subcategory keeps only itself: music (3040) is not an audiobook (3030).
+        let audiobooks = try #require(try await client.search(.text("Some Movie", category: .audiobooks), caps: caps))
+        #expect(audiobooks.map(\.title) == ["Some.Movie.Unlabelled"])
+        let music = try #require(try await client.search(.text("Some Movie", category: .music), caps: caps))
+        #expect(music.map(\.category) == [3040, nil])
 
         let all = try #require(try await client.search(.text("Some Movie", category: .all), caps: caps))
         #expect(all.count == 4)

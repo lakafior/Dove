@@ -166,6 +166,7 @@ struct AddCategoryTests {
         #expect(AddCategory(mediaType: .movie) == .movies)
         #expect(AddCategory(mediaType: .series) == .tv)
         #expect([2040, 5030, 3010, 4050, 6010, 7020].compactMap(AddCategory.init(newznabCategory:)) == [.movies, .tv, .audio, .software, .xxx, .books])
+        #expect(AddCategory(newznabCategory: 3030) == .audiobooks)
         #expect(AddCategory(newznabCategory: 8010) == nil)
         #expect(AddCategory(releaseName: "Pink Floyd - The Wall (1979) [FLAC]") == .audio)
         #expect(AddCategory(releaseName: "Clip.XXX.1080p.nzb") == .xxx)

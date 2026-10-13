@@ -7,6 +7,8 @@ public enum NewznabCategory: String, CaseIterable, Sendable, Hashable, Codable {
     case software
     case music
     case books
+    /// Audio › Audiobook (3030), apart from music.
+    case audiobooks
     /// Hidden unless the user shows adult content.
     case adult
 
@@ -17,6 +19,7 @@ public enum NewznabCategory: String, CaseIterable, Sendable, Hashable, Codable {
         case .software: [4000]
         case .music: [3000]
         case .books: [7000]
+        case .audiobooks: [3030]
         case .adult: [6000]
         }
     }
@@ -27,6 +30,7 @@ public enum NewznabCategory: String, CaseIterable, Sendable, Hashable, Codable {
         case .software: "Software"
         case .music: "Music"
         case .books: "Books"
+        case .audiobooks: "Audiobooks"
         case .adult: "Adult"
         }
     }
@@ -172,8 +176,10 @@ public struct NewznabClient: Sendable {
         )
         let wanted = Set(query.categories)
         return document.items.enumerated().compactMap { index, item in
-            // Some indexers ignore `cat`: drop what is plainly from another category.
-            if !wanted.isEmpty, let category = item.category, !wanted.contains(category / 1000 * 1000) { return nil }
+            // Some indexers ignore `cat`: drop what is plainly from another category. A parent (3000) takes its
+            // subcategories; a subcategory (3030) only itself.
+            if !wanted.isEmpty, let category = item.category,
+               !wanted.contains(where: { $0 % 1000 == 0 ? category / 1000 * 1000 == $0 : category == $0 }) { return nil }
             return item.candidate(id: "newznab:\(indexer.id):\(item.guid ?? String(index))", indexer: indexer)
         }
     }
