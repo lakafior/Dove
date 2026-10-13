@@ -16,6 +16,8 @@ final class LibraryModel {
     }
     private(set) var failures: [String] = []
     private(set) var matches: [String: MediaSummary] = [:]
+    /// Covers for books and audiobooks, keyed by `BookGuess.key`.
+    private(set) var bookMatches: [String: BookSummary] = [:]
     private(set) var isLoading = false
     private(set) var hasLoaded = false
     private(set) var isRematching = false
@@ -24,6 +26,8 @@ final class LibraryModel {
 
     /// Matches survive launches; they are not secrets.
     private let store = MatchStore(fileURL: URL.applicationSupportDirectory.appending(path: "Dove/library-matches.json"))
+    private let bookStore = MetadataStore<BookSummary>(fileURL: URL.applicationSupportDirectory.appending(path: "Dove/library-books.json"))
+    private let bookMetadata = BookMetadata()
     /// Kinds learned from an item's files once it was opened (Real-Debrid and Offcloud list items without files),
     /// and kinds the user set. In the App Group container: the Files extension hides adult items with them.
     private var kinds: KindOverrides
@@ -47,7 +51,11 @@ final class LibraryModel {
         LibraryShelf.titles(items, matches: matches)
     }
 
-    /// Music, books, software and the rest: listed by name under the posters.
+    var books: [BookTitle] {
+        LibraryShelf.books(items, matches: bookMatches)
+    }
+
+    /// Music, software and the rest: listed by name under the posters.
     var others: [ShelfItem] {
         LibraryShelf.others(items)
     }
@@ -67,7 +75,7 @@ final class LibraryModel {
     }
 
     /// "Change type": the user's kind for these items; nil goes back to automatic (files, then the name).
-    /// Items that become video get looked up for a poster.
+    /// Items that become video, books or audiobooks get looked up for a poster or a cover.
     func setKind(_ kind: ContentKind?, for changed: [ShelfItem], using app: AppModel) async {
         let ids = Set(changed.map(\.id))
         for id in ids { kinds.manual[id] = kind }
@@ -75,6 +83,7 @@ final class LibraryModel {
         allItems = allItems.map { ids.contains($0.id) ? kinds.shelfItem($0.item) : $0 }
         FilesLocation.libraryChanged()
         await matchMissing(using: app.addonSet)
+        await matchMissingBooks()
     }
 
     /// A kind known when the item was added (an indexer's adult category), kept like the user's choice.
@@ -99,6 +108,10 @@ final class LibraryModel {
         titles.first { $0.id == id }
     }
 
+    func book(id: String) -> BookTitle? {
+        books.first { $0.id == id }
+    }
+
     func refresh(using app: AppModel) async {
         isLoading = true
         defer { isLoading = false; hasLoaded = true }
@@ -107,7 +120,10 @@ final class LibraryModel {
         failures = result.failures
         FilesLocation.libraryChanged()
         matches = await store.all().compactMapValues(\.media)
-        await matchMissing(using: app.addonSet)
+        bookMatches = await bookStore.all().compactMapValues(\.media)
+        async let titles: Void = matchMissing(using: app.addonSet)
+        async let books: Void = matchMissingBooks()
+        _ = await (titles, books)
     }
 
     /// Looks every title up again (e.g. after adding a TMDB key). The user's own choices stay, and a title
@@ -115,7 +131,9 @@ final class LibraryModel {
     func rematchAll(using app: AppModel) async {
         isRematching = true
         defer { isRematching = false }
-        await matchMissing(using: app.addonSet, everything: true)
+        async let titles: Void = matchMissing(using: app.addonSet, everything: true)
+        async let books: Void = matchMissingBooks(everything: true)
+        _ = await (titles, books)
     }
 
     /// Looks up posters for titles without one, through TMDB or the search addon. Rows update as answers arrive.
@@ -134,6 +152,41 @@ final class LibraryModel {
 
     private func record(_ media: MediaSummary, for key: String) {
         matches[key] = media
+    }
+
+    /// Covers for books and audiobooks from Open Library and Apple Books (no key). Two at a time: Apple allows
+    /// about 20 searches a minute, and a refused search is simply tried again on the next refresh.
+    private func matchMissingBooks(everything: Bool = false) async {
+        var guesses: [String: BookGuess] = [:]
+        for item in items {
+            if let guess = item.bookGuess, guesses[guess.key] == nil { guesses[guess.key] = guess }
+        }
+        let metadata = bookMetadata
+        await LibraryMatcher.matchMissing(
+            guesses,
+            store: bookStore,
+            everything: everything,
+            concurrency: 2,
+            lookup: { try await metadata.match($0) },
+            onMatch: { key, book in await self.recordBook(book, for: key) }
+        )
+    }
+
+    private func recordBook(_ book: BookSummary, for key: String) {
+        bookMatches[key] = book
+    }
+
+    /// The user's choice for a book; applies to every release with the same guess.
+    func setBookMatch(_ book: BookSummary, for keys: Set<String>) async {
+        for key in keys {
+            await bookStore.set(.manual(book), for: key)
+            bookMatches[key] = book
+        }
+    }
+
+    /// Search for the picker ("Wrong book?").
+    func searchBooks(_ query: String, format: BookFormat) async throws -> [BookSummary] {
+        try await bookMetadata.search(query, format: format)
     }
 
     /// The user's choice for a guessed title; applies to every release with that guess.

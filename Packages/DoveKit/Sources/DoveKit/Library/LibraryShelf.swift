@@ -35,12 +35,7 @@ public struct LibraryTitle: Identifiable, Sendable, Hashable {
     public var size: Int64 { items.compactMap(\.item.size).reduce(0, +) }
 
     /// The least finished state among its items, so a title shows "downloading" until everything is ready.
-    public var status: LibraryFilter.Status {
-        let states = Set(items.map { LibraryFilter.Status(of: $0.item.status) })
-        if states.contains(.failed) { return .failed }
-        if states.contains(.active) { return .active }
-        return .ready
-    }
+    public var status: LibraryFilter.Status { LibraryFilter.Status(least: items) }
 
     /// Items grouped by season for series. Multi-season and complete packs (and items without a season)
     /// come first under nil, then "Season 1", "Season 2"…, episode order within.
@@ -102,6 +97,25 @@ extension LibraryTitle {
     }
 }
 
+/// Every release of one book in one format (an ebook and its audiobook are two), across services.
+public struct BookTitle: Identifiable, Sendable, Hashable {
+    public let id: String
+    public let guess: BookGuess
+    public var book: BookSummary?
+    public var items: [ShelfItem]
+
+    public var format: BookFormat { guess.format }
+    public var name: String { book?.title ?? guess.title }
+    public var author: String? { book?.authors.first ?? guess.author }
+    public var year: String? { (book?.year ?? guess.year).map(String.init) }
+    public var backends: [BackendID] {
+        Array(Set(items.map(\.item.backend))).sorted { $0.rawValue < $1.rawValue }
+    }
+    public var latestAdded: Date? { items.compactMap(\.item.addedAt).max() }
+    public var size: Int64 { items.compactMap(\.item.size).reduce(0, +) }
+    public var status: LibraryFilter.Status { LibraryFilter.Status(least: items) }
+}
+
 public enum LibraryShelf {
     /// Groups items by matched title (several releases of one show share its metadata ID),
     /// falling back to the guessed title when there is no match. Newest first.
@@ -121,9 +135,27 @@ public enum LibraryShelf {
             .sorted { ($0.latestAdded ?? .distantPast) > ($1.latestAdded ?? .distantPast) }
     }
 
-    /// Everything that is not video, newest first: listed by name, no titles or posters.
+    /// Books and audiobooks grouped like titles: by matched book, else by guessed author and title. Newest first.
+    public static func books(_ items: [ShelfItem], matches: [String: BookSummary]) -> [BookTitle] {
+        var books: [String: BookTitle] = [:]
+        var order: [String] = []
+        for item in items {
+            guard let guess = item.bookGuess else { continue }
+            let book = matches[guess.key]
+            let id = book.map { "book:\(guess.format.rawValue):\($0.id)" } ?? "guess:\(guess.key)"
+            if books[id] == nil {
+                books[id] = BookTitle(id: id, guess: guess, book: book, items: [])
+                order.append(id)
+            }
+            books[id]!.items.append(item)
+        }
+        return order.compactMap { books[$0] }
+            .sorted { ($0.latestAdded ?? .distantPast) > ($1.latestAdded ?? .distantPast) }
+    }
+
+    /// Everything that is neither video nor a book, newest first: listed by name, no titles or covers.
     public static func others(_ items: [ShelfItem]) -> [ShelfItem] {
-        items.filter { $0.kind != .video }
+        items.filter { $0.kind != .video && BookFormat(kind: $0.kind) == nil }
     }
 }
 
@@ -131,7 +163,7 @@ public enum LibraryShelf {
 public struct LibraryFilter: Equatable, Sendable {
     /// Movies and series split video; the other kinds map one to one.
     public enum Category: String, CaseIterable, Sendable {
-        case movies, series, music, books, software, adult, other
+        case movies, series, music, books, audiobooks, software, adult, other
 
         public var title: String {
             switch self {
@@ -139,6 +171,7 @@ public struct LibraryFilter: Equatable, Sendable {
             case .series: "Series"
             case .music: "Music"
             case .books: "Books"
+            case .audiobooks: "Audiobooks"
             case .software: "Software"
             case .adult: "Adult"
             case .other: "Other"
@@ -151,6 +184,7 @@ public struct LibraryFilter: Equatable, Sendable {
             case .series: item.kind == .video && item.guess.type == .series
             case .music: item.kind == .music
             case .books: item.kind == .books
+            case .audiobooks: item.kind == .audiobooks
             case .software: item.kind == .software
             case .adult: item.kind == .adult
             case .other: item.kind == .other
@@ -167,6 +201,12 @@ public struct LibraryFilter: Equatable, Sendable {
             case .queued, .awaitingFileSelection, .downloading: self = .active
             case .failed: self = .failed
             }
+        }
+
+        /// The least finished state among items: failed, then downloading, then ready.
+        init(least items: [ShelfItem]) {
+            let states = Set(items.map { Status(of: $0.item.status) })
+            self = states.contains(.failed) ? .failed : states.contains(.active) ? .active : .ready
         }
 
         public var title: String {
@@ -204,16 +244,34 @@ public struct LibraryFilter: Equatable, Sendable {
             case nil: break
             case .movies: if title.type != .movie { return nil }
             case .series: if title.type != .series { return nil }
-            case .music, .books, .software, .adult, .other: return nil
+            case .music, .books, .audiobooks, .software, .adult, .other: return nil
             }
             var title = title
-            title.items = title.items.filter { item in
-                if !backends.isEmpty && !backends.contains(item.item.backend) { return false }
-                if let status, Status(of: item.item.status) != status { return false }
-                return matchesQuery(item.item.name) || matchesQuery(title.name)
-            }
+            title.items = title.items.filter { keeps($0, names: [title.name]) }
             return title.items.isEmpty ? nil : title
         }
+    }
+
+    /// The same for books: the category picks the format; the query also finds the author.
+    public func apply(to books: [BookTitle]) -> [BookTitle] {
+        books.compactMap { book in
+            switch category {
+            case nil: break
+            case .books: if book.format != .ebook { return nil }
+            case .audiobooks: if book.format != .audiobook { return nil }
+            case .movies, .series, .music, .software, .adult, .other: return nil
+            }
+            var book = book
+            book.items = book.items.filter { keeps($0, names: [book.name, book.author].compactMap { $0 }) }
+            return book.items.isEmpty ? nil : book
+        }
+    }
+
+    /// An item of a title or book passes the service and status filters, and the query matches it or the title.
+    private func keeps(_ item: ShelfItem, names: [String]) -> Bool {
+        if !backends.isEmpty && !backends.contains(item.item.backend) { return false }
+        if let status, Status(of: item.item.status) != status { return false }
+        return matchesQuery(item.item.name) || names.contains(where: matchesQuery)
     }
 
     public func apply(to items: [ShelfItem]) -> [ShelfItem] {

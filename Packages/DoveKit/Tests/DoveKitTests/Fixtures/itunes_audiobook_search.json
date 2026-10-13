@@ -1,0 +1,27 @@
+{
+  "resultCount": 2,
+  "results": [
+    {
+      "wrapperType": "audiobook",
+      "artistName": "Andy Weir",
+      "collectionId": 1565808256,
+      "collectionName": "Project Hail Mary (Unabridged)",
+      "collectionViewUrl": "https://books.apple.com/us/audiobook/project-hail-mary-unabridged/id1565808256?uo=4",
+      "artworkUrl100": "https://is1-ssl.mzstatic.com/image/thumb/Music221/v4/7b/01/65/7b01658e-4ae7-1837-699f-03b91166c929/rm_image.jpg/100x100bb.jpg",
+      "releaseDate": "2021-05-04T07:00:00Z",
+      "primaryGenreName": "Sci-Fi & Fantasy",
+      "description": "<b>THE #1 </b><b><i> NEW YORK TIMES </i></b><b> BESTSELLER FROM THE AUTHOR OF </b><b><i> THE MARTIAN. </i></b><b> Now a major motion picture starring Ryan Gosli<br /><br />More &amp; more."
+    },
+    {
+      "wrapperType": "audiobook",
+      "artistName": "Andy Weir",
+      "collectionId": 1729184154,
+      "collectionName": "Project Hail Mary",
+      "collectionViewUrl": "https://books.apple.com/us/audiobook/project-hail-mary/id1729184154?uo=4",
+      "artworkUrl100": "https://is1-ssl.mzstatic.com/image/thumb/Music221/v4/2a/1a/fc/2a1afcc9-6179-5fdf-3bea-aec376486895/rm_image.jpg/100x100bb.jpg",
+      "releaseDate": "2026-05-02T07:00:00Z",
+      "primaryGenreName": "Sci-Fi & Fantasy",
+      "description": "Quando Ryland Grace si risveglia, non ha assolutamente idea di dove si trovi né di chi sia. Vede solo che il suo corpo è collegato a decine di tubi, che gli ogg<br /><br />More &amp; more."
+    }
+  ]
+}

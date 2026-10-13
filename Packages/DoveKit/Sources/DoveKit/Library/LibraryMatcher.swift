@@ -1,16 +1,19 @@
 import Foundation
 
-/// Finds the metadata (poster, real title) for a guessed library title through the search addon,
-/// and remembers the answer on disk so the library does not search on every launch.
-public actor MatchStore {
+/// Metadata matches for guessed library titles (movies and series).
+public typealias MatchStore = MetadataStore<MediaSummary>
+
+/// Remembers the metadata (poster, real title) found for guessed library titles on disk, so the library does
+/// not search on every launch. One store per kind of metadata: titles (`MatchStore`), books (`BookSummary`).
+public actor MetadataStore<Media: Codable & Sendable & Equatable> {
     public enum Entry: Codable, Sendable, Equatable {
-        case matched(MediaSummary)
+        case matched(Media)
         /// Searched, nothing fitting. Retried after `retryAfter`.
         case unmatched(Date)
         /// Chosen by the user; never replaced automatically.
-        case manual(MediaSummary)
+        case manual(Media)
 
-        public var media: MediaSummary? {
+        public var media: Media? {
             switch self {
             case .matched(let media), .manual(let media): media
             case .unmatched: nil
@@ -18,7 +21,7 @@ public actor MatchStore {
         }
     }
 
-    public static let retryAfter: TimeInterval = 7 * 24 * 3600
+    public static var retryAfter: TimeInterval { 7 * 24 * 3600 }
 
     private let fileURL: URL?
     private var entries: [String: Entry]
@@ -99,7 +102,23 @@ public enum LibraryMatcher {
         search: @escaping @Sendable (String, MediaType) async throws -> [MediaSummary],
         onMatch: @escaping @Sendable (String, MediaSummary) async -> Void = { _, _ in }
     ) async -> Int {
-        var pending: [(String, MediaGuess)] = []
+        await matchMissing(guesses, store: store, everything: everything, concurrency: concurrency, lookup: { guess in
+            best(try await search(guess.title, guess.type), for: guess)
+        }, onMatch: onMatch)
+    }
+
+    /// The same for any kind of guess and metadata: `lookup` answers one guess (nil: nothing fitting; a throw:
+    /// try again next time).
+    @discardableResult
+    public static func matchMissing<Guess: Sendable, Media: Codable & Sendable & Equatable>(
+        _ guesses: [String: Guess],
+        store: MetadataStore<Media>,
+        everything: Bool = false,
+        concurrency: Int = 4,
+        lookup: @escaping @Sendable (Guess) async throws -> Media?,
+        onMatch: @escaping @Sendable (String, Media) async -> Void = { _, _ in }
+    ) async -> Int {
+        var pending: [(String, Guess)] = []
         for (key, guess) in guesses where await store.needsLookup(key, everything: everything) {
             pending.append((key, guess))
         }
@@ -109,8 +128,9 @@ public enum LibraryMatcher {
                 guard let (key, guess) = iterator.next() else { return false }
                 group.addTask {
                     // A failed search (offline, addon down) records nothing, so it is retried next time.
-                    guard let results = try? await search(guess.title, guess.type) else { return }
-                    if let media = best(results, for: guess) {
+                    let found: Media?
+                    do { found = try await lookup(guess) } catch { return }
+                    if let media = found {
                         await store.set(.matched(media), for: key)
                         await onMatch(key, media)
                     } else if await store.entry(for: key)?.media == nil {

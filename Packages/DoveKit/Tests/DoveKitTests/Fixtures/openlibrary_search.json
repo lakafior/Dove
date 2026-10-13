@@ -1,0 +1,31 @@
+{
+  "numFound": 8,
+  "start": 0,
+  "docs": [
+    {
+      "author_name": [
+        "Andy Weir"
+      ],
+      "cover_i": 11200092,
+      "first_publish_year": 2021,
+      "key": "/works/OL21745884W",
+      "title": "Project Hail Mary"
+    },
+    {
+      "author_name": [
+        "Irb Media"
+      ],
+      "first_publish_year": 2021,
+      "key": "/works/OL26086346W",
+      "title": "Summary of Andy Weir's Project Hail Mary"
+    },
+    {
+      "author_name": [
+        "Andy Weir"
+      ],
+      "first_publish_year": 2022,
+      "key": "/works/OL36735881W",
+      "title": "The Martian / Artemis / Project Hail Mary"
+    }
+  ]
+}

@@ -1,13 +1,16 @@
 import Foundation
 
-/// What a library item holds. Only `video` gets titles, posters and Infuse; the rest are listed by name.
-/// A separate kind per family leaves room for their own metadata later (music, games).
+/// What a library item holds. `video` gets titles, posters and Infuse; `books` and `audiobooks` get covers
+/// (`BookMetadata`); the rest are listed by name. A separate kind per family leaves room for their own metadata
+/// later (music, games).
 /// `adult` is hidden everywhere (Library, Files, Search › Other) unless the user shows it.
 public enum ContentKind: String, Codable, Sendable, CaseIterable, Hashable {
-    case video, music, books, software, adult, other
+    case video, music, books, audiobooks, software, adult, other
 
-    /// The kind of a Newznab category: 2000 movies and 5000 TV are video, 3000 audio, 4000 PC, 6000 XXX, 7000 books.
+    /// The kind of a Newznab category: 2000 movies and 5000 TV are video, 3000 audio (3030 audiobooks), 4000 PC,
+    /// 6000 XXX, 7000 books.
     public init(newznabCategory category: Int) {
+        if category == 3030 { self = .audiobooks; return }
         switch category / 1000 {
         case 2, 5: self = .video
         case 3: self = .music
@@ -23,6 +26,7 @@ public enum ContentKind: String, Codable, Sendable, CaseIterable, Hashable {
         case .video: "Video"
         case .music: "Music"
         case .books: "Books"
+        case .audiobooks: "Audiobooks"
         case .software: "Software"
         case .adult: "Adult"
         case .other: "Other"
@@ -35,6 +39,7 @@ public enum ContentKind: String, Codable, Sendable, CaseIterable, Hashable {
         case .video: "film"
         case .music: "music.note"
         case .books: "book"
+        case .audiobooks: "headphones"
         case .software: "shippingbox"
         case .adult: "eye.slash"
         case .other: "doc"
@@ -45,7 +50,8 @@ public enum ContentKind: String, Codable, Sendable, CaseIterable, Hashable {
 /// Decides an item's kind, most reliable evidence first:
 /// 0. an adult marker (`XXX`) in the name: such releases are video files, and must not get posters or titles;
 /// 1. its files (or the item's own name, for a single file), weighed by size;
-/// 2. markers in the release name (`1080p`, `S01E02` → video; `FLAC` → music; `x64`, `GOG` → software…);
+/// 2. markers in the release name (`1080p`, `S01E02` → video; `Audiobook`, `Unabridged` → audiobooks; `FLAC` → music;
+///    `x64`, `GOG` → software…); audio files under an audiobook name are an audiobook, not music;
 /// 3. a year or a season in the name → video (how most releases are named); otherwise `other`.
 ///
 /// Real-Debrid and Offcloud list items without files, so for them only the name counts until the item
@@ -54,7 +60,8 @@ public enum ContentClassifier {
     static let extensions: [ContentKind: Set<String>] = [
         .video: FileKind.videoExtensions,
         .music: ["flac", "mp3", "m4a", "aac", "ogg", "opus", "wav", "alac", "ape", "wv", "dsf", "dff", "aiff"],
-        .books: ["epub", "pdf", "mobi", "azw", "azw3", "cbz", "cbr", "djvu", "fb2", "m4b"],
+        .books: ["epub", "pdf", "mobi", "azw", "azw3", "cbz", "cbr", "djvu", "fb2"],
+        .audiobooks: ["m4b"],
         .software: ["iso", "img", "dmg", "pkg", "exe", "msi", "apk", "ipa", "appimage", "deb", "rpm", "nsp", "xci"],
     ]
 
@@ -67,7 +74,9 @@ public enum ContentClassifier {
 
     public static func classify(name: String, files: [LibraryFile]) -> ContentKind {
         if isAdult(name: name) { return .adult }
-        if let kind = byFiles(files) ?? kind(ofFile: name) { return kind }
+        if let kind = byFiles(files) ?? kind(ofFile: name) {
+            return kind == .music && isAudiobook(name: name) ? .audiobooks : kind
+        }
         return byName(name)
     }
 
@@ -84,8 +93,10 @@ public enum ContentClassifier {
 
     private static let musicMarkers =
         #"\b(flac|mp3|320 ?kbps|v0|24 ?bit|16 ?bit|lossless|discography|vinyl|alac|web flac|cd ?rip|soundtrack|ost)\b"#
+    private static let audiobookMarkers =
+        #"\b(audio ?books?|unabridged|abridged|narrated by|read by|m4b)\b"#
     private static let bookMarkers =
-        #"\b(epub|pdf|mobi|azw3|e-?books?|audiobooks?|comics?|cbz|cbr|magazine|retail ebook)\b"#
+        #"\b(epub|pdf|mobi|azw3|e-?books?|comics?|cbz|cbr|magazine|retail ebook)\b"#
     private static let softwareMarkers =
         #"\b(x64|x86|amd64|arm64|win(dows)?|win64|win32|macos|mac os|linux|setup|installer|portable|multilingual|fitgirl|dodi|elamigos|gog|codex|skidrow|plaza|empress|tenoke|rune|flt|razor1911|repack|v\d+(\.\d+){1,3})\b"#
 
@@ -97,14 +108,22 @@ public enum ContentClassifier {
         return text.range(of: adultMarkers, options: .regularExpression) != nil
     }
 
+    static func isAudiobook(name: String) -> Bool {
+        markerText(name).range(of: audiobookMarkers, options: .regularExpression) != nil
+    }
+
+    private static func markerText(_ name: String) -> String {
+        name.lowercased().replacingOccurrences(of: #"[._\[\]\(\)]"#, with: " ", options: .regularExpression)
+    }
+
     static func byName(_ name: String) -> ContentKind {
         let traits = ReleaseParser.parse(name)
         if traits.resolution != nil || traits.encode != nil || traits.quality != nil
             || !traits.seasons.isEmpty || !traits.episodes.isEmpty {
             return .video
         }
-        let text = name.lowercased()
-            .replacingOccurrences(of: #"[._\[\]\(\)]"#, with: " ", options: .regularExpression)
+        let text = markerText(name)
+        if text.range(of: audiobookMarkers, options: .regularExpression) != nil { return .audiobooks }
         if text.range(of: musicMarkers, options: .regularExpression) != nil { return .music }
         if text.range(of: bookMarkers, options: .regularExpression) != nil { return .books }
         if text.range(of: softwareMarkers, options: .regularExpression) != nil { return .software }

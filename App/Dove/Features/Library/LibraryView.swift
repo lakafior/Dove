@@ -1,9 +1,9 @@
 import DoveKit
 import SwiftUI
 
-/// Everything in every debrid, either as titles with posters (matched through the search addon)
-/// or as the raw list of torrents and downloads. Music, books, software and the rest are listed by name
-/// under the posters. Filters: services, category, status, text.
+/// Everything in every debrid, either as titles with posters (matched through the search addon), books and
+/// audiobooks with covers (Open Library, Apple Books), or as the raw list of torrents and downloads. Music,
+/// software and the rest are listed by name under the shelves. Filters: services, category, status, text.
 struct LibraryView: View {
     @Environment(AppModel.self) private var model
     @AppStorage("libraryMode") private var mode: Mode = .titles
@@ -15,6 +15,8 @@ struct LibraryView: View {
     @State private var pending: BatchRequest?
     /// "Wrong title?" from a poster's menu.
     @State private var fixingTitle: LibraryTitle?
+    /// "Wrong book?" from a cover's menu.
+    @State private var fixingBook: BookTitle?
     /// Short confirmation (e.g. magnets copied), cleared after a moment.
     @State private var notice: String?
 
@@ -78,7 +80,7 @@ struct LibraryView: View {
                     Button(library.isRematching ? "Re-matching…" : "Re-match all titles", systemImage: "arrow.triangle.2.circlepath") {
                         Task { await library.rematchAll(using: model) }
                     }
-                    .disabled(library.isRematching || !model.addonSet.canSearch)
+                    .disabled(library.isRematching)
                 }
                 ToolbarItem(placement: .secondaryAction) {
                     @Bindable var model = model
@@ -112,6 +114,7 @@ struct LibraryView: View {
                 Text(request.message)
             }
             .sheet(item: $fixingTitle) { MatchPickerSheet(title: $0) }
+            .sheet(item: $fixingBook) { BookPickerSheet(book: $0) }
             .overlay(alignment: .bottom) {
                 if let notice {
                     Text(notice)
@@ -129,6 +132,7 @@ struct LibraryView: View {
             }
             .onChange(of: mode) { endSelecting() }
             .navigationDestination(for: TitleRoute.self) { LibraryTitleView(titleID: $0.id) }
+            .navigationDestination(for: BookRoute.self) { BookTitleView(bookID: $0.id) }
             .navigationDestination(for: ShelfItem.self) { LibraryItemView(item: $0.item) }
             .refreshable { await library.refresh(using: model) }
             .task {
@@ -141,11 +145,14 @@ struct LibraryView: View {
 
     private var titlesView: some View {
         let titles = filter.apply(to: library.titles)
+        let books = filter.apply(to: library.books)
         let others = filter.apply(to: library.others)
         return ScrollView {
             failuresBanner.padding(.horizontal)
             titleGrid("Movies", titles.filter { $0.type == .movie })
             titleGrid("Series", titles.filter { $0.type == .series })
+            bookGrid("Books", books.filter { $0.format == .ebook }, minimum: 104)
+            bookGrid("Audiobooks", books.filter { $0.format == .audiobook }, minimum: 140)
             if !others.isEmpty {
                 LazyVStack(alignment: .leading, spacing: 0) {
                     HStack(alignment: .firstTextBaseline) {
@@ -195,6 +202,35 @@ struct LibraryView: View {
                             Button("Wrong title?", systemImage: "magnifyingglass") { fixingTitle = title }
                             batchActions(title.items)
                             Button("Delete", systemImage: "trash", role: .destructive) { pending = .delete(title.items) }
+                        }
+                    }
+                }
+            }
+            .padding(.horizontal)
+            .padding(.bottom)
+        }
+    }
+
+    /// Books and audiobooks under their own heading; audiobook artwork is square, so its tiles are wider.
+    @ViewBuilder
+    private func bookGrid(_ heading: String, _ books: [BookTitle], minimum: CGFloat) -> some View {
+        if !books.isEmpty {
+            LazyVStack(alignment: .leading, spacing: 8) {
+                HStack(alignment: .firstTextBaseline) {
+                    Text(heading).font(.title3.bold())
+                    Text("\(books.count)").font(.subheadline).foregroundStyle(.secondary)
+                }
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: minimum), spacing: 12)], alignment: .leading, spacing: 16) {
+                    ForEach(books) { book in
+                        NavigationLink(value: BookRoute(id: book.id)) {
+                            BookCard(book: book)
+                        }
+                        .buttonStyle(.plain)
+                        .contextMenu {
+                            kindMenu(book.items)
+                            Button("Wrong book?", systemImage: "magnifyingglass") { fixingBook = book }
+                            batchActions(book.items)
+                            Button("Delete", systemImage: "trash", role: .destructive) { pending = .delete(book.items) }
                         }
                     }
                 }
@@ -430,7 +466,7 @@ private struct TitleCard: View {
                 .aspectRatio(2 / 3, contentMode: .fit)
                 .clipShape(RoundedRectangle(cornerRadius: 8))
 
-                statusMark.padding(5)
+                LibraryStatusMark(status: title.status, count: title.items.count).padding(5)
             }
             .overlay(alignment: .topLeading) {
                 if let coverage = title.coverage {
@@ -450,13 +486,18 @@ private struct TitleCard: View {
             }
         }
     }
+}
 
-    @ViewBuilder
-    private var statusMark: some View {
-        switch title.status {
+/// Top corner of a poster or cover: how many releases when ready, otherwise downloading or failed.
+struct LibraryStatusMark: View {
+    let status: LibraryFilter.Status
+    let count: Int
+
+    var body: some View {
+        switch status {
         case .ready:
-            if title.items.count > 1 {
-                Text("\(title.items.count)")
+            if count > 1 {
+                Text("\(count)")
                     .font(.caption2.bold())
                     .padding(.horizontal, 6)
                     .padding(.vertical, 2)

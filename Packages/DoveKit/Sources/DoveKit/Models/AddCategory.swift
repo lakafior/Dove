@@ -29,7 +29,7 @@ public enum AddCategory: String, Sendable, CaseIterable, Hashable {
         switch ContentClassifier.classify(name: base, files: []) {
         case .video: self.init(mediaType: ReleaseParser.guess(base).type)
         case .music: self = .audio
-        case .books: self = .books
+        case .books, .audiobooks: self = .books
         case .software: self = .software
         case .adult: self = .xxx
         case .other: return nil
