@@ -10,6 +10,9 @@ public enum CredentialKey: String, Sendable, CaseIterable {
     case nzbdavAPIKey
     case nzbdavWebDAVUser
     case nzbdavWebDAVPassword
+    /// nzbdav's `FRONTEND_BACKEND_API_KEY` (set in its environment): NZB downloads from history and signed
+    /// `/view` links. Optional.
+    case nzbdavFrontendKey
     case tmdbAPIKey
     /// JSON array of Stremio addon manifest URLs, in the user's order (they embed tokens).
     case stremioAddons
@@ -166,7 +169,8 @@ public enum SharedConfiguration {
             baseURL: url,
             apiKey: value(.nzbdavAPIKey),
             webDAVUser: value(.nzbdavWebDAVUser),
-            webDAVPassword: value(.nzbdavWebDAVPassword)
+            webDAVPassword: value(.nzbdavWebDAVPassword),
+            frontendKey: value(.nzbdavFrontendKey)
         )
     }
 

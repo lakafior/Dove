@@ -111,7 +111,7 @@ struct LibraryTitleView: View {
 }
 
 /// Search the metadata addon and pick the right title; the choice sticks for every release with the same guess.
-private struct MatchPickerSheet: View {
+struct MatchPickerSheet: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
     let title: LibraryTitle

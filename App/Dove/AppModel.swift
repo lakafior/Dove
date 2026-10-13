@@ -231,6 +231,27 @@ final class AppModel {
         backend(id) != nil
     }
 
+    // MARK: - Re-adding and moving
+
+    /// A torrent with its hash, or an NZB its service can hand back (nzbdav with the frontend key).
+    func canReAdd(_ item: LibraryItem) -> Bool {
+        LibraryActions.canReAdd(item, on: backend(item.backend))
+    }
+
+    /// Services "Move to" can send the item to: they take its kind of source and do not hold it already.
+    /// Debrids in priority order; NZBs go to Usenet services (nzbdav, TorBox with a Usenet plan).
+    func moveTargets(for item: LibraryItem) -> [BackendID] {
+        guard canReAdd(item), let kind = LibraryActions.sourceKind(of: item) else { return [] }
+        return (backends(usenet: true) + backends(usenet: false))
+            .filter { $0.id != item.backend && $0.supportedSources.contains(kind) }
+            .map(\.id)
+    }
+
+    /// Why none of these items can be added again or moved, for a disabled menu line.
+    func reAddBlocker(_ items: [LibraryItem]) -> String {
+        items.count == 1 ? "No magnet or stored NZB: cannot be added again" : "No magnets or stored NZBs: cannot be added again"
+    }
+
     /// Configured backends of one family, in priority order.
     func backends(usenet: Bool) -> [any LibraryBackend] {
         let rank = { (id: BackendID) in self.debridOrder.firstIndex(of: id) ?? Int.max }

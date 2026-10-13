@@ -8,6 +8,7 @@ struct NzbdavSettingsView: View {
     @State private var apiKey = ""
     @State private var user = ""
     @State private var password = ""
+    @State private var frontendKey = ""
     @State private var status: String?
     @State private var isTesting = false
 
@@ -37,7 +38,14 @@ struct NzbdavSettingsView: View {
             } header: {
                 Text("WebDAV")
             } footer: {
-                Text("nzbdav → Settings → WebDAV. Dove lists and downloads files with it; Infuse gets it inside the link it plays.")
+                Text("nzbdav → Settings → WebDAV. Dove lists and downloads files with it.")
+            }
+            Section {
+                SecureField("FRONTEND_BACKEND_API_KEY", text: $frontendKey)
+            } header: {
+                Text("Frontend key (optional)")
+            } footer: {
+                Text("Set FRONTEND_BACKEND_API_KEY to a fixed value in nzbdav's or InfiniDysk's environment (docker compose; otherwise it changes on every start) and paste it here. Infuse then plays signed links instead of links with your WebDAV login. Older nzbdav also needs it to hand NZBs back for Reinsert and Move; InfiniDysk does that with the API key.")
             }
             Section {
                 Button(action: saveAndTest) {
@@ -62,6 +70,7 @@ struct NzbdavSettingsView: View {
         apiKey = (try? model.keychain.get(.nzbdavAPIKey)) ?? ""
         user = (try? model.keychain.get(.nzbdavWebDAVUser)) ?? ""
         password = (try? model.keychain.get(.nzbdavWebDAVPassword)) ?? ""
+        frontendKey = (try? model.keychain.get(.nzbdavFrontendKey)) ?? ""
     }
 
     private func saveAndTest() {
@@ -71,13 +80,14 @@ struct NzbdavSettingsView: View {
             try model.keychain.set(apiKey.trimmingCharacters(in: .whitespacesAndNewlines), for: .nzbdavAPIKey)
             try model.keychain.set(user.trimmingCharacters(in: .whitespacesAndNewlines), for: .nzbdavWebDAVUser)
             try model.keychain.set(password, for: .nzbdavWebDAVPassword)
+            try model.keychain.set(frontendKey.trimmingCharacters(in: .whitespacesAndNewlines), for: .nzbdavFrontendKey)
         } catch {
             status = "Keychain error: \(error)"
             return
         }
         model.reloadBackends()
         guard let nzbdav = model.backend(.nzbdav) else {
-            status = trimmedURL.isEmpty && apiKey.isEmpty ? "nzbdav removed." : "Fill in all four fields."
+            status = trimmedURL.isEmpty && apiKey.isEmpty ? "nzbdav removed." : "Fill in the server, API key and WebDAV login."
             return
         }
         status = "Testing…"
@@ -86,7 +96,9 @@ struct NzbdavSettingsView: View {
             defer { isTesting = false }
             do {
                 try await nzbdav.validateCredentials()
-                status = "✅ Connected: API key and WebDAV login work."
+                status = frontendKey.isEmpty
+                    ? "✅ Connected: API key and WebDAV login work."
+                    : "✅ Connected: API key, WebDAV login and frontend key work."
             } catch {
                 status = "❌ \(error.localizedDescription)"
             }

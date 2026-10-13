@@ -19,6 +19,8 @@ final class LibraryModel {
     private(set) var isLoading = false
     private(set) var hasLoaded = false
     private(set) var isRematching = false
+    /// A batch action (delete, reinsert, move) on several items: what it is and how far it got.
+    private(set) var batch: (label: String, done: Int, total: Int)?
 
     /// Matches survive launches; they are not secrets.
     private let store = MatchStore(fileURL: URL.applicationSupportDirectory.appending(path: "Dove/library-matches.json"))
@@ -139,6 +141,57 @@ final class LibraryModel {
         for key in keys {
             await store.set(.manual(media), for: key)
             matches[key] = media
+        }
+    }
+
+    // MARK: - Batch actions
+
+    /// Runs `action` on every item, one at a time (Real-Debrid limits requests), then refreshes once.
+    /// Failures are listed with the load failures and do not stop the rest.
+    private func runBatch(
+        _ label: String,
+        _ items: [ShelfItem],
+        using app: AppModel,
+        _ action: (ShelfItem) async throws -> Void
+    ) async {
+        guard !items.isEmpty, batch == nil else { return }
+        batch = (label, 0, items.count)
+        var errors: [String] = []
+        for item in items {
+            do {
+                try await action(item)
+            } catch {
+                errors.append("\(item.item.name) (\(item.item.backend.displayName)): \(error.localizedDescription)")
+            }
+            batch?.done += 1
+        }
+        batch = nil
+        await refresh(using: app)
+        failures += errors
+    }
+
+    func delete(_ items: [ShelfItem], using app: AppModel) async {
+        await runBatch("Deleting", items, using: app) { item in
+            guard let backend = app.backend(item.item.backend) else { return }
+            try await backend.delete(item.item.id)
+        }
+    }
+
+    /// Adds each torrent or NZB again on its service and deletes the old item (`LibraryActions.reinsert`).
+    func reinsert(_ items: [ShelfItem], using app: AppModel) async {
+        await runBatch("Reinserting", items.filter { app.canReAdd($0.item) }, using: app) { item in
+            guard let backend = app.backend(item.item.backend) else { return }
+            _ = try await LibraryActions.reinsert(item.item, on: backend)
+        }
+    }
+
+    /// Adds each item to `target` (torrents to debrids, NZBs to Usenet services); deletes the original after a
+    /// successful add when `deleteOriginal`.
+    func move(_ items: [ShelfItem], to target: BackendID, deleteOriginal: Bool, using app: AppModel) async {
+        let movable = items.filter { app.moveTargets(for: $0.item).contains(target) }
+        await runBatch(deleteOriginal ? "Moving" : "Copying", movable, using: app) { item in
+            guard let source = app.backend(item.item.backend), let destination = app.backend(target) else { return }
+            _ = try await LibraryActions.move(item.item, from: source, to: destination, deleteOriginal: deleteOriginal)
         }
     }
 

@@ -8,11 +8,37 @@ struct LibraryView: View {
     @Environment(AppModel.self) private var model
     @AppStorage("libraryMode") private var mode: Mode = .titles
     @State private var filter = LibraryFilter()
-    /// Files view: several items picked for one delete.
+    /// Files view: several items picked for one action.
     @State private var isSelecting = false
     @State private var selection = Set<ShelfItem.ID>()
-    @State private var confirmDelete = false
-    @State private var deleting: (done: Int, total: Int)?
+    /// A batch action waiting for confirmation.
+    @State private var pending: BatchRequest?
+    /// "Wrong title?" from a poster's menu.
+    @State private var fixingTitle: LibraryTitle?
+    /// Short confirmation (e.g. magnets copied), cleared after a moment.
+    @State private var notice: String?
+
+    enum BatchRequest {
+        case delete([ShelfItem])
+        case reinsert([ShelfItem])
+        case move([ShelfItem], to: BackendID)
+
+        var title: String {
+            switch self {
+            case .delete(let items): items.count == 1 ? "Delete this item?" : "Delete \(items.count) items?"
+            case .reinsert(let items): items.count == 1 ? "Add this again?" : "Add \(items.count) items again?"
+            case .move(let items, let target): items.count == 1 ? "Move to \(target.displayName)?" : "Move \(items.count) items to \(target.displayName)?"
+            }
+        }
+
+        var message: String {
+            switch self {
+            case .delete: "Each item is removed from its debrid or nzbdav, with its files. This cannot be undone."
+            case .reinsert: "Dove adds each one to its service again and deletes the old item: for dead, expired or stuck torrents and failed NZB jobs."
+            case .move: "Dove adds each one there first; it deletes an original only after that worked. NZBs go to Usenet services only."
+            }
+        }
+    }
 
     enum Mode: String, CaseIterable {
         case titles, files
@@ -62,6 +88,45 @@ struct LibraryView: View {
                     ToolbarItem(placement: .topBarLeading) { selectButton }
                 }
             }
+            .confirmationDialog(
+                pending?.title ?? "",
+                isPresented: Binding(get: { pending != nil }, set: { if !$0 { pending = nil } }),
+                titleVisibility: .visible,
+                presenting: pending
+            ) { request in
+                switch request {
+                case .delete(let items):
+                    Button("Delete from their services", role: .destructive) { start { await library.delete(items, using: model) } }
+                case .reinsert(let items):
+                    Button("Reinsert") { start { await library.reinsert(items, using: model) } }
+                case .move(let items, let target):
+                    Button("Move (delete originals)") {
+                        start { await library.move(items, to: target, deleteOriginal: true, using: model) }
+                    }
+                    Button("Copy (keep originals)") {
+                        start { await library.move(items, to: target, deleteOriginal: false, using: model) }
+                    }
+                }
+                Button("Cancel", role: .cancel) {}
+            } message: { request in
+                Text(request.message)
+            }
+            .sheet(item: $fixingTitle) { MatchPickerSheet(title: $0) }
+            .overlay(alignment: .bottom) {
+                if let notice {
+                    Text(notice)
+                        .font(.footnote.weight(.medium))
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 8)
+                        .background(.regularMaterial, in: Capsule())
+                        .padding(.bottom, 12)
+                        .transition(.opacity)
+                        .task {
+                            try? await Task.sleep(for: .seconds(2))
+                            self.notice = nil
+                        }
+                }
+            }
             .onChange(of: mode) { endSelecting() }
             .navigationDestination(for: TitleRoute.self) { LibraryTitleView(titleID: $0.id) }
             .navigationDestination(for: ShelfItem.self) { LibraryItemView(item: $0.item) }
@@ -98,6 +163,7 @@ struct LibraryView: View {
                         .buttonStyle(.plain)
                         .contextMenu {
                             kindMenu([item])
+                            batchActions([item])
                             deleteButton(item)
                         }
                         Divider()
@@ -124,7 +190,12 @@ struct LibraryView: View {
                             TitleCard(title: title)
                         }
                         .buttonStyle(.plain)
-                        .contextMenu { kindMenu(title.items) }
+                        .contextMenu {
+                            kindMenu(title.items)
+                            Button("Wrong title?", systemImage: "magnifyingglass") { fixingTitle = title }
+                            batchActions(title.items)
+                            Button("Delete", systemImage: "trash", role: .destructive) { pending = .delete(title.items) }
+                        }
                     }
                 }
             }
@@ -144,6 +215,7 @@ struct LibraryView: View {
                     .swipeActions { deleteButton(item) }
                     .contextMenu {
                         kindMenu([item])
+                        batchActions([item])
                         deleteButton(item)
                     }
             }
@@ -152,63 +224,90 @@ struct LibraryView: View {
         .safeAreaInset(edge: .bottom) {
             if isSelecting { selectionBar(visible: items) }
         }
-        .confirmationDialog(
-            "Delete \(selection.count) items?",
-            isPresented: $confirmDelete,
-            titleVisibility: .visible
-        ) {
-            Button("Delete from their services", role: .destructive) { deleteSelection() }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text("Each item is removed from its debrid or nzbdav, with its files. This cannot be undone.")
-        }
     }
 
     private var selectButton: some View {
         Button(isSelecting ? "Done" : "Select") {
             if isSelecting { endSelecting() } else { isSelecting = true }
         }
-        .disabled(deleting != nil)
+        .disabled(library.batch != nil)
     }
 
-    /// Select all of what the filters show (e.g. one service), or delete the picked ones.
+    /// Select all of what the filters show (e.g. one service), then change, fix, move or delete the picked ones.
     private func selectionBar(visible items: [ShelfItem]) -> some View {
         HStack {
             Button(selection.count == items.count && !items.isEmpty ? "Select none" : "Select all") {
                 selection = selection.count == items.count ? [] : Set(items.map(\.id))
             }
             Spacer()
-            if deleting == nil {
-                kindMenu(library.items.filter { selection.contains($0.id) })
-                    .disabled(selection.isEmpty)
-            }
-            if let deleting {
+            let picked = library.items.filter { selection.contains($0.id) }
+            if let batch = library.batch {
                 ProgressView()
-                Text("Deleting \(deleting.done) of \(deleting.total)…").font(.footnote)
+                Text("\(batch.label) \(batch.done) of \(batch.total)…").font(.footnote)
             } else {
-                Button("Delete \(selection.count)", systemImage: "trash", role: .destructive) { confirmDelete = true }
-                    .buttonStyle(.borderedProminent)
-                    .tint(.red)
-                    .disabled(selection.isEmpty)
+                Group {
+                    kindMenu(picked)
+                    Menu("Actions", systemImage: "ellipsis.circle") { batchActions(picked) }
+                    Button("Delete \(selection.count)", systemImage: "trash", role: .destructive) { pending = .delete(picked) }
+                        .buttonStyle(.borderedProminent)
+                        .tint(.red)
+                }
+                .disabled(selection.isEmpty)
             }
         }
         .padding(.horizontal)
         .padding(.vertical, 10)
         .background(.bar)
-        .disabled(deleting != nil)
     }
 
-    /// One by one, so a failure (shown with the other failures) does not stop the rest.
-    private func deleteSelection() {
-        let picked = library.items.filter { selection.contains($0.id) }
-        deleting = (0, picked.count)
+    /// Starts a confirmed batch action; the selection ends once it is done.
+    private func start(_ action: @escaping () async -> Void) {
         Task {
-            for item in picked {
-                await library.delete(item, using: model)
-                deleting?.done += 1
-            }
-            deleting = nil
+            await action()
             endSelecting()
+        }
+    }
+
+    /// Copy magnets, Reinsert and Move for what among `items` can be added again (torrents by hash, NZBs that
+    /// nzbdav hands back), and a status refresh.
+    @ViewBuilder
+    private func batchActions(_ items: [ShelfItem]) -> some View {
+        let readdable = items.filter { model.canReAdd($0.item) }
+        let torrents = readdable.filter { $0.item.magnet != nil }
+        let skipped = items.count - readdable.count
+        if readdable.isEmpty {
+            Button(model.reAddBlocker(items.map(\.item)), systemImage: "info.circle") {}
+                .disabled(true)
+        } else {
+            Section {
+                if !torrents.isEmpty {
+                    Button(torrents.count == 1 ? "Copy magnet" : "Copy \(torrents.count) magnets", systemImage: "link") {
+                        UIPasteboard.general.string = torrents.compactMap(\.item.magnet).joined(separator: "\n")
+                        withAnimation { notice = torrents.count == 1 ? "Magnet copied." : "\(torrents.count) magnets copied." }
+                    }
+                }
+                Button("Reinsert", systemImage: "arrow.clockwise.circle") { pending = .reinsert(readdable) }
+                // Every service at least one of these can go to, in order.
+                let targets = readdable.flatMap { model.moveTargets(for: $0.item) }.reduce(into: [BackendID]()) {
+                    if !$0.contains($1) { $0.append($1) }
+                }
+                if !targets.isEmpty {
+                    Menu("Move to", systemImage: "arrow.right.circle") {
+                        ForEach(targets, id: \.self) { target in
+                            Button(target.displayName) {
+                                pending = .move(readdable.filter { model.moveTargets(for: $0.item).contains(target) }, to: target)
+                            }
+                        }
+                    }
+                }
+            } header: {
+                if skipped > 0 {
+                    Text("\(readdable.count) can be added again · \(skipped) skipped (no magnet or stored NZB)")
+                }
+            }
+        }
+        Button("Refresh status", systemImage: "arrow.triangle.2.circlepath") {
+            Task { await library.refresh(using: model) }
         }
     }
 
@@ -412,9 +511,9 @@ struct LibraryItemView: View {
 
     private var current: LibraryItem { detail ?? item }
 
-    /// Other debrids that take torrents, in priority order: where "Move to" can send this one.
+    /// Services that take this item's kind of source (debrids for torrents, Usenet for NZBs).
     private var moveTargets: [BackendID] {
-        model.backends(usenet: false).map(\.id).filter { $0 != item.backend }
+        model.moveTargets(for: current)
     }
 
     /// In name order, so episodes read E01, E02… (services list them in their own order).
@@ -496,11 +595,13 @@ struct LibraryItemView: View {
         .toolbar {
             ToolbarItem(placement: .primaryAction) { actionsMenu }
         }
-        .confirmationDialog("Add this torrent again?", isPresented: $confirmReinsert, titleVisibility: .visible) {
+        .confirmationDialog("Add this again?", isPresented: $confirmReinsert, titleVisibility: .visible) {
             Button("Reinsert on \(item.backend.displayName)") { reinsert() }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("Dove adds the same torrent to \(item.backend.displayName) again and deletes this item. Use it for dead, expired or stuck torrents.")
+            Text(current.magnet != nil
+                 ? "Dove adds the same torrent to \(item.backend.displayName) again and deletes this item. Use it for dead, expired or stuck torrents."
+                 : "Dove asks nzbdav to queue this job's NZB again (a retry) and removes this entry.")
         }
         .confirmationDialog(
             "Move to \(pendingMove?.displayName ?? "")?",
@@ -512,14 +613,14 @@ struct LibraryItemView: View {
             Button("Copy (keep it here too)") { move(to: target, deleteOriginal: false) }
             Button("Cancel", role: .cancel) {}
         } message: { _ in
-            Text("Dove adds the torrent there first; it deletes this item only after that worked.")
+            Text("Dove adds it there first; it deletes this item only after that worked.")
         }
         .disabled(isWorking)
         .refreshable { await loadDetail() }
         .task { await loadDetail() }
     }
 
-    /// DMM-style actions for torrents (by info hash), and a status refresh for everything.
+    /// DMM-style actions for torrents (by info hash) and NZBs nzbdav hands back, and a status refresh for everything.
     private var actionsMenu: some View {
         Menu("Actions", systemImage: "ellipsis.circle") {
             if let magnet = current.magnet, let hash = current.infoHash {
@@ -527,6 +628,8 @@ struct LibraryItemView: View {
                     Button("Copy magnet", systemImage: "link") { copy(magnet, "Magnet copied.") }
                     Button("Copy hash", systemImage: "number") { copy(hash, "Hash copied.") }
                 }
+            }
+            if model.canReAdd(current) {
                 Section {
                     Button("Reinsert", systemImage: "arrow.clockwise.circle") { confirmReinsert = true }
                     if !moveTargets.isEmpty {
@@ -537,6 +640,9 @@ struct LibraryItemView: View {
                         }
                     }
                 }
+            } else {
+                Button(model.reAddBlocker([current]), systemImage: "info.circle") {}
+                    .disabled(true)
             }
             Button("Refresh status", systemImage: "arrow.triangle.2.circlepath") {
                 Task {

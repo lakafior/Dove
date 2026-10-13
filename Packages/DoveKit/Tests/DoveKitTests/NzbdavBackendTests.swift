@@ -72,6 +72,9 @@ struct NzbdavBackendTests {
         #expect(items[1].addedAt == Date(timeIntervalSince1970: 1_791_748_800))
         #expect(items[2].status == .failed(reason: "Article with message-id abc123 not found."))
         #expect(items[3].addedAt == nil, "the Tv listing failed; the item still loads")
+        #expect(items[1].nzbBlobID == "11111111-1111-1111-1111-111111111111")
+        #expect(items[2].nzbBlobID == "22222222-2222-2222-2222-222222222222")
+        #expect(items[4].nzbBlobID == nil, "folders without history have no stored NZB")
 
         let propfind = try #require(await transport.requests.first { $0.httpMethod == "PROPFIND" })
         #expect(propfind.value(forHTTPHeaderField: "Depth") == "1")
@@ -236,5 +239,117 @@ struct NzbdavBackendTests {
             await #expect(throws: BackendError.notFound) { try await backend.delete(id) }
         }
         #expect(await transport.requests.isEmpty)
+    }
+
+    // MARK: - Frontend key
+
+    private func makeBackend(frontendKey: String) -> (NzbdavBackend, MockTransport) {
+        let transport = MockTransport()
+        let backend = NzbdavBackend(
+            baseURL: base, apiKey: "test-key", webDAVUser: "user", webDAVPassword: "p@ss:word",
+            frontendKey: frontendKey, transport: transport
+        )
+        return (backend, transport)
+    }
+
+    @Test func storedNZBComesBackWithTheKeyInAHeader() async throws {
+        let (backend, transport) = makeBackend(frontendKey: "frontend-key")
+        await transport.stub("/api/download-nzb", body: Data("<nzb/>".utf8), contentType: "application/x-nzb")
+        let item = LibraryItem(id: "nzo:2", backend: .nzbdav, name: "Some-Movie-2023", status: .failed(reason: "x"), nzbBlobID: "22222222-2222-2222-2222-222222222222")
+
+        #expect(backend.providesNZB(for: item))
+        let source = try await backend.nzb(of: item)
+
+        #expect(source == .nzbFile(data: Data("<nzb/>".utf8), filename: "Some-Movie-2023.nzb"))
+        let request = try #require(await transport.requests.last)
+        #expect(request.url?.absoluteString == "https://nzb.example/api/download-nzb?nzbBlobId=22222222-2222-2222-2222-222222222222")
+        #expect(request.value(forHTTPHeaderField: "x-api-key") == "frontend-key")
+        #expect(request.url?.query?.contains("frontend-key") == false)
+    }
+
+    @Test func withoutABlobNothingIsProvided() {
+        let (plain, _) = makeBackend()
+        #expect(plain.providesNZB(for: LibraryItem(id: "nzo:2", backend: .nzbdav, name: "x", status: .ready, nzbBlobID: "b")))
+        #expect(!plain.providesNZB(for: LibraryItem(id: "dav:/content/a/b", backend: .nzbdav, name: "b", status: .ready)))
+    }
+
+    /// InfiniDysk takes the SABnzbd key on download-nzb; nzbdav answers 401 and the user learns what to set.
+    @Test func withoutTheFrontendKeyTheSABKeyFetchesTheNZB() async throws {
+        let (backend, transport) = makeBackend()
+        await transport.stub("/api/download-nzb", body: Data("<nzb/>".utf8), contentType: "application/x-nzb")
+        let item = LibraryItem(id: "nzo:2", backend: .nzbdav, name: "Job", status: .ready, nzbBlobID: "blob")
+
+        _ = try await backend.nzb(of: item)
+        #expect(await transport.requests.last?.value(forHTTPHeaderField: "x-api-key") == "test-key")
+
+        let (old, oldTransport) = makeBackend()
+        await oldTransport.stub("/api/download-nzb", status: 401, json: #"{"status":false,"error":"API Key Incorrect"}"#)
+        await #expect(throws: BackendError.api(message: NzbdavBackend.needsFrontendKeyMessage)) { try await old.nzb(of: item) }
+    }
+
+    @Test func retryUsesTheServerOrSaysItCannot() async throws {
+        let (backend, transport) = makeBackend()
+        await transport.stub("/api", queryContains: "mode=retry", json: #"{"status":true,"nzo_id":"99999999-9999-9999-9999-999999999999","nzo_ids":["99999999-9999-9999-9999-999999999999"]}"#)
+        let failed = LibraryItem(id: "nzo:22222222-2222-2222-2222-222222222222", backend: .nzbdav, name: "x", status: .failed(reason: "x"), nzbBlobID: "b")
+
+        #expect(try await backend.retry(failed) == "nzo:99999999-9999-9999-9999-999999999999")
+        let sent = try #require(await transport.requests.last)
+        #expect(query(sent)["value"] == "22222222-2222-2222-2222-222222222222")
+        #expect(form(sent)["apikey"] == "test-key")
+
+        let (old, oldTransport) = makeBackend()
+        await oldTransport.stub("/api", queryContains: "mode=retry", status: 400, json: #"{"status":false,"error":"Invalid mode"}"#)
+        #expect(try await old.retry(failed) == nil)
+    }
+
+    /// InfiniDysk: `completed` dates the entry, `storage` names the real folder ("Name (2)" for a second job).
+    @Test func historyDateAndFolderComeFromCompletedAndStorage() async throws {
+        let (backend, transport) = makeBackend()
+        await transport.stub("/api", queryContains: "mode=queue", json: #"{"queue":{"slots":[]}}"#)
+        await transport.stub("/api", queryContains: "mode=history", json: """
+        {"history":{"slots":[{"nzo_id":"11111111-1111-1111-1111-111111111111","name":"Job","category":"Movies","status":"Completed","bytes":10,"completed":1791748800,"storage":"/mnt/nzbdav/completed-symlinks/Movies/Job (2)","nzb_blob_id":"11111111-1111-1111-1111-111111111111"}]}}
+        """)
+        await transport.stub("Job (2)", status: 207, body: Data(#"<?xml version="1.0"?><d:multistatus xmlns:d="DAV:"><d:response><d:href>/content/Movies/Job%20(2)/</d:href><d:propstat><d:prop><d:resourcetype><d:collection/></d:resourcetype></d:prop></d:propstat></d:response><d:response><d:href>/content/Movies/Job%20(2)/a.mkv</d:href><d:propstat><d:prop><d:getcontentlength>5</d:getcontentlength><d:resourcetype/></d:prop></d:propstat></d:response></d:multistatus>"#.utf8), contentType: "application/xml")
+
+        let item = try await backend.item("nzo:11111111-1111-1111-1111-111111111111")
+
+        #expect(item.addedAt == Date(timeIntervalSince1970: 1_791_748_800))
+        #expect(item.files.map(\.id) == ["/content/Movies/Job (2)/a.mkv"])
+    }
+
+    @Test func contentDispositionNamesTheFile() {
+        #expect(NzbdavBackend.filename(fromContentDisposition: #"attachment; filename="A B.nzb"; filename*=UTF-8''A%20B%20%C5%BC.nzb"#) == "A B ż.nzb")
+        #expect(NzbdavBackend.filename(fromContentDisposition: "attachment; filename=Plain.nzb") == "Plain.nzb")
+        #expect(NzbdavBackend.filename(fromContentDisposition: nil) == nil)
+    }
+
+    @Test func frontendKeyIsCheckedWithAnNZBThatCannotExist() async throws {
+        let (good, goodTransport) = makeBackend(frontendKey: "right")
+        await goodTransport.stub("/api/download-nzb", status: 400, json: #"{"status":false,"error":"NZB not found."}"#)
+        try await good.validateFrontendKey()
+
+        let (bad, badTransport) = makeBackend(frontendKey: "wrong")
+        await badTransport.stub("/api/download-nzb", status: 401, json: #"{"status":false,"error":"API Key Incorrect"}"#)
+        await #expect(throws: BackendError.api(message: NzbdavBackend.frontendKeyMessage)) { try await bad.validateFrontendKey() }
+    }
+
+    @Test func playbackUsesSignedViewLinksWithTheKey() async throws {
+        let file = "/content/Movies/Some Movie (2023)/Some Movie.mkv"
+        let prefix = "https://nzb.example/view/content/Movies/Some%20Movie%20%282023%29/Some%20Movie.mkv?downloadKey="
+
+        // InfiniDysk: HMAC-SHA256, checked with a one-byte request.
+        let (backend, transport) = makeBackend(frontendKey: "frontend-key")
+        await transport.stub("/Some Movie.mkv", status: 206, body: Data([0]), contentType: "video/x-matroska")
+        let url = try await backend.playbackURL(itemID: "nzo:x", fileID: file)
+        #expect(url.absoluteString == prefix + "0bd62b0c6c40c9d69f6e97c0fc88ee20c6bf860a5aa3d63764e92985a4e3d998")
+        #expect(url.user == nil)
+        #expect(await transport.requests.last?.value(forHTTPHeaderField: "Range") == "bytes=0-0")
+
+        // nzbdav refuses the HMAC key: its own SHA-256 one.
+        let (old, oldTransport) = makeBackend(frontendKey: "frontend-key")
+        await oldTransport.stub("/Some Movie.mkv", status: 401, json: "{}")
+        let legacy = try await old.playbackURL(itemID: "nzo:x", fileID: file)
+        #expect(legacy.absoluteString == prefix + "aebbfaf48f6aa2b1e47d46f6676a2b1bb0985916b1014ab4cff446425c9b79d5")
+        await #expect(throws: BackendError.notFound) { try await backend.playbackURL(itemID: "nzo:x", fileID: "/etc/passwd") }
     }
 }

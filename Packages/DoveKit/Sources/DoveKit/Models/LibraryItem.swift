@@ -44,6 +44,9 @@ public struct LibraryItem: Identifiable, Sendable, Hashable {
     /// Torrents only, lowercased, when the service tells it (Real-Debrid, TorBox; Offcloud from the magnet it was
     /// added with). Lets the user copy the magnet, add the torrent again or move it to another service.
     public var infoHash: String?
+    /// nzbdav keeps every job's NZB while it is in the history; with its frontend key Dove can fetch it again
+    /// (`NZBProviding`) to retry the job or send it to another Usenet service.
+    public var nzbBlobID: String?
 
     public init(
         id: String,
@@ -53,7 +56,8 @@ public struct LibraryItem: Identifiable, Sendable, Hashable {
         status: Status,
         files: [LibraryFile] = [],
         addedAt: Date? = nil,
-        infoHash: String? = nil
+        infoHash: String? = nil,
+        nzbBlobID: String? = nil
     ) {
         self.id = id
         self.backend = backend
@@ -63,6 +67,7 @@ public struct LibraryItem: Identifiable, Sendable, Hashable {
         self.files = files
         self.addedAt = addedAt
         self.infoHash = infoHash.flatMap(InfoHash.normalized)
+        self.nzbBlobID = nzbBlobID.flatMap { $0.isEmpty ? nil : $0 }
     }
 
     /// A magnet with the item's name, for copying or adding elsewhere. Nil without an info hash.

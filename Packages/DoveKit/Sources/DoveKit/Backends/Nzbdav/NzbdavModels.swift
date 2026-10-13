@@ -9,6 +9,12 @@ struct NzbdavAdded: Decodable {
     let nzoIds: [String]?
 }
 
+/// `mode=retry` (InfiniDysk): `nzo_id` for one job, `nzo_ids` for several.
+struct NzbdavRetried: Decodable {
+    let nzoId: String?
+    let nzoIds: [String]?
+}
+
 struct NzbdavQueueResponse: Decodable {
     struct Queue: Decodable { let slots: [NzbdavQueueSlot]? }
     let queue: Queue?
@@ -49,13 +55,32 @@ struct NzbdavHistorySlot: Decodable {
     let status: String?
     let bytes: Int64?
     let failMessage: String?
+    /// The stored NZB (`GET /api/download-nzb?nzbBlobId=`); missing on jobs from before nzbdav kept them.
+    let nzbBlobId: String?
+    /// Unix seconds (InfiniDysk); nzbdav sends none.
+    let completed: LossyDouble?
+    /// The import path (`/mnt/…/completed-symlinks/{category}/{folder}`); its last part is the real folder name.
+    let storage: String?
 
     var jobName: String { name ?? nzbName ?? nzoId }
     var categoryName: String { category?.isEmpty == false ? category! : "uncategorized" }
     var isCompleted: Bool { status?.lowercased() == "completed" }
+    var isFailed: Bool { status?.lowercased() == "failed" }
 
-    /// `/content/{category}/{job name}`: where nzbdav mounts the job's files.
-    var folderPath: String { "\(NzbdavBackend.contentRoot)/\(categoryName)/\(jobName)" }
+    /// The job's folder: `storage`'s last part when there is one (a second job with the same name gets
+    /// "Name (2)"), the job name otherwise.
+    var folderName: String {
+        if let storage, let last = storage.split(separator: "/").last, !last.isEmpty { return String(last) }
+        return jobName
+    }
+
+    /// `/content/{category}/{folder}`: where nzbdav mounts the job's files.
+    var folderPath: String { "\(NzbdavBackend.contentRoot)/\(categoryName)/\(folderName)" }
+
+    var completedAt: Date? {
+        guard let seconds = completed?.value, seconds > 0 else { return nil }
+        return Date(timeIntervalSince1970: seconds)
+    }
 
     func libraryItem(files: [LibraryFile] = [], addedAt: Date? = nil) -> LibraryItem {
         let state: LibraryItem.Status = switch status?.lowercased() {
@@ -70,7 +95,8 @@ struct NzbdavHistorySlot: Decodable {
             size: bytes,
             status: state,
             files: files,
-            addedAt: addedAt
+            addedAt: completedAt ?? addedAt,
+            nzbBlobID: nzbBlobId
         )
     }
 }
