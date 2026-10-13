@@ -17,7 +17,7 @@ struct SettingsView: View {
                     NavigationLink {
                         DebridPriorityView()
                     } label: {
-                        LabeledContent("Priority", value: model.debridOrder.map(\.displayName).joined(separator: " → "))
+                        LabeledContent("Priority", value: priorityOrder.map(\.displayName).joined(separator: " → "))
                     }
                 } footer: {
                     Text("Torrents and links go to the first service. If it fails, Dove tries the next one.")
@@ -65,6 +65,12 @@ struct SettingsView: View {
             }
             .navigationTitle("Settings")
         }
+    }
+
+    /// The summary lists only services with a key; the full order (with "No key" rows) is one tap away.
+    private var priorityOrder: [BackendID] {
+        let configured = model.debridOrder.filter(model.isConfigured)
+        return configured.isEmpty ? model.debridOrder : configured
     }
 }
 
