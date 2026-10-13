@@ -18,6 +18,13 @@ struct DoveApp: App {
 final class AppDelegate: NSObject, UIApplicationDelegate {
     let model = AppModel()
 
+    func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
+        // AsyncImage loads through URLSession.shared; the default cache is too small to hold a library's posters,
+        // so they were fetched again on every scroll. Poster CDNs (TMDB, metahub) send long max-age headers.
+        URLCache.shared = URLCache(memoryCapacity: 50 * 1024 * 1024, diskCapacity: 300 * 1024 * 1024)
+        return true
+    }
+
     func application(
         _ application: UIApplication,
         handleEventsForBackgroundURLSession identifier: String,

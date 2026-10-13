@@ -66,6 +66,42 @@ struct LibraryMatcherTests {
         await LibraryMatcher.matchMissing([guess.key: guess], store: store) { _, _ in throw URLError(.notConnectedToInternet) }
         #expect(await store.needsLookup(guess.key))
     }
+
+    @Test func rematchEverythingKeepsManualChoicesAndOldMatchesWithoutAnswer() async {
+        let store = MatchStore(fileURL: nil)
+        let dune = ReleaseParser.guess("Dune.2021.2160p")
+        let manual = ReleaseParser.guess("Dune.1984.1080p")
+        let lost = ReleaseParser.guess("Gone.2019.1080p")
+        let offline = ReleaseParser.guess("Offline.2018.1080p")
+        await store.set(.matched(dune2021), for: dune.key)
+        await store.set(.manual(dune1984), for: manual.key)
+        await store.set(.matched(MediaSummary(id: "tt1", type: .movie, name: "Gone", releaseInfo: "2019")), for: lost.key)
+        await store.set(.matched(MediaSummary(id: "tt2", type: .movie, name: "Offline", releaseInfo: "2018")), for: offline.key)
+        let fromTMDB = MediaSummary(id: "tmdb:438631", type: .movie, name: "Dune", releaseInfo: "2021")
+        let searched = Recorder()
+
+        let looked = await LibraryMatcher.matchMissing(
+            [dune.key: dune, manual.key: manual, lost.key: lost, offline.key: offline],
+            store: store,
+            everything: true
+        ) { query, _ in
+            await searched.add(query)
+            if query == "Offline" { throw URLError(.notConnectedToInternet) }
+            return query == "Dune" ? [fromTMDB] : []
+        }
+
+        #expect(looked == 3)
+        #expect(await searched.queries.sorted() == ["Dune", "Gone", "Offline"])
+        #expect(await store.entry(for: dune.key) == .matched(fromTMDB))
+        #expect(await store.entry(for: manual.key) == .manual(dune1984))
+        #expect(await store.entry(for: lost.key)?.media?.id == "tt1")
+        #expect(await store.entry(for: offline.key)?.media?.id == "tt2")
+    }
+}
+
+private actor Recorder {
+    var queries: [String] = []
+    func add(_ query: String) { queries.append(query) }
 }
 
 private actor Counter {

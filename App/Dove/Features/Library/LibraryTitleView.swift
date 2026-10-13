@@ -156,7 +156,7 @@ private struct MatchPickerSheet: View {
 
     private func search() {
         guard model.addonSet.canSearch else {
-            message = "Add a Stremio addon that can search in Settings."
+            message = "Add a TMDB key or a Stremio addon that can search in Settings."
             return
         }
         isSearching = true

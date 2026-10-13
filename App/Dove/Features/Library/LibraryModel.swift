@@ -11,6 +11,7 @@ final class LibraryModel {
     private(set) var matches: [String: MediaSummary] = [:]
     private(set) var isLoading = false
     private(set) var hasLoaded = false
+    private(set) var isRematching = false
 
     /// Matches survive launches; they are not secrets.
     private let store = MatchStore(fileURL: URL.applicationSupportDirectory.appending(path: "Dove/library-matches.json"))
@@ -63,14 +64,23 @@ final class LibraryModel {
         await matchMissing(using: app.addonSet)
     }
 
-    /// Looks up posters for titles without one, through the search addon. Rows update as answers arrive.
-    private func matchMissing(using addons: AddonSet) async {
+    /// Looks every title up again (e.g. after adding a TMDB key). The user's own choices stay, and a title
+    /// keeps its old match when the new search finds nothing.
+    func rematchAll(using app: AppModel) async {
+        isRematching = true
+        defer { isRematching = false }
+        await matchMissing(using: app.addonSet, everything: true)
+    }
+
+    /// Looks up posters for titles without one, through TMDB or the search addon. Rows update as answers arrive.
+    private func matchMissing(using addons: AddonSet, everything: Bool = false) async {
         guard addons.canSearch else { return }
         var guesses: [String: MediaGuess] = [:]
         for item in items where item.kind == .video && guesses[item.guess.key] == nil { guesses[item.guess.key] = item.guess }
         await LibraryMatcher.matchMissing(
             guesses,
             store: store,
+            everything: everything,
             search: { query, type in try await addons.search(query, type: type) },
             onMatch: { key, media in await self.record(media, for: key) }
         )

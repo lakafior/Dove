@@ -154,7 +154,7 @@ struct SearchView: View {
         guard !query.isEmpty else { return }
         if scope == .other { return searchOther(query) }
         guard model.addonSet.canSearch else {
-            message = "Add a Stremio addon that can search (for example AIOMetadata or Cinemeta) in Settings."
+            message = "Add a TMDB key or a Stremio addon that can search (for example AIOMetadata or Cinemeta) in Settings."
             return
         }
         isSearching = true

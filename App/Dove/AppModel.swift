@@ -314,6 +314,20 @@ final class AppModel {
         aioStreamsVariant = AIOStreamsSearch.unfilteredVariantID
     }
 
+    // MARK: - TMDB
+
+    var tmdbKey: String {
+        (try? keychain.get(.tmdbAPIKey)) ?? ""
+    }
+
+    /// Checks the key (v3 API key or v4 read access token) before keeping it. Empty removes it.
+    func saveTMDBKey(_ key: String) async throws {
+        let key = key.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !key.isEmpty { try await TMDBMetadata(key: key).validate() }
+        try keychain.set(key, for: .tmdbAPIKey)
+        rebuildAddonSet()
+    }
+
     /// The first AIOStreams addon in the list (by URL shape and manifest).
     private var aioStreamsInstance: (origin: URL, uuid: String, variant: String?)? {
         addonEntries.lazy.filter(\.isAIOStreams).compactMap { AIOStreamsSearch.instance(from: $0.url) }.first
@@ -327,7 +341,8 @@ final class AppModel {
             let variant = aioStreamsVariant.isEmpty ? instance.variant : aioStreamsVariant
             search = AIOStreamsSearch(origin: instance.origin, uuid: instance.uuid, password: password, variant: variant)
         }
-        addonSet = AddonSet(addons: addons, aioStreams: search)
+        let tmdbKey = tmdbKey
+        addonSet = AddonSet(addons: addons, aioStreams: search, tmdb: tmdbKey.isEmpty ? nil : TMDBMetadata(key: tmdbKey))
     }
 
     private func storedAddonURLs() -> [URL] {

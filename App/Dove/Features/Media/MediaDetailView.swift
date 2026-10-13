@@ -26,7 +26,8 @@ struct MediaDetailView: View {
                     NavigationLink("Sources") {
                         SourcesView(title: summary.name, type: .movie, id: summary.id, searchTitle: summary.name)
                     }
-                    .disabled(!model.addonSet.hasStreams)
+                    // TMDB search results carry TMDB IDs; the detail brings the IMDb ID stream addons want.
+                    .disabled(!model.addonSet.hasStreams || (detail == nil && error == nil && item.id.hasPrefix("tmdb:")))
                 } footer: {
                     if !model.addonSet.hasStreams { Text("Add a Stremio addon with streams in Settings.") }
                 }
@@ -75,7 +76,7 @@ struct MediaDetailView: View {
     @ViewBuilder
     private func episodes(of detail: MediaDetail) -> some View {
         if detail.seasons.isEmpty {
-            Text("No episode list from your metadata addon.").foregroundStyle(.secondary)
+            Text("No episode list from TMDB or your metadata addon.").foregroundStyle(.secondary)
         } else {
             let currentSeason = season ?? detail.seasons.first ?? 1
             let firstEpisode = detail.episodes(inSeason: currentSeason).first

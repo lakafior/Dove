@@ -41,6 +41,12 @@ struct LibraryView: View {
                     .fixedSize()
                 }
                 ToolbarItem(placement: .primaryAction) { filterMenu }
+                ToolbarItem(placement: .secondaryAction) {
+                    Button(library.isRematching ? "Re-matching…" : "Re-match all titles", systemImage: "arrow.triangle.2.circlepath") {
+                        Task { await library.rematchAll(using: model) }
+                    }
+                    .disabled(library.isRematching || !model.addonSet.canSearch)
+                }
                 if mode == .files {
                     ToolbarItem(placement: .topBarLeading) { selectButton }
                 }

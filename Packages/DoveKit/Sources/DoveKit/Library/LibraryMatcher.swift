@@ -48,9 +48,11 @@ public actor MatchStore {
         save()
     }
 
-    /// Whether this key should be looked up now.
-    public func needsLookup(_ key: String, now: Date = Date()) -> Bool {
-        switch entries[key] {
+    /// Whether this key should be looked up now. `everything` (re-match all) takes every key but the user's choices.
+    public func needsLookup(_ key: String, everything: Bool = false, now: Date = Date()) -> Bool {
+        if everything, case .manual = entries[key] { return false }
+        if everything { return true }
+        return switch entries[key] {
         case nil: true
         case .unmatched(let date): now.timeIntervalSince(date) > Self.retryAfter
         case .matched, .manual: false
@@ -85,17 +87,20 @@ public enum LibraryMatcher {
     }
 
     /// Looks up every key the store has no fresh answer for, a few at a time, and records the results.
-    /// `search` is the search addon (`AddonSet.search(_:type:)`). Returns how many keys were looked up.
+    /// `search` is TMDB or the search addon (`AddonSet.search(_:type:)`). Returns how many keys were looked up.
+    /// `everything` re-matches automatic matches too (e.g. after adding a TMDB key); the user's own choices stay,
+    /// and a match is only replaced by a new one, never dropped because the new search found nothing.
     @discardableResult
     public static func matchMissing(
         _ guesses: [String: MediaGuess],
         store: MatchStore,
+        everything: Bool = false,
         concurrency: Int = 4,
         search: @escaping @Sendable (String, MediaType) async throws -> [MediaSummary],
         onMatch: @escaping @Sendable (String, MediaSummary) async -> Void = { _, _ in }
     ) async -> Int {
         var pending: [(String, MediaGuess)] = []
-        for (key, guess) in guesses where await store.needsLookup(key) {
+        for (key, guess) in guesses where await store.needsLookup(key, everything: everything) {
             pending.append((key, guess))
         }
         await withTaskGroup(of: Void.self) { group in
@@ -108,7 +113,7 @@ public enum LibraryMatcher {
                     if let media = best(results, for: guess) {
                         await store.set(.matched(media), for: key)
                         await onMatch(key, media)
-                    } else {
+                    } else if await store.entry(for: key)?.media == nil {
                         await store.set(.unmatched(Date()), for: key)
                     }
                 }

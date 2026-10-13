@@ -50,7 +50,15 @@ struct SettingsView: View {
                 } header: {
                     Text("Search")
                 } footer: {
-                    Text("Titles, metadata and sources come from your Stremio addons. Indexers (Newznab for Usenet, Torznab for torrents) are searched from your phone and add sources, and power Search › Other.")
+                    Text("Sources (and titles, without a TMDB key) come from your Stremio addons. Indexers (Newznab for Usenet, Torznab for torrents) are searched from your phone and add sources, and power Search › Other.")
+                }
+
+                Section {
+                    TMDBKeyRow()
+                } header: {
+                    Text("Metadata")
+                } footer: {
+                    Text("With a TMDB key, search, posters, seasons and episodes come from TMDB first; your addons answer when TMDB cannot. Get a free key at themoviedb.org › Settings › API (the API key or the read access token).")
                 }
 
                 FilesLocationSection()
@@ -103,6 +111,42 @@ private struct APIKeyRow: View {
             } catch {
                 status = "❌ \(error.localizedDescription)"
             }
+        }
+    }
+}
+
+/// TMDB key field: validated against TMDB before it is saved.
+private struct TMDBKeyRow: View {
+    @Environment(AppModel.self) private var model
+    @State private var value = ""
+    @State private var status: String?
+    @State private var isSaving = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            SecureField("TMDB API key or read access token", text: $value)
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+                .onSubmit(save)
+            Button("Save and test", action: save)
+                .font(.callout)
+                .disabled(isSaving)
+            if let status { Text(status).font(.footnote) }
+        }
+        .onAppear { value = model.tmdbKey }
+    }
+
+    private func save() {
+        isSaving = true
+        status = value.isEmpty ? nil : "Testing…"
+        Task {
+            do {
+                try await model.saveTMDBKey(value)
+                status = value.isEmpty ? "Key removed." : "✅ TMDB key works."
+            } catch {
+                status = "❌ \(error.localizedDescription)"
+            }
+            isSaving = false
         }
     }
 }
