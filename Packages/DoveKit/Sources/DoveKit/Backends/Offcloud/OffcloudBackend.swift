@@ -1,33 +1,41 @@
 import Foundation
 
-/// Offcloud adapter. Offcloud's own docs (https://github.com/Offcloud/offcloud-api) are thin; the behaviour here
-/// follows Debrid Media Manager's live measurements (`src/services/offcloud.ts`, 2026-09).
+/// Offcloud adapter. Follows the API docs Offcloud published after its 2026-10 rebuild (offcloud.com/api, shown
+/// only when logged in; the GitHub repo is outdated, its `remote` endpoints are gone). Older behaviour notes come
+/// from Debrid Media Manager (`src/services/offcloud.ts`).
 ///
-/// - Auth: `Authorization: Bearer <key>`. `?key=` works too, but query strings end up in logs.
-/// - Add magnet, torrent URL or hoster link: `POST /cloud` with JSON `{"url": …}`; `.torrent` bytes as multipart `file`.
+/// - Auth: `Authorization: Bearer <key>`. `?key=` / `?apiKey=` are legacy, and query strings end up in logs.
+/// - Add magnet, torrent URL, hoster or NZB link: `POST /cloud` with JSON `{"url": …}`; `.torrent`/`.nzb` bytes as
+///   multipart `file`. NZBs only with `usenet` on (Settings › Usenet › Offcloud Usenet).
 ///   A cached magnet answers `status: "downloaded"` at once. Offcloud accepts invalid magnets and never finishes
 ///   them, so the info hash is validated first.
-/// - List: `GET /cloud/history` (no sizes, no progress). Account: `GET /account/info`.
-/// - Files: folders via `GET /cloud/explore/{id}` (a bare array of signed URLs); a single file lives at
-///   `https://{server}.offcloud.com/cloud/download/{id}/{fileName}`.
-/// - Delete: `GET /cloud/remove/{id}` — destructive despite being a GET; only call it from a user action.
+/// - List: `GET /cloud/history` (active transfers; `progress` 0…1 and `message`, no sizes). Account: `GET /account/info`.
+/// - Files: `GET /cloud/explore/{id}?format=detailed` (`path`, `size`, `url` per file; "Bad archive" for a single
+///   file, which lives at `https://{server}.offcloud.com/cloud/download/{id}/{fileName}`, or comes from
+///   `POST /cache/download` when the history has no `server`).
+/// - Delete: `POST /cloud/remove` with `{"requests": [id]}`.
+/// - Cache: `POST /cache/info` with `{"urls": [magnet…]}`, answered in the same order.
 /// - Errors: `{"error": "…"}` (`NOAUTH` for any key problem); unknown paths answer with HTML, so check the content type.
 public struct OffcloudBackend: LibraryBackend {
     public let id: BackendID = .offcloud
-    public let supportedSources: Set<SourceKind> = [.torrent, .hoster]
+    public let supportedSources: Set<SourceKind>
 
     private let apiKey: String
+    private let usenet: Bool
     private let transport: any HTTPTransport
     private let baseURL: URL
 
     public init(
         apiKey: String,
+        usenet: Bool = false,
         transport: any HTTPTransport = URLSession.shared,
         baseURL: URL = URL(string: "https://offcloud.com/api")!
     ) {
         self.apiKey = apiKey
+        self.usenet = usenet
         self.transport = transport
         self.baseURL = baseURL
+        supportedSources = usenet ? [.torrent, .hoster, .nzb] : [.torrent, .hoster]
     }
 
     // MARK: - LibraryBackend
@@ -51,11 +59,13 @@ public struct OffcloudBackend: LibraryBackend {
         case .torrentURL(let url), .hosterURL(let url):
             request = jsonRequest("cloud", body: ["url": url.absoluteString])
         case .torrentFile(let data, let filename):
-            var form = MultipartFormData()
-            form.addFile("file", filename: filename, mimeType: "application/x-bittorrent", data: data)
-            request = self.request("cloud", method: "POST", body: form.finalized(), contentType: form.contentType)
-        case .nzbURL, .nzbFile:
-            throw BackendError.unsupportedSource(.nzb)
+            request = fileRequest(data, filename: filename, mimeType: "application/x-bittorrent")
+        case .nzbURL(let url):
+            guard usenet else { throw BackendError.unsupportedSource(.nzb) }
+            request = jsonRequest("cloud", body: ["url": url.absoluteString])
+        case .nzbFile(let data, let filename):
+            guard usenet else { throw BackendError.unsupportedSource(.nzb) }
+            request = fileRequest(data, filename: filename, mimeType: "application/x-nzb")
         }
 
         let result = try await decode(OffcloudAddResult.self, from: request)
@@ -73,21 +83,21 @@ public struct OffcloudBackend: LibraryBackend {
     public func item(_ itemID: LibraryItem.ID) async throws -> LibraryItem {
         let entry = try await historyEntry(itemID)
         guard entry.libraryStatus == .ready else { return entry.libraryItem() }
-        let files = try await links(for: entry).enumerated().map { index, url in
-            LibraryFile(id: String(index), name: url.lastPathComponent)
-        }
-        return entry.libraryItem(files: files)
+        return entry.libraryItem(files: Self.libraryFiles(try await files(for: entry)))
     }
 
     public func delete(_ itemID: LibraryItem.ID) async throws {
         guard let ref = OffcloudItemRef(itemID) else { throw BackendError.notFound }
-        _ = try await send(request("cloud/remove/\(ref.requestID)"))
+        let result = try await decode(OffcloudRemoveResult.self, from: jsonRequest("cloud/remove", body: ["requests": [ref.requestID]]))
+        if result.success == false { throw BackendError.api(message: "Offcloud did not remove this download.") }
     }
 
     public func downloadRequest(itemID: LibraryItem.ID, fileID: LibraryFile.ID) async throws -> URLRequest {
-        let links = try await links(for: historyEntry(itemID))
-        guard let index = Int(fileID), links.indices.contains(index) else { throw BackendError.notFound }
-        return URLRequest(url: links[index])
+        let files = try await files(for: historyEntry(itemID))
+        guard let index = Int(fileID), files.indices.contains(index), let url = URL(string: files[index].url) else {
+            throw BackendError.notFound
+        }
+        return URLRequest(url: url)
     }
 
     // MARK: - Helpers
@@ -105,20 +115,42 @@ public struct OffcloudBackend: LibraryBackend {
         return entry
     }
 
-    /// Download URLs for every file of a request, in a stable order (file IDs are indexes into it).
-    private func links(for entry: OffcloudHistoryItem) async throws -> [URL] {
+    /// Every file of a request, in a stable order (file IDs are indexes into it).
+    private func files(for entry: OffcloudHistoryItem) async throws -> [OffcloudFile] {
         if entry.isDirectory != false {
             do {
-                let links = try await decode([String].self, from: request("cloud/explore/\(entry.requestId)"))
-                return links.compactMap(URL.init(string:))
-            } catch {
-                // Explore answers "Bad archive" for a single file; fall back to its direct link when we can.
-                guard entry.isDirectory == nil, let url = entry.singleFileURL else { throw error }
-                return [url]
+                let explore = request(
+                    "cloud/explore/\(entry.requestId)",
+                    query: [URLQueryItem(name: "format", value: "detailed")]
+                )
+                return try await decode(OffcloudExplore.self, from: explore).files
+            } catch BackendError.api(let message) {
+                // Explore answers "Bad archive" for a single file.
+                guard entry.isDirectory == nil else { throw BackendError.api(message: message) }
             }
         }
-        guard let url = entry.singleFileURL else { throw BackendError.invalidResponse }
-        return [url]
+        if let url = entry.singleFileURL {
+            return [OffcloudFile(url: url.absoluteString, path: nil, folder: nil, filename: entry.fileName, size: nil)]
+        }
+        // A finished torrent is cached, so Offcloud hands out its links without a server name.
+        guard let hash = entry.infoHash else { throw BackendError.invalidResponse }
+        return try await decode(
+            [OffcloudFile].self,
+            from: jsonRequest("cache/download", body: ["url": "magnet:?xt=urn:btih:\(hash)"])
+        )
+    }
+
+    /// Paths without the download's own root folder (when every file sits in it), like the other services.
+    static func libraryFiles(_ files: [OffcloudFile]) -> [LibraryFile] {
+        let paths = files.map { file in
+            (file.relativePath ?? URL(string: file.url)?.lastPathComponent ?? file.url).split(separator: "/").map(String.init)
+        }
+        let roots = Set(paths.compactMap { $0.count > 1 ? $0[0] : nil })
+        let dropRoot = roots.count == 1 && paths.allSatisfy { $0.count > 1 }
+        return zip(files, paths).enumerated().map { index, pair in
+            let components = dropRoot ? Array(pair.1.dropFirst()) : pair.1
+            return LibraryFile(id: String(index), name: components.joined(separator: "/"), size: pair.0.size)
+        }
     }
 
     static func notAvailableMessage(_ reason: String) -> String {
@@ -132,13 +164,27 @@ public struct OffcloudBackend: LibraryBackend {
         }
     }
 
-    private func jsonRequest(_ path: String, body: [String: String]) -> URLRequest {
+    private func fileRequest(_ data: Data, filename: String, mimeType: String) -> URLRequest {
+        var form = MultipartFormData()
+        form.addFile("file", filename: filename, mimeType: mimeType, data: data)
+        return request("cloud", method: "POST", body: form.finalized(), contentType: form.contentType)
+    }
+
+    fileprivate func jsonRequest(_ path: String, body: [String: Any]) -> URLRequest {
         let data = try? JSONSerialization.data(withJSONObject: body)
         return request(path, method: "POST", body: data, contentType: "application/json")
     }
 
-    fileprivate func request(_ path: String, method: String = "GET", body: Data? = nil, contentType: String? = nil) -> URLRequest {
-        var request = URLRequest(url: baseURL.appending(path: path))
+    fileprivate func request(
+        _ path: String,
+        method: String = "GET",
+        query: [URLQueryItem] = [],
+        body: Data? = nil,
+        contentType: String? = nil
+    ) -> URLRequest {
+        var url = baseURL.appending(path: path)
+        if !query.isEmpty { url.append(queryItems: query) }
+        var request = URLRequest(url: url)
         request.httpMethod = method
         request.httpBody = body
         request.timeoutInterval = 30
@@ -185,16 +231,14 @@ public struct OffcloudBackend: LibraryBackend {
 }
 
 extension OffcloudBackend: CacheChecking {
-    /// `POST /cache` with `{"hashes": [...]}` answers `{"cachedItems": [...]}` — hits only. Adds nothing.
+    /// `POST /cache/info` with `{"urls": [magnet…]}` answers `[{"cached": Bool}]` in the same order. Adds nothing.
     public func cachedHashes(_ hashes: [String]) async throws -> Set<String> {
         var cached = Set<String>()
-        for chunk in BackendID.chunks(hashes.map { $0.lowercased() }, of: 1000) {
-            let body = try JSONSerialization.data(withJSONObject: ["hashes": chunk])
-            let response = try await decode(
-                OffcloudCacheResponse.self,
-                from: request("cache", method: "POST", body: body, contentType: "application/json")
-            )
-            cached.formUnion((response.cachedItems ?? []).map { $0.lowercased() })
+        for chunk in BackendID.chunks(hashes.map { $0.lowercased() }, of: 100) {
+            let magnets = chunk.map { "magnet:?xt=urn:btih:\($0)" }
+            let answers = try await decode([OffcloudCacheInfo].self, from: jsonRequest("cache/info", body: ["urls": magnets]))
+            guard answers.count == chunk.count else { throw BackendError.invalidResponse }
+            for (hash, answer) in zip(chunk, answers) where answer.cached == true { cached.insert(hash) }
         }
         return cached
     }

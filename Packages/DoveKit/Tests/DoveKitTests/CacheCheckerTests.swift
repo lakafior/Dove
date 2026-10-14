@@ -29,23 +29,33 @@ struct CacheCheckerTests {
 
     @Test func offcloudPostsHashesAndReadsHitsOnly() async throws {
         let transport = MockTransport()
-        await transport.stub("/cache", json: #"{"cachedItems":["\#(hashB)"]}"#)
+        await transport.stub("cache/info", json: #"[{"cached":false},{"cached":true}]"#)
         let offcloud = OffcloudBackend(apiKey: "k", transport: transport)
 
-        let cached = try await offcloud.cachedHashes([hashA, hashB])
+        let cached = try await offcloud.cachedHashes([hashA, hashB.uppercased()])
 
+        // Answers come back in the order of the URLs sent.
         #expect(cached == [hashB])
         let sent = try #require(await transport.requests.last)
         #expect(sent.httpMethod == "POST")
+        #expect(sent.url?.path.hasSuffix("/api/cache/info") == true)
         let body = try JSONSerialization.jsonObject(with: sent.httpBody ?? Data()) as? [String: [String]]
-        #expect(body?["hashes"] == [hashA, hashB])
+        #expect(body?["urls"] == ["magnet:?xt=urn:btih:\(hashA)", "magnet:?xt=urn:btih:\(hashB)"])
+    }
+
+    @Test func offcloudShortAnswerIsInvalid() async {
+        let transport = MockTransport()
+        await transport.stub("cache/info", json: #"[{"cached":true}]"#)
+        await #expect(throws: BackendError.invalidResponse) {
+            try await OffcloudBackend(apiKey: "k", transport: transport).cachedHashes([hashA, hashB])
+        }
     }
 
     @Test func annotateMarksCachedAndKnownMisses() async throws {
         let torBoxTransport = MockTransport()
         await torBoxTransport.stub("torrents/checkcached", json: #"{"success":true,"data":[{"hash":"\#(hashA)"}]}"#)
         let offcloudTransport = MockTransport()
-        await offcloudTransport.stub("/cache", status: 500, json: #"{"error":"down"}"#)
+        await offcloudTransport.stub("cache/info", status: 500, json: #"{"error":"down"}"#)
         let groups = StreamGroup.group([
             StreamCandidate(id: "1", kind: .p2p, title: "A.S01E01.1080p", infoHash: hashA),
             StreamCandidate(id: "2", kind: .p2p, title: "B.S01E01.1080p", infoHash: hashB, service: "realdebrid", cached: true),

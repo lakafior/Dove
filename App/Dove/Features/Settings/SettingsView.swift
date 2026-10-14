@@ -37,11 +37,18 @@ struct SettingsView: View {
                         SettingsRow("nzbdav", symbol: BackendID.nzbdav.settingsSymbol, color: BackendID.nzbdav.settingsColor,
                                     value: serviceValue(.nzbdav), light: serviceLight(.nzbdav))
                     }
-                    TorBoxUsenetToggle()
+                    DebridUsenetToggle(backend: .torBox, key: .torBoxUsenet)
+                    DebridUsenetToggle(backend: .offcloud, key: .offcloudUsenet)
+                    NavigationLink {
+                        UsenetPriorityView()
+                    } label: {
+                        SettingsRow("Priority", symbol: "arrow.up.arrow.down", color: .gray,
+                                    value: model.nzbBackends.map(\.id.displayName).joined(separator: " → "))
+                    }
                 } header: {
                     Text("Usenet")
                 } footer: {
-                    Text("NZBs go to nzbdav first, then to TorBox if your TorBox plan includes Usenet.")
+                    Text("NZBs go to the first service in Priority. If it fails, Dove tries the next one. TorBox needs a plan with Usenet.")
                 }
 
                 Section {

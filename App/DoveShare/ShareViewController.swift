@@ -43,7 +43,8 @@ final class ShareModel {
         let keychain = SharedConfiguration.keychain()
         router = BackendRouter(
             backends: SharedConfiguration.backends(from: keychain),
-            order: SharedConfiguration.debridOrder(from: keychain)
+            order: SharedConfiguration.debridOrder(from: keychain),
+            usenetOrder: SharedConfiguration.usenetOrder(from: keychain)
         )
         self.close = close
     }

@@ -253,7 +253,7 @@ extension SearchView {
             }
         } footer: {
             if otherResults.contains(where: { !canAdd($0) }) {
-                Text("NZBs need nzbdav or TorBox Usenet, torrents a debrid service: set them up in Settings.")
+                Text("NZBs need nzbdav, TorBox or Offcloud Usenet, torrents a debrid service: set them up in Settings.")
             }
         }
     }
@@ -296,7 +296,7 @@ extension SearchView {
         group.kind == .usenet ? model.usenetBackend != nil : !model.backends(usenet: false).isEmpty
     }
 
-    /// Adds through the priority order (NZBs: nzbdav, then TorBox Usenet; torrents: services that have it
+    /// Adds through the priority order (NZBs: the Usenet priority; torrents: services that have it
     /// cached first, then the debrid order); "Download only" fetches every file.
     func addOther(_ group: StreamGroup) {
         guard let source = group.librarySource else { return }

@@ -1,23 +1,27 @@
 import Foundation
 
 /// Picks the backend for a source. The source type decides the family
-/// (torrent/hoster go to debrid, NZB goes to nzbdav); the user's priority order decides within it.
+/// (torrent/hoster go to debrid, NZB goes to nzbdav and debrids with Usenet); the user's priority order decides within it.
 public struct BackendRouter: Sendable {
     public var backends: [any LibraryBackend]
     /// Highest priority first. Backends missing from the list keep their relative order after the listed ones.
     public var order: [BackendID]
+    /// Priority for NZBs (Settings › Usenet › Priority). Empty: nzbdav first, then `order`.
+    public var usenetOrder: [BackendID]
 
-    public init(backends: [any LibraryBackend], order: [BackendID] = []) {
+    public init(backends: [any LibraryBackend], order: [BackendID] = [], usenetOrder: [BackendID] = []) {
         self.backends = backends
         self.order = order
+        self.usenetOrder = usenetOrder
     }
 
-    /// Compatible backends, in priority order. NZBs go to Usenet backends (nzbdav) before debrids that also
-    /// take them (TorBox with a Usenet plan).
+    /// Compatible backends, in priority order. NZBs follow `usenetOrder`; without one they go to Usenet
+    /// backends (nzbdav) before debrids that also take them (TorBox/Offcloud with Usenet on).
     public func candidates(for source: Source) -> [any LibraryBackend] {
         let compatible = backends.filter { $0.supports(source) }
+        let order = source.kind == .nzb && !usenetOrder.isEmpty ? usenetOrder : self.order
         let rank = { (id: BackendID) in order.firstIndex(of: id) ?? order.count }
-        let family = { (id: BackendID) in source.kind == .nzb && id.isUsenet ? 0 : 1 }
+        let family = { (id: BackendID) in source.kind == .nzb && usenetOrder.isEmpty && id.isUsenet ? 0 : 1 }
         return compatible.enumerated()
             .sorted { (family($0.element.id), rank($0.element.id), $0.offset) < (family($1.element.id), rank($1.element.id), $1.offset) }
             .map(\.element)

@@ -22,12 +22,25 @@
     "fileName": "Loading...",
     "status": "created",
     "originalLink": "magnet:?xt=urn:btih:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-    "createdOn": "2026-10-08T12:00:00.000Z"
+    "createdOn": "2026-10-08T12:00:00.000Z",
+    "progress": 0.42,
+    "message": "Downloading..."
   },
   {
     "requestId": "66f1a2b3c4d5e6f7a8b9c0d4",
     "fileName": "Broken.Torrent",
     "status": "error",
-    "createdOn": "2026-09-30T12:00:00.000Z"
+    "createdOn": "2026-09-30T12:00:00.000Z",
+    "message": "Not enough seeders",
+    "progress": null
+  },
+  {
+    "requestId": "66f1a2b3c4d5e6f7a8b9c0d5",
+    "fileName": "Another Movie (2025).mkv",
+    "status": "downloaded",
+    "progress": null,
+    "message": null,
+    "originalLink": "cccccccccccccccccccccccccccccccccccccccc.torrent",
+    "createdOn": "2026-10-12T09:00:00.000Z"
   }
 ]

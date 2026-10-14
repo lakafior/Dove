@@ -198,6 +198,7 @@ struct NewznabTests {
         let torbox = NewznabSearch.Results(candidates: [a], failures: []).routed(to: .torBox).candidates[0]
         #expect(torbox.service == "torbox")
         #expect(torbox.cached == nil)
+        #expect(NewznabSearch.Results(candidates: [a], failures: []).routed(to: .offcloud).candidates[0].service == "offcloud")
         #expect(NewznabSearch.Results(candidates: [a], failures: []).routed(to: nil).candidates[0].service == nil)
     }
 }

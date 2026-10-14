@@ -21,8 +21,12 @@ public enum CredentialKey: String, Sendable, CaseIterable {
     /// JSON array of `BackendID` raw values, highest priority first. Not a secret: it lives here because the
     /// Keychain is the one store the share extension shares with the app without an App Group.
     case debridOrder
+    /// JSON array of `BackendID` raw values: where NZBs go, highest priority first (nzbdav, TorBox, Offcloud).
+    case usenetOrder
     /// "1" when the TorBox plan includes Usenet. Not a secret; shared with the extension like `debridOrder`.
     case torBoxUsenet
+    /// "1" when NZBs may go to Offcloud. Not a secret, like `torBoxUsenet`.
+    case offcloudUsenet
     /// JSON array of `NewznabIndexer` (they carry API keys).
     case newznabIndexers
     /// JSON of `SyncedPreferences`: settings that are not secrets, kept here so iCloud Keychain carries them too.
@@ -151,7 +155,7 @@ public enum SharedConfiguration {
             list.append(TorBoxBackend(apiKey: key, usenet: (try? keychain.get(.torBoxUsenet)) == "1"))
         }
         if let key = try? keychain.get(.offcloudAPIKey), !key.isEmpty {
-            list.append(OffcloudBackend(apiKey: key))
+            list.append(OffcloudBackend(apiKey: key, usenet: (try? keychain.get(.offcloudUsenet)) == "1"))
         }
         if let nzbdav = nzbdav(from: keychain) {
             list.append(nzbdav)
@@ -178,14 +182,36 @@ public enum SharedConfiguration {
 
     /// The user's debrid priority; services missing from the stored list are appended in default order.
     public static func debridOrder(from keychain: KeychainStore) -> [BackendID] {
-        let stored = (try? keychain.get(.debridOrder))
-            .flatMap { try? JSONDecoder().decode([String].self, from: Data($0.utf8)) }?
-            .compactMap(BackendID.init(rawValue:)) ?? []
+        let stored = stored(.debridOrder, in: keychain)
         return stored.filter(debrids.contains) + debrids.filter { !stored.contains($0) }
     }
 
     public static func saveDebridOrder(_ order: [BackendID], to keychain: KeychainStore) {
+        save(order, as: .debridOrder, to: keychain)
+    }
+
+    /// Services that can take NZBs (TorBox and Offcloud only with their Usenet toggle on).
+    public static let usenetServices: [BackendID] = [.nzbdav, .torBox, .offcloud]
+
+    /// The user's NZB priority. Until it is set: nzbdav, then the debrids in their own order.
+    public static func usenetOrder(from keychain: KeychainStore) -> [BackendID] {
+        let fallback = [.nzbdav] + debridOrder(from: keychain).filter(usenetServices.contains)
+        let stored = stored(.usenetOrder, in: keychain).filter(usenetServices.contains)
+        return stored + fallback.filter { !stored.contains($0) }
+    }
+
+    public static func saveUsenetOrder(_ order: [BackendID], to keychain: KeychainStore) {
+        save(order, as: .usenetOrder, to: keychain)
+    }
+
+    private static func stored(_ key: CredentialKey, in keychain: KeychainStore) -> [BackendID] {
+        (try? keychain.get(key))
+            .flatMap { try? JSONDecoder().decode([String].self, from: Data($0.utf8)) }?
+            .compactMap(BackendID.init(rawValue:)) ?? []
+    }
+
+    private static func save(_ order: [BackendID], as key: CredentialKey, to keychain: KeychainStore) {
         guard let data = try? JSONEncoder().encode(order.map(\.rawValue)) else { return }
-        try? keychain.set(String(decoding: data, as: UTF8.self), for: .debridOrder)
+        try? keychain.set(String(decoding: data, as: UTF8.self), for: key)
     }
 }

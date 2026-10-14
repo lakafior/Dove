@@ -106,23 +106,25 @@ struct NzbdavSettingsView: View {
     }
 }
 
-/// "My TorBox plan includes Usenet": NZBs may go to TorBox (after nzbdav).
-struct TorBoxUsenetToggle: View {
+/// "NZBs may go to this debrid" (TorBox with a Usenet plan, Offcloud): after nzbdav, in the priority order.
+struct DebridUsenetToggle: View {
+    let backend: BackendID
+    let key: CredentialKey
     @Environment(AppModel.self) private var model
     @State private var isOn = false
 
     var body: some View {
         Toggle(isOn: $isOn) {
             Label {
-                Text("TorBox Usenet")
+                Text("\(backend.displayName) Usenet")
             } icon: {
-                SettingsIcon(symbol: "newspaper.fill", color: BackendID.torBox.settingsColor)
+                SettingsIcon(symbol: "newspaper.fill", color: backend.settingsColor)
             }
         }
-            .disabled(!model.isConfigured(.torBox))
-            .onAppear { isOn = (try? model.keychain.get(.torBoxUsenet)) == "1" }
+            .disabled(!model.isConfigured(backend))
+            .onAppear { isOn = (try? model.keychain.get(key)) == "1" }
             .onChange(of: isOn) {
-                try? model.keychain.set(isOn ? "1" : "", for: .torBoxUsenet)
+                try? model.keychain.set(isOn ? "1" : "", for: key)
                 model.reloadBackends()
             }
     }
@@ -246,7 +248,7 @@ private struct NewznabIndexerEditor: View {
                 SecureField("API key", text: $apiKey)
             } footer: {
                 Text(kind == .newznab
-                    ? "The indexer's address (a full …/api link works too) and your API key from its profile page. Results are NZBs for nzbdav or TorBox Usenet."
+                    ? "The indexer's address (a full …/api link works too) and your API key from its profile page. Results are NZBs for nzbdav, TorBox or Offcloud Usenet."
                     : "The Torznab feed from Jackett (…/torznab) or Prowlarr (…/<id>/api) and its API key. Results are torrents for your debrid services; Dove fetches .torrent links on the phone, so a local address works.")
             }
             Section {

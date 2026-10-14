@@ -40,6 +40,42 @@ struct OffcloudBackendTests {
         #expect(OffcloudMagnet.hasValidInfoHash("magnet:?xt=urn:btih:DIDXQ5VK5K7HSPBB57ZZ35DUNUXXHG32"))
     }
 
+    @Test func nzbLinkIsPostedLikeAnyURLWhenUsenetIsOn() async throws {
+        let transport = MockTransport()
+        let backend = OffcloudBackend(apiKey: "test-key", usenet: true, transport: transport)
+        await transport.stub("/cloud", json: #"{"requestId":"nzb1","fileName":"Some.Movie.2023.nzb","status":"created"}"#)
+
+        #expect(backend.supportedSources.contains(.nzb))
+        let id = try await backend.add(.nzbURL(URL(string: "https://indexer.example/getnzb/1.nzb")!))
+
+        #expect(id == "cloud:nzb1")
+        let sent = try #require(await transport.requests.last)
+        #expect(jsonBody(sent)["url"] == "https://indexer.example/getnzb/1.nzb")
+    }
+
+    @Test func nzbFileIsUploadedAsMultipart() async throws {
+        let transport = MockTransport()
+        let backend = OffcloudBackend(apiKey: "test-key", usenet: true, transport: transport)
+        await transport.stub("/cloud", json: #"{"requestId":"nzb2","status":"created"}"#)
+
+        _ = try await backend.add(.nzbFile(data: Data("<nzb/>".utf8), filename: "Some.Movie.2023.nzb"))
+
+        let sent = try #require(await transport.requests.last)
+        #expect(sent.value(forHTTPHeaderField: "Content-Type")?.hasPrefix("multipart/form-data") == true)
+        let body = String(decoding: sent.httpBody ?? Data(), as: UTF8.self)
+        #expect(body.contains(#"name="file"; filename="Some.Movie.2023.nzb""#))
+        #expect(body.contains("application/x-nzb"))
+    }
+
+    @Test func nzbIsRefusedWithUsenetOff() async {
+        let (backend, transport) = makeBackend()
+        #expect(!backend.supportedSources.contains(.nzb))
+        await #expect(throws: BackendError.unsupportedSource(.nzb)) {
+            try await backend.add(.nzbURL(URL(string: "https://indexer.example/1.nzb")!))
+        }
+        #expect(await transport.requests.isEmpty)
+    }
+
     @Test func notAvailableBecomesReadableError() async {
         let (backend, transport) = makeBackend()
         await transport.stub("/cloud", json: #"{"not_available":"cloud"}"#)
@@ -78,25 +114,61 @@ struct OffcloudBackendTests {
 
         let items = try await backend.items()
 
-        #expect(items.map(\.status) == [.ready, .ready, .queued, .failed(reason: "error")])
+        #expect(items.map(\.status) == [
+            .ready, .ready, .downloading(progress: 0.42), .failed(reason: "Not enough seeders"), .ready
+        ])
         #expect(items[0].id == "cloud:66f1a2b3c4d5e6f7a8b9c0d1")
-        // The hash comes from the magnet the request was made with; hoster links have none.
-        #expect(items.map(\.infoHash) == [String(repeating: "a", count: 40), nil, String(repeating: "b", count: 40), nil])
+        // The hash comes from the magnet, or from the `<hash>.torrent` name Offcloud now stores; hoster links have none.
+        #expect(items.map(\.infoHash) == [
+            String(repeating: "a", count: 40), nil, String(repeating: "b", count: 40), nil, String(repeating: "c", count: 40)
+        ])
     }
 
-    @Test func folderFilesComeFromExplore() async throws {
+    @Test func folderFilesComeFromDetailedExplore() async throws {
         let (backend, transport) = makeBackend()
         await transport.stub("cloud/history", body: try Fixture.data("offcloud_history"))
         await transport.stub("cloud/explore/66f1a2b3c4d5e6f7a8b9c0d1", json: """
-            ["https://fr-3.offcloud.com/cloud/download/x/Some.Show.S02E01.mkv?sig=1",
-             "https://fr-3.offcloud.com/cloud/download/x/Some%20Show%20S02E02.mkv?sig=2"]
+            {"files":[
+              {"id":"1","name":"S02E01.mkv","size":1500000000,"path":"Some.Show.S02/Season 2/Some.Show.S02E01.mkv",
+               "url":"https://fr-3.offcloud.com/cloud/download/x/1/Some.Show.S02E01.mkv"},
+              {"id":"2","name":"x","size":1400000000,"path":"Some.Show.S02/Some Show S02E02.mkv",
+               "url":"https://fr-3.offcloud.com/cloud/download/x/2/Some%20Show%20S02E02.mkv"}
+            ]}
             """)
 
         let item = try await backend.item("cloud:66f1a2b3c4d5e6f7a8b9c0d1")
-        #expect(item.files.map(\.name) == ["Some.Show.S02E01.mkv", "Some Show S02E02.mkv"])
+        // The shared root folder goes; subfolders stay.
+        #expect(item.files.map(\.name) == ["Season 2/Some.Show.S02E01.mkv", "Some Show S02E02.mkv"])
+        #expect(item.files.map(\.size) == [1_500_000_000, 1_400_000_000])
+        let explore = try #require(await transport.requests.last)
+        #expect(explore.url?.query() == "format=detailed")
 
         let request = try await backend.downloadRequest(itemID: item.id, fileID: "1")
-        #expect(request.url?.absoluteString == "https://fr-3.offcloud.com/cloud/download/x/Some%20Show%20S02E02.mkv?sig=2")
+        #expect(request.url?.absoluteString == "https://fr-3.offcloud.com/cloud/download/x/2/Some%20Show%20S02E02.mkv")
+    }
+
+    @Test func singleFileWithoutServerComesFromCacheDownload() async throws {
+        let (backend, transport) = makeBackend()
+        await transport.stub("cloud/history", body: try Fixture.data("offcloud_history"))
+        await transport.stub("cloud/explore/66f1a2b3c4d5e6f7a8b9c0d5", status: 400, json: #"{"error":"Bad archive"}"#)
+        await transport.stub("cache/download", json: """
+            [{"folder":[],"filename":"Another Movie (2025).mkv","size":4000000000,"url":"https://cdn.offcloud.com/download/m"}]
+            """)
+
+        let item = try await backend.item("cloud:66f1a2b3c4d5e6f7a8b9c0d5")
+
+        #expect(item.files == [LibraryFile(id: "0", name: "Another Movie (2025).mkv", size: 4_000_000_000)])
+        let sent = try #require(await transport.requests.last)
+        let body = try JSONSerialization.jsonObject(with: sent.httpBody ?? Data()) as? [String: String]
+        #expect(body?["url"] == "magnet:?xt=urn:btih:\(String(repeating: "c", count: 40))")
+    }
+
+    @Test func filesOutsideOneRootKeepTheirPaths() {
+        let files = OffcloudBackend.libraryFiles([
+            OffcloudFile(url: "https://x/1", path: "A/a.mkv", folder: nil, filename: nil, size: nil),
+            OffcloudFile(url: "https://x/2", path: "b.srt", folder: nil, filename: nil, size: nil)
+        ])
+        #expect(files.map(\.name) == ["A/a.mkv", "b.srt"])
     }
 
     @Test func singleFileUsesTheServerDownloadURL() async throws {
@@ -109,13 +181,25 @@ struct OffcloudBackendTests {
         #expect(await transport.requests.count == 1)
     }
 
-    @Test func deleteCallsRemove() async throws {
+    @Test func deletePostsTheRequestID() async throws {
         let (backend, transport) = makeBackend()
-        await transport.stub("cloud/remove/abc123", json: #"{"success":true}"#)
+        await transport.stub("cloud/remove", json: #"{"success":true}"#)
 
         try await backend.delete("cloud:abc123")
 
-        #expect(await transport.requests.last?.httpMethod == "GET")
+        let sent = try #require(await transport.requests.last)
+        #expect(sent.httpMethod == "POST")
+        #expect(sent.url?.path.hasSuffix("/api/cloud/remove") == true)
+        let body = try JSONSerialization.jsonObject(with: sent.httpBody ?? Data()) as? [String: [String]]
+        #expect(body?["requests"] == ["abc123"])
+    }
+
+    @Test func refusedDeleteIsAnError() async {
+        let (backend, transport) = makeBackend()
+        await transport.stub("cloud/remove", json: #"{"success":false}"#)
+        await #expect(throws: BackendError.api(message: "Offcloud did not remove this download.")) {
+            try await backend.delete("cloud:abc123")
+        }
     }
 
     @Test func itemRefRoundTrips() {

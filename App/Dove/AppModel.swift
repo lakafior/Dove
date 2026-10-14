@@ -47,9 +47,15 @@ final class AppModel {
     }
 
     /// Debrid priority, highest first. "Automatic" adds try them in this order and fall through on any error.
-    /// NZBs always go to nzbdav. Not a secret; in the Keychain so the share extension and iCloud Keychain see it.
+    /// NZBs follow `usenetOrder`. Not a secret; in the Keychain so the share extension and iCloud Keychain see it.
     var debridOrder: [BackendID] {
         didSet { SharedConfiguration.saveDebridOrder(debridOrder, to: keychain) }
+    }
+
+    /// NZB priority, highest first: nzbdav, TorBox and Offcloud (the last two only with Usenet on). Stored like
+    /// `debridOrder`.
+    var usenetOrder: [BackendID] {
+        didSet { SharedConfiguration.saveUsenetOrder(usenetOrder, to: keychain) }
     }
 
     /// Where the order lived before the share extension needed it.
@@ -127,6 +133,7 @@ final class AppModel {
             UserDefaults.standard.set(true, forKey: Self.synchronizedKey)
         }
         debridOrder = SharedConfiguration.debridOrder(from: keychain)
+        usenetOrder = SharedConfiguration.usenetOrder(from: keychain)
         if let preferences = SharedConfiguration.preferences(from: keychain) {
             downloadOnly = preferences.downloadOnly
             sourceFilter = preferences.sourceFilter
@@ -209,14 +216,14 @@ final class AppModel {
     }
 
     var router: BackendRouter {
-        BackendRouter(backends: backends, order: debridOrder)
+        BackendRouter(backends: backends, order: debridOrder, usenetOrder: usenetOrder)
     }
 
     /// Same priority list, but services that already have the release cached go first:
     /// adding there is instant and costs nothing.
     func router(preferring cached: [BackendID]) -> BackendRouter {
         let first = debridOrder.filter(cached.contains)
-        return BackendRouter(backends: backends, order: first + debridOrder.filter { !first.contains($0) })
+        return BackendRouter(backends: backends, order: first + debridOrder.filter { !first.contains($0) }, usenetOrder: usenetOrder)
     }
 
     /// Configured backends that can check cache status without adding anything (TorBox, Offcloud).
@@ -228,10 +235,15 @@ final class AppModel {
         backends.first { $0.id == id }
     }
 
-    /// Where NZBs go: nzbdav first, then TorBox with a Usenet plan (the router's order for NZBs).
+    /// Where NZBs go first: the top of `usenetOrder` that takes NZBs (the router's order for NZBs).
     var usenetBackend: BackendID? {
-        let takesNZB = backends.filter { $0.supportedSources.contains(.nzb) }
-        return (takesNZB.first { $0.id.isUsenet } ?? takesNZB.first)?.id
+        nzbBackends.first?.id
+    }
+
+    /// Configured services that take NZBs, in `usenetOrder`.
+    var nzbBackends: [any LibraryBackend] {
+        let rank = { (id: BackendID) in self.usenetOrder.firstIndex(of: id) ?? Int.max }
+        return backends.filter { $0.supportedSources.contains(.nzb) }.sorted { rank($0.id) < rank($1.id) }
     }
 
     func isConfigured(_ id: BackendID) -> Bool {
@@ -246,10 +258,10 @@ final class AppModel {
     }
 
     /// Services "Move to" can send the item to: they take its kind of source and do not hold it already.
-    /// Debrids in priority order; NZBs go to Usenet services (nzbdav, TorBox with a Usenet plan).
+    /// Debrids in priority order; NZBs in the Usenet order (nzbdav, TorBox/Offcloud with Usenet on).
     func moveTargets(for item: LibraryItem) -> [BackendID] {
         guard canReAdd(item), let kind = LibraryActions.sourceKind(of: item) else { return [] }
-        return (backends(usenet: true) + backends(usenet: false))
+        return (kind == .nzb ? nzbBackends : backends(usenet: true) + backends(usenet: false))
             .filter { $0.id != item.backend && $0.supportedSources.contains(kind) }
             .map(\.id)
     }
