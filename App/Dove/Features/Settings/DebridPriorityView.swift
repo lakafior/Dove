@@ -85,7 +85,7 @@ private struct PriorityList<Footer: View>: View {
             } header: {
                 Text("Speed")
             } footer: {
-                Text("Downloads the start of a big file from each service's library (up to 150 MB or 10 seconds) over Wi-Fi, the network your TV uses. Results stay on this iPhone. Ordering by speed is up to you: cached releases still go to the services that have them first.")
+                Text("Downloads the start of a big file from each service's library (up to 150 MB or 10 seconds) over Wi-Fi, the network your TV uses. Results stay on this iPhone. Ordering by speed is up to you. A release cached on some services goes to the first of those in this order; one cached nowhere goes to the first service.")
             }
         }
         .environment(\.editMode, .constant(.active))
