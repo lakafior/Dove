@@ -46,6 +46,8 @@ extension BackendID {
         case .torBox: "torbox"
         case .offcloud: "offcloud"
         case .debridLink: "debridlink"
+        case .premiumize: "premiumize"
+        case .allDebrid: "alldebrid"
         case .nzbdav: "nzbdav"
         }
     }

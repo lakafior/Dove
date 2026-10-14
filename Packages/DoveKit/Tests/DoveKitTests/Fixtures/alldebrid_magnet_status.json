@@ -1,0 +1,10 @@
+{
+ "status": "success",
+ "data": {
+  "magnets": [
+   {"id": 101, "filename": "Show.S01.1080p.WEB", "size": 4000000000, "hash": "0123456789abcdef0123456789abcdef01234567", "status": "Downloading", "statusCode": 1, "downloaded": 1000000000, "uploaded": 0, "seeders": 12, "downloadSpeed": 5000000, "uploadSpeed": 0, "uploadDate": 1791990000, "completionDate": 0},
+   {"id": 102, "filename": "Movie.2024.2160p", "size": 20000000000, "hash": "89abcdef0123456789abcdef0123456789abcdef", "status": "Ready", "statusCode": 4, "downloaded": 20000000000, "uploaded": 0, "seeders": 0, "downloadSpeed": 0, "uploadSpeed": 0, "uploadDate": 1791900000, "completionDate": 1791900100},
+   {"id": 103, "filename": "Dead.Torrent", "size": 1000, "status": "File not available - no peer", "statusCode": 15, "downloaded": 0, "uploadDate": 1791800000}
+  ]
+ }
+}

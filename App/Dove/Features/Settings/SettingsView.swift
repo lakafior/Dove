@@ -10,7 +10,7 @@ struct SettingsView: View {
         NavigationStack {
             Form {
                 Section {
-                    ForEach([BackendID.realDebrid, .torBox, .offcloud, .debridLink], id: \.self) { backend in
+                    ForEach([BackendID.realDebrid, .torBox, .offcloud, .debridLink, .premiumize, .allDebrid], id: \.self) { backend in
                         NavigationLink {
                             DebridKeyView(backend: backend)
                         } label: {
@@ -50,6 +50,7 @@ struct SettingsView: View {
                     }
                     DebridUsenetToggle(backend: .torBox)
                     DebridUsenetToggle(backend: .offcloud)
+                    DebridUsenetToggle(backend: .premiumize)
                     NavigationLink {
                         UsenetPriorityView()
                     } label: {
@@ -214,6 +215,8 @@ extension BackendID {
         case .torBox: "shippingbox.fill"
         case .offcloud: "cloud.fill"
         case .debridLink: "link"
+        case .premiumize: "crown.fill"
+        case .allDebrid: "a.circle.fill"
         case .nzbdav: "server.rack"
         }
     }
@@ -224,6 +227,8 @@ extension BackendID {
         case .torBox: .purple
         case .offcloud: .blue
         case .debridLink: .teal
+        case .premiumize: .red
+        case .allDebrid: .yellow
         case .nzbdav: .orange
         }
     }
@@ -235,6 +240,8 @@ extension BackendID {
         case .torBox: "torbox.app › Settings › API key."
         case .offcloud: "offcloud.com › Account › API key."
         case .debridLink: "debrid-link.com › My account › API key. Debrid-Link seeds, so torrents from private trackers can go here."
+        case .premiumize: "premiumize.me › Account › API key. Every plan includes Usenet."
+        case .allDebrid: "alldebrid.com › Account › API keys (alldebrid.com/apikeys). A new key may need confirming from the e-mail AllDebrid sends."
         case .nzbdav: ""
         }
     }
@@ -254,6 +261,8 @@ private struct DebridKeyView: View {
         case .torBox: .torBoxAPIKey
         case .offcloud: .offcloudAPIKey
         case .debridLink: .debridLinkAPIKey
+        case .premiumize: .premiumizeAPIKey
+        case .allDebrid: .allDebridAPIKey
         case .nzbdav: .nzbdavAPIKey
         }
     }

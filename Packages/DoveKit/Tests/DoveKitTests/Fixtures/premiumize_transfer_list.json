@@ -1,0 +1,9 @@
+{
+ "status": "success",
+ "transfers": [
+  {"id": "t-run", "name": "Show.S01.1080p.WEB", "message": "Downloading 45 MB/s", "status": "running", "progress": 0.42, "src": "magnet:?xt=urn:btih:0123456789ABCDEF0123456789ABCDEF01234567&dn=Show", "folder_id": null, "file_id": null},
+  {"id": "t-done", "name": "Movie.2024.2160p", "message": "", "status": "finished", "progress": 1, "src": "magnet:?xt=urn:btih:89abcdef0123456789abcdef0123456789abcdef", "folder_id": "f-movie", "file_id": null},
+  {"id": "t-one", "name": "single.mkv", "message": "", "status": "finished", "progress": 1, "src": "https://1fichier.com/?abc", "folder_id": null, "file_id": "i-single"},
+  {"id": "t-err", "name": "Broken.Release", "message": "Not enough seeders", "status": "error", "progress": 0, "src": "magnet:?xt=urn:btih:fedcba9876543210fedcba9876543210fedcba98", "folder_id": null, "file_id": null}
+ ]
+}

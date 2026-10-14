@@ -1,0 +1,10 @@
+{
+ "status": "success",
+ "name": "root",
+ "parent_id": "",
+ "folder_id": "root-id",
+ "content": [
+  {"id": "f-movie", "name": "Movie.2024.2160p", "type": "folder", "created_at": 1791900000},
+  {"id": "i-single", "name": "single.mkv", "type": "file", "size": 734003200, "created_at": 1791990000, "mime_type": "video/x-matroska", "link": "https://dl.premiumize.me/x/single.mkv"}
+ ]
+}

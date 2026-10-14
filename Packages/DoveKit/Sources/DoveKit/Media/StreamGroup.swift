@@ -199,6 +199,8 @@ extension BackendID {
         case "torbox", "tb": self = .torBox
         case "offcloud", "oc": self = .offcloud
         case "debridlink", "dl": self = .debridLink
+        case "premiumize", "pm": self = .premiumize
+        case "alldebrid", "ad": self = .allDebrid
         case "nzbdav", "nd": self = .nzbdav
         default: return nil
         }

@@ -273,7 +273,7 @@ extension SearchView {
             }
         } footer: {
             if visibleOtherResults.contains(where: { !canAdd($0) }) {
-                Text("NZBs need nzbdav, TorBox or Offcloud Usenet, torrents a debrid service: set them up in Settings.")
+                Text("NZBs need nzbdav or Usenet on TorBox, Offcloud or Premiumize, torrents a debrid service: set them up in Settings.")
             }
         }
     }

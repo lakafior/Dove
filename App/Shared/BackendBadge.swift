@@ -21,6 +21,8 @@ struct BackendBadge: View {
         case .torBox: "TB"
         case .offcloud: "OC"
         case .debridLink: "DL"
+        case .premiumize: "PM"
+        case .allDebrid: "AD"
         case .nzbdav: "ND"
         }
     }
@@ -31,6 +33,8 @@ struct BackendBadge: View {
         case .torBox: .purple
         case .offcloud: .blue
         case .debridLink: .teal
+        case .premiumize: .red
+        case .allDebrid: .yellow
         case .nzbdav: .orange
         }
     }

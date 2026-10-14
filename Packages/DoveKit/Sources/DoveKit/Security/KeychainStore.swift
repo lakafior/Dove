@@ -7,6 +7,8 @@ public enum CredentialKey: String, Sendable, CaseIterable {
     case realDebridAPIKey
     case offcloudAPIKey
     case debridLinkAPIKey
+    case premiumizeAPIKey
+    case allDebridAPIKey
     case nzbdavURL
     case nzbdavAPIKey
     case nzbdavWebDAVUser
@@ -33,6 +35,8 @@ public enum CredentialKey: String, Sendable, CaseIterable {
     case privateTrackers
     /// "1" when NZBs may go to Offcloud. Not a secret, like `torBoxUsenet`.
     case offcloudUsenet
+    /// "0" when the user turned Premiumize Usenet off; unset is on (every Premiumize plan includes Usenet).
+    case premiumizeUsenet
     /// JSON array of `NewznabIndexer` (they carry API keys).
     case newznabIndexers
     /// JSON of `KodiServer` (it carries the password).
@@ -179,6 +183,12 @@ public enum SharedConfiguration {
         if !debridLinkKey.isEmpty {
             list.append(DebridLinkBackend(apiKey: debridLinkKey, takesPrivateTorrents: privateServices.contains(.debridLink)))
         }
+        if let key = try? keychain.get(.premiumizeAPIKey), !key.isEmpty {
+            list.append(PremiumizeBackend(apiKey: key, usenet: (try? keychain.get(.premiumizeUsenet)) != "0"))
+        }
+        if let key = try? keychain.get(.allDebridAPIKey), !key.isEmpty {
+            list.append(AllDebridBackend(apiKey: key))
+        }
         if let nzbdav = nzbdav(from: keychain) {
             list.append(nzbdav)
         }
@@ -226,8 +236,8 @@ public enum SharedConfiguration {
         save(order, as: .debridOrder, to: keychain)
     }
 
-    /// Services that can take NZBs (TorBox with Usenet on or a Pro plan, Offcloud with its toggle on).
-    public static let usenetServices: [BackendID] = [.nzbdav, .torBox, .offcloud]
+    /// Services that can take NZBs (TorBox with Usenet on or a Pro plan, Offcloud and Premiumize with their toggle on).
+    public static let usenetServices: [BackendID] = [.nzbdav, .torBox, .offcloud, .premiumize]
 
     /// The user's NZB priority. Until it is set: nzbdav, then the debrids in their own order.
     public static func usenetOrder(from keychain: KeychainStore) -> [BackendID] {

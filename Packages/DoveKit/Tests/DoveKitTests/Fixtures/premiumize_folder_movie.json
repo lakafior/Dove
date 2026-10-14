@@ -1,0 +1,10 @@
+{
+ "status": "success",
+ "name": "Movie.2024.2160p",
+ "parent_id": "root-id",
+ "folder_id": "f-movie",
+ "content": [
+  {"id": "i-main", "name": "Movie.2024.2160p.mkv", "type": "file", "size": 20000000000, "created_at": 1791900000, "link": "https://dl.premiumize.me/x/main.mkv"},
+  {"id": "f-subs", "name": "Subs", "type": "folder", "created_at": 1791900000}
+ ]
+}

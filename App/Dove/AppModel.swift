@@ -324,6 +324,7 @@ final class AppModel {
         switch id {
         case .torBox: try? keychain.set(enabled ? "1" : "0", for: .torBoxUsenet)
         case .offcloud: try? keychain.set(enabled ? "1" : nil, for: .offcloudUsenet)
+        case .premiumize: try? keychain.set(enabled ? nil : "0", for: .premiumizeUsenet)
         default: return
         }
         reloadBackends()

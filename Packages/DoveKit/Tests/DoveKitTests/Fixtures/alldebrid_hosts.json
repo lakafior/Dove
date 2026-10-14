@@ -1,0 +1,61 @@
+{
+ "status": "success",
+ "data": {
+  "hosts": {
+   "1fichier": {
+    "name": "1fichier",
+    "type": "premium",
+    "domains": [
+     "1fichier.com",
+     "megadl.fr",
+     "alterupload.com",
+     "cjoint.net",
+     "desfichiers.com",
+     "dfichiers.com",
+     "mesfichiers.org",
+     "piecejointe.net",
+     "pjointe.com",
+     "tenvoi.com",
+     "dl4free.com"
+    ],
+    "regexps": [
+     "((1fichier\\.com|megadl\\.fr|alterupload\\.com|cjoint\\.net|desfichiers\\.com|dfichiers\\.com|mesfichiers\\.org|piecejointe\\.net|pjointe\\.com|tenvoi\\.com|dl4free\\.com)/\\?[a-zA-Z0-9]{5,30}(&pw=[^&]+)?)"
+    ],
+    "regexp": "((1fichier\\.com|megadl\\.fr|alterupload\\.com|cjoint\\.net|desfichiers\\.com|dfichiers\\.com|mesfichiers\\.org|piecejointe\\.net|pjointe\\.com|tenvoi\\.com|dl4free\\.com)/\\?[a-zA-Z0-9]{5,30}(&pw=[^&]+)?)",
+    "status": true
+   },
+   "rapidgator": {
+    "name": "rapidgator",
+    "type": "premium",
+    "domains": [
+     "rapidgator.net",
+     "rg.to",
+     "rapidgator.asia"
+    ],
+    "regexps": [
+     "(rapidgator\\.net|rg\\.to|rapidgator\\.asia)/file/([0-9a-zA-Z]{32})",
+     "(rapidgator\\.net/file/[0-9]{7,8})"
+    ],
+    "regexp": "((rapidgator\\.net|rg\\.to|rapidgator\\.asia)/file/([0-9a-zA-Z]{32}))|((rapidgator\\.net/file/[0-9]{7,8}))",
+    "status": true
+   },
+   "mega": {
+    "name": "mega",
+    "type": "premium",
+    "domains": [
+     "mega.co.nz",
+     "mega.nz"
+    ],
+    "regexps": [
+     "mega\\.nz/(\\?fbclid=[^\\#]+)?\\#N(![a-zA-Z0-9-_/+=]+![a-zA-Z0-9-_/+=%]+)\\#\\#\\#n=([a-zA-Z0-9-_/+=]+)",
+     "(mega\\.co\\.nz/(\\?fbclid=[^\\#]+)?\\#![a-zA-Z0-9-_/+=]+![a-zA-Z0-9-_/+~=%]+(![a-zA-Z0-9-_/+~=%]+)?)",
+     "mega\\.nz/(\\?fbclid=[^\\#]+)?(\\#![a-zA-Z0-9-_/+=]+![a-zA-Z0-9-_/+~=%]+(![a-zA-Z0-9-_/+~=%]+)?)",
+     "mega\\.nz/file/([a-zA-Z0-9-_/+=]+)\\#([a-zA-Z0-9-_/+~=%]+(![a-zA-Z0-9-_/+~=%]+)?)",
+     "(mega\\.nz/folder/([a-zA-Z0-9-_/+=]+)\\#([a-zA-Z0-9-_/+~=%]+/file/([a-zA-Z0-9-_/+~=%]+)))"
+    ],
+    "regexp": "(mega\\.nz/(\\?fbclid=[^\\#]+)?\\#N(![a-zA-Z0-9-_/+=]+![a-zA-Z0-9-_/+=%]+)\\#\\#\\#n=([a-zA-Z0-9-_/+=]+))|((mega\\.co\\.nz/(\\?fbclid=[^\\#]+)?\\#![a-zA-Z0-9-_/+=]+![a-zA-Z0-9-_/+~=%]+(![a-zA-Z0-9-_/+~=%]+)?))|(mega\\.nz/(\\?fbclid=[^\\#]+)?(\\#![a-zA-Z0-9-_/+=]+![a-zA-Z0-9-_/+~=%]+(![a-zA-Z0-9-_/+~=%]+)?))|(mega\\.nz/file/([a-zA-Z0-9-_/+=]+)\\#([a-zA-Z0-9-_/+~=%]+(![a-zA-Z0-9-_/+~=%]+)?))|((mega\\.nz/folder/([a-zA-Z0-9-_/+=]+)\\#([a-zA-Z0-9-_/+~=%]+/file/([a-zA-Z0-9-_/+~=%]+))))",
+    "status": true
+   }
+  }
+ }
+}

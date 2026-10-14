@@ -9,7 +9,7 @@ import Foundation
 public enum TorrentFile {
     /// True when the file's `info` dictionary has `private` set to 1. False for anything unreadable.
     public static func isPrivate(_ data: Data) -> Bool {
-        var reader = BencodeReader(bytes: [UInt8](data))
+        let reader = BencodeReader(bytes: [UInt8](data))
         guard let info = try? reader.value(forKey: "info", inDictionaryAt: 0),
               let flag = try? reader.value(forKey: "private", inDictionaryAt: info)
         else { return false }

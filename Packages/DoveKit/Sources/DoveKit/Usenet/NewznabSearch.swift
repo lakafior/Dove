@@ -26,8 +26,8 @@ public actor NewznabSearch {
                 case .torBox:
                     candidate.service = "torbox"
                     candidate.cached = nil
-                case .offcloud:
-                    candidate.service = "offcloud"
+                case .offcloud, .premiumize:
+                    candidate.service = backend?.serviceName
                     candidate.cached = nil
                 default:
                     candidate.service = nil

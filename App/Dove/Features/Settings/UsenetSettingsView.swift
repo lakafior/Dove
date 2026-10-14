@@ -246,7 +246,7 @@ private struct NewznabIndexerEditor: View {
                 SecureField("API key", text: $apiKey)
             } footer: {
                 Text(kind == .newznab
-                    ? "The indexer's address (a full …/api link works too) and your API key from its profile page. Results are NZBs for nzbdav, TorBox or Offcloud Usenet."
+                    ? "The indexer's address (a full …/api link works too) and your API key from its profile page. Results are NZBs for nzbdav, TorBox, Offcloud or Premiumize Usenet."
                     : "The Torznab feed from Jackett (…/torznab) or Prowlarr (…/<id>/api) and its API key. Results are torrents for your debrid services; Dove fetches .torrent links on the phone, so a local address works.")
             }
             Section {

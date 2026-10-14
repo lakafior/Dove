@@ -1,0 +1,13 @@
+{
+ "status": "success",
+ "data": {
+  "magnets": [
+   {"id": 102, "files": [
+    {"n": "Movie.2024.2160p", "e": [
+     {"n": "Movie.2024.2160p.mkv", "s": 19990000000, "l": "https://alldebrid.com/f/AAA"},
+     {"n": "Subs", "e": [{"n": "en.srt", "s": 50000, "l": "https://alldebrid.com/f/BBB"}]}
+    ]}
+   ]}
+  ]
+ }
+}
