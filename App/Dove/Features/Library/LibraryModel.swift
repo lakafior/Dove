@@ -19,7 +19,14 @@ final class LibraryModel {
     /// Covers for books and audiobooks, keyed by `BookGuess.key`.
     private(set) var bookMatches: [String: BookSummary] = [:]
     private(set) var isLoading = false
+    /// Something to show: the cached list from the last launch, or a finished refresh.
     private(set) var hasLoaded = false
+    /// When the list on screen came from the services (the cache keeps its own date).
+    private(set) var updatedAt: Date?
+    /// Set once the tab has shown the cache and asked the services; later visits only refresh on request.
+    private var hasStarted = false
+    /// The refresh in progress: pull-to-refresh, launch and actions share it instead of racing each other.
+    private var refreshTask: Task<Void, Never>?
     private(set) var isRematching = false
     /// A batch action (delete, reinsert, move) on several items: what it is and how far it got.
     private(set) var batch: (label: String, done: Int, total: Int)?
@@ -28,6 +35,8 @@ final class LibraryModel {
     private let store = MatchStore(fileURL: URL.applicationSupportDirectory.appending(path: "Dove/library-matches.json"))
     private let bookStore = MetadataStore<BookSummary>(fileURL: URL.applicationSupportDirectory.appending(path: "Dove/library-books.json"))
     private let bookMetadata = BookMetadata()
+    /// The last list, shown at once on launch while the services are asked again.
+    private static let cacheURL = URL.applicationSupportDirectory.appending(path: "Dove/library-items.json")
     /// Kinds learned from an item's files once it was opened (Real-Debrid and Offcloud list items without files),
     /// and kinds the user set. In the App Group container: the Files extension hides adult items with them.
     private var kinds: KindOverrides
@@ -44,6 +53,11 @@ final class LibraryModel {
                 try? kinds.save(to: Self.kindsURL)
                 try? FileManager.default.removeItem(at: Self.legacyKindsURL)
             }
+        }
+        if let cache = LibraryCache.load(from: Self.cacheURL) {
+            allItems = cache.items.map(kinds.shelfItem)
+            updatedAt = cache.savedAt
+            hasLoaded = true
         }
     }
 
@@ -112,12 +126,46 @@ final class LibraryModel {
         books.first { $0.id == id }
     }
 
-    func refresh(using app: AppModel) async {
+    /// First visit of the tab: the cached list and its posters right away, then the services behind it.
+    func start(using app: AppModel) async {
+        guard !hasStarted else { return }
+        hasStarted = true
+        matches = await store.all().compactMapValues(\.media)
+        bookMatches = await bookStore.all().compactMapValues(\.media)
+        await refresh(using: app)
+    }
+
+    /// Lists every service again. A refresh already running is joined, not restarted, unless `after` an action
+    /// that changed the library: then that one finishes and a new one starts.
+    ///
+    /// The work runs in its own task: pull-to-refresh cancels its task when the list redraws mid-refresh, which
+    /// used to cancel the requests and show "cancelled" instead of the library.
+    func refresh(using app: AppModel, afterChange: Bool = false) async {
+        if let running = refreshTask {
+            await running.value
+            guard afterChange else { return }
+        }
+        let task = Task { await self.load(using: app) }
+        refreshTask = task
+        await task.value
+        if refreshTask == task { refreshTask = nil }
+    }
+
+    private func load(using app: AppModel) async {
         isLoading = true
         defer { isLoading = false; hasLoaded = true }
         let result = await LibraryLoader.load(app.backends)
-        allItems = result.items.map { kinds.kind(for: $0.id) == nil ? $0 : kinds.shelfItem($0.item) }
+        // A service that did not answer keeps what it had; one without a key anymore loses it.
+        let merged = LibraryCache.merge(
+            fresh: result.items.map(\.item),
+            cached: allItems.map(\.item),
+            failed: result.failed,
+            configured: Set(app.backends.map(\.id))
+        )
+        allItems = merged.map(kinds.shelfItem)
         failures = result.failures
+        if result.failed.count < app.backends.count { updatedAt = .now }
+        try? LibraryCache(items: merged, savedAt: updatedAt ?? .now).save(to: Self.cacheURL)
         FilesLocation.libraryChanged()
         matches = await store.all().compactMapValues(\.media)
         bookMatches = await bookStore.all().compactMapValues(\.media)
@@ -219,7 +267,7 @@ final class LibraryModel {
             batch?.done += 1
         }
         batch = nil
-        await refresh(using: app)
+        await refresh(using: app, afterChange: true)
         failures += errors
     }
 
@@ -254,6 +302,7 @@ final class LibraryModel {
         do {
             try await backend.delete(item.item.id)
             allItems.removeAll { $0.id == item.id }
+            try? LibraryCache(items: allItems.map(\.item), savedAt: updatedAt ?? .now).save(to: Self.cacheURL)
             FilesLocation.libraryChanged()
         } catch {
             failures.append("Could not delete \(item.item.name) from \(item.item.backend.displayName): \(error.localizedDescription)")

@@ -1,33 +1,41 @@
 import DoveKit
 import SwiftUI
 
+/// One row per service or feature, each saying whether it is set up; the fields live one tap deeper, so no
+/// section starts open and every service works the same way.
 struct SettingsView: View {
     @Environment(AppModel.self) private var model
 
     var body: some View {
         NavigationStack {
             Form {
-                Section("Debrid") {
-                    APIKeyRow(backend: .realDebrid, key: .realDebridAPIKey)
-                    APIKeyRow(backend: .torBox, key: .torBoxAPIKey)
-                    APIKeyRow(backend: .offcloud, key: .offcloudAPIKey)
-                }
-
                 Section {
+                    ForEach([BackendID.realDebrid, .torBox, .offcloud], id: \.self) { backend in
+                        NavigationLink {
+                            DebridKeyView(backend: backend)
+                        } label: {
+                            SettingsRow(backend.displayName, symbol: backend.settingsSymbol, color: backend.settingsColor,
+                                        value: model.isConfigured(backend) ? "Connected" : "Not set up")
+                        }
+                    }
                     NavigationLink {
                         DebridPriorityView()
                     } label: {
-                        LabeledContent("Priority", value: priorityOrder.map(\.displayName).joined(separator: " → "))
+                        SettingsRow("Priority", symbol: "arrow.up.arrow.down", color: .gray,
+                                    value: priorityOrder.map(\.displayName).joined(separator: " → "))
                     }
+                } header: {
+                    Text("Debrid")
                 } footer: {
-                    Text("Torrents and links go to the first service. If it fails, Dove tries the next one.")
+                    Text("Torrents and links go to the first service in Priority. If it fails, Dove tries the next one.")
                 }
 
                 Section {
                     NavigationLink {
                         NzbdavSettingsView()
                     } label: {
-                        LabeledContent("nzbdav", value: model.isConfigured(.nzbdav) ? "Connected" : "Not set up")
+                        SettingsRow("nzbdav", symbol: BackendID.nzbdav.settingsSymbol, color: BackendID.nzbdav.settingsColor,
+                                    value: model.isConfigured(.nzbdav) ? "Connected" : "Not set up")
                     }
                     TorBoxUsenetToggle()
                 } header: {
@@ -40,28 +48,43 @@ struct SettingsView: View {
                     NavigationLink {
                         AddonsView()
                     } label: {
-                        LabeledContent("Stremio addons", value: "\(model.addonEntries.count)")
+                        SettingsRow("Stremio addons", symbol: "puzzlepiece.extension.fill", color: .indigo,
+                                    value: "\(model.addonEntries.count)")
                     }
                     NavigationLink {
                         NewznabIndexersView()
                     } label: {
-                        LabeledContent("Indexers", value: "\(model.newznabIndexers.filter(\.enabled).count)")
+                        SettingsRow("Indexers", symbol: "list.bullet.rectangle.fill", color: .teal,
+                                    value: "\(model.newznabIndexers.filter(\.enabled).count)")
+                    }
+                    NavigationLink {
+                        TMDBSettingsView()
+                    } label: {
+                        SettingsRow("TMDB", symbol: "film.stack.fill", color: .cyan,
+                                    value: model.addonSet.tmdb != nil ? "Connected" : "Not set up")
                     }
                 } header: {
-                    Text("Search")
+                    Text("Search and metadata")
                 } footer: {
-                    Text("Sources (and titles, without a TMDB key) come from your Stremio addons. Indexers (Newznab for Usenet, Torznab for torrents) are searched from your phone and add sources, and power Search › Other.")
+                    Text("Addons give sources (and titles, without TMDB). Indexers are searched from your phone and power Search › Other. TMDB gives search, posters and episodes.")
+                }
+
+                Section("This iPhone") {
+                    NavigationLink {
+                        FilesLocationView()
+                    } label: {
+                        SettingsRow("Files app", symbol: "folder.fill", color: .blue)
+                    }
+                    NavigationLink {
+                        StorageView()
+                    } label: {
+                        SettingsRow("Storage", symbol: "internaldrive.fill", color: .gray)
+                    }
                 }
 
                 Section {
-                    TMDBKeyRow()
-                } header: {
-                    Text("Metadata")
-                } footer: {
-                    Text("With a TMDB key, search, posters, seasons and episodes come from TMDB first; your addons answer when TMDB cannot. Get a free key at themoviedb.org › Settings › API (the API key or the read access token).")
+                    LabeledContent("Version", value: Self.version)
                 }
-
-                FilesLocationSection()
             }
             .navigationTitle("Settings")
         }
@@ -72,29 +95,127 @@ struct SettingsView: View {
         let configured = model.debridOrder.filter(model.isConfigured)
         return configured.isEmpty ? model.debridOrder : configured
     }
+
+    private static var version: String {
+        let info = Bundle.main.infoDictionary
+        let short = info?["CFBundleShortVersionString"] as? String ?? "?"
+        let build = info?["CFBundleVersion"] as? String ?? "?"
+        return "\(short) (\(build))"
+    }
 }
 
-/// API key field for one service: saves to the Keychain and tests the connection.
-private struct APIKeyRow: View {
-    @Environment(AppModel.self) private var model
-    let backend: BackendID
-    let key: CredentialKey
-    @State private var value = ""
-    @State private var status: String?
+/// A Settings-style row: a coloured icon, the name, and its state on the right.
+struct SettingsRow: View {
+    let title: String
+    let symbol: String
+    let color: Color
+    var value: String?
+
+    init(_ title: String, symbol: String, color: Color, value: String? = nil) {
+        self.title = title
+        self.symbol = symbol
+        self.color = color
+        self.value = value
+    }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            SecureField("\(backend.displayName) API key", text: $value)
-                .textInputAutocapitalization(.never)
-                .autocorrectionDisabled()
-                .onSubmit(saveAndTest)
-            Button("Save and test connection", action: saveAndTest)
-                .font(.callout)
-            if let status { Text(status).font(.footnote) }
+        LabeledContent {
+            if let value { Text(value).lineLimit(1) }
+        } label: {
+            Label {
+                Text(title)
+            } icon: {
+                Image(systemName: symbol)
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(.white)
+                    .frame(width: 28, height: 28)
+                    .background(color.gradient, in: RoundedRectangle(cornerRadius: 7))
+            }
         }
-        .onAppear {
-            value = (try? model.keychain.get(key)) ?? ""
+    }
+}
+
+extension BackendID {
+    var settingsSymbol: String {
+        switch self {
+        case .realDebrid: "bolt.fill"
+        case .torBox: "shippingbox.fill"
+        case .offcloud: "cloud.fill"
+        case .nzbdav: "server.rack"
         }
+    }
+
+    var settingsColor: Color {
+        switch self {
+        case .realDebrid: .green
+        case .torBox: .purple
+        case .offcloud: .blue
+        case .nzbdav: .orange
+        }
+    }
+
+    /// Where the user finds the key.
+    var keyHelp: String {
+        switch self {
+        case .realDebrid: "real-debrid.com › My account › API token (real-debrid.com/apitoken)."
+        case .torBox: "torbox.app › Settings › API key."
+        case .offcloud: "offcloud.com › Account › API key."
+        case .nzbdav: ""
+        }
+    }
+}
+
+/// One debrid service: its key, saved to the Keychain and tested.
+private struct DebridKeyView: View {
+    @Environment(AppModel.self) private var model
+    let backend: BackendID
+    @State private var value = ""
+    @State private var status: String?
+    @State private var isTesting = false
+
+    private var key: CredentialKey {
+        switch backend {
+        case .realDebrid: .realDebridAPIKey
+        case .torBox: .torBoxAPIKey
+        case .offcloud: .offcloudAPIKey
+        case .nzbdav: .nzbdavAPIKey
+        }
+    }
+
+    var body: some View {
+        Form {
+            Section {
+                SecureField("API key", text: $value)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                    .onSubmit(saveAndTest)
+            } header: {
+                Text("API key")
+            } footer: {
+                Text(backend.keyHelp)
+            }
+            Section {
+                Button(action: saveAndTest) {
+                    HStack {
+                        Text("Save and test connection")
+                        if isTesting { Spacer(); ProgressView() }
+                    }
+                }
+                .disabled(isTesting)
+                if let status { Text(status).font(.footnote) }
+            }
+            if model.isConfigured(backend) {
+                Section {
+                    Button("Remove key", role: .destructive) {
+                        value = ""
+                        saveAndTest()
+                    }
+                }
+            }
+        }
+        .navigationTitle(backend.displayName)
+        .navigationBarTitleDisplayMode(.inline)
+        .onAppear { value = (try? model.keychain.get(key)) ?? "" }
     }
 
     private func saveAndTest() {
@@ -109,7 +230,8 @@ private struct APIKeyRow: View {
             status = "Key removed."
             return
         }
-        status = "Testing…"
+        status = nil
+        isTesting = true
         Task {
             do {
                 try await service.validateCredentials()
@@ -117,34 +239,51 @@ private struct APIKeyRow: View {
             } catch {
                 status = "❌ \(error.localizedDescription)"
             }
+            isTesting = false
         }
     }
 }
 
-/// TMDB key field: validated against TMDB before it is saved.
-private struct TMDBKeyRow: View {
+/// TMDB key: validated against TMDB before it is saved.
+private struct TMDBSettingsView: View {
     @Environment(AppModel.self) private var model
     @State private var value = ""
     @State private var status: String?
     @State private var isSaving = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            SecureField("TMDB API key or read access token", text: $value)
-                .textInputAutocapitalization(.never)
-                .autocorrectionDisabled()
-                .onSubmit(save)
-            Button("Save and test", action: save)
-                .font(.callout)
+        Form {
+            Section {
+                SecureField("API key or read access token", text: $value)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                    .onSubmit(save)
+            } header: {
+                Text("Key")
+            } footer: {
+                Text("Get a free key at themoviedb.org › Settings › API (the API key or the read access token).")
+            }
+            Section {
+                Button(action: save) {
+                    HStack {
+                        Text("Save and test")
+                        if isSaving { Spacer(); ProgressView() }
+                    }
+                }
                 .disabled(isSaving)
-            if let status { Text(status).font(.footnote) }
+                if let status { Text(status).font(.footnote) }
+            } footer: {
+                Text("With a key, search, posters, seasons, episodes and the home screen's trending titles come from TMDB first; your addons answer when TMDB cannot.")
+            }
         }
+        .navigationTitle("TMDB")
+        .navigationBarTitleDisplayMode(.inline)
         .onAppear { value = model.tmdbKey }
     }
 
     private func save() {
         isSaving = true
-        status = value.isEmpty ? nil : "Testing…"
+        status = nil
         Task {
             do {
                 try await model.saveTMDBKey(value)
@@ -158,32 +297,65 @@ private struct TMDBKeyRow: View {
 }
 
 /// The "Dove" location in the Files app: re-register it when Files shows an error next to it.
-private struct FilesLocationSection: View {
+private struct FilesLocationView: View {
     @State private var status: String?
     @State private var isResetting = false
 
     var body: some View {
-        Section {
-            Button("Reset Files location") {
-                isResetting = true
-                Task {
-                    do {
-                        try await FilesLocation.reset()
-                        status = "Done. Open Files, tap Dove and turn it on."
-                    } catch {
-                        status = error.localizedDescription
+        Form {
+            Section {
+                Button {
+                    isResetting = true
+                    Task {
+                        do {
+                            try await FilesLocation.reset()
+                            status = "Done. Open Files, tap Dove and turn it on."
+                        } catch {
+                            status = error.localizedDescription
+                        }
+                        isResetting = false
                     }
-                    isResetting = false
+                } label: {
+                    HStack {
+                        Text("Reset Files location")
+                        if isResetting { Spacer(); ProgressView() }
+                    }
                 }
+                .disabled(isResetting)
+                if let status {
+                    Text(status).font(.footnote).foregroundStyle(.secondary)
+                }
+            } footer: {
+                Text("Your services appear in Files under Locations › Dove. If Files shows an error there, reset it: Files forgets what it knew and lists everything again.")
             }
-            .disabled(isResetting)
-            if let status {
-                Text(status).foregroundStyle(.secondary)
-            }
-        } header: {
-            Text("Files app")
-        } footer: {
-            Text("Your services appear in Files under Locations › Dove. If Files shows an error there, reset it: Files forgets what it knew and lists everything again.")
         }
+        .navigationTitle("Files app")
+        .navigationBarTitleDisplayMode(.inline)
+    }
+}
+
+/// What Dove keeps on this phone besides downloads: artwork and the last library list.
+private struct StorageView: View {
+    @State private var imageBytes: Int64?
+
+    var body: some View {
+        Form {
+            Section {
+                LabeledContent("Posters and covers", value: imageBytes.map { $0.formatted(.byteCount(style: .file)) } ?? "…")
+                Button("Clear artwork", role: .destructive) {
+                    Task {
+                        await ImageCache.shared.removeAll()
+                        DecodedImages.shared.removeAll()
+                        imageBytes = await ImageCache.shared.size()
+                    }
+                }
+                .disabled(imageBytes == 0)
+            } footer: {
+                Text("Artwork is kept so the library does not download it again on every launch. iOS may also clear it when space runs low; Dove then fetches it again as needed. Downloads are in the Downloads tab.")
+            }
+        }
+        .navigationTitle("Storage")
+        .navigationBarTitleDisplayMode(.inline)
+        .task { imageBytes = await ImageCache.shared.size() }
     }
 }

@@ -135,9 +135,7 @@ struct LibraryView: View {
             .navigationDestination(for: BookRoute.self) { BookTitleView(bookID: $0.id) }
             .navigationDestination(for: ShelfItem.self) { LibraryItemView(item: $0.item) }
             .refreshable { await library.refresh(using: model) }
-            .task {
-                if !library.hasLoaded { await library.refresh(using: model) }
-            }
+            .task { await library.start(using: model) }
         }
     }
 
@@ -354,14 +352,30 @@ struct LibraryView: View {
 
     // MARK: - Pieces
 
+    /// "Updating…" while the services are asked (the cached list stays on screen), when the list is from, and
+    /// what failed.
     @ViewBuilder
     private var failuresBanner: some View {
-        if !library.failures.isEmpty {
-            Label(library.failures.joined(separator: "\n"), systemImage: "exclamationmark.triangle")
-                .font(.footnote)
-                .foregroundStyle(.orange)
-                .frame(maxWidth: .infinity, alignment: .leading)
+        VStack(alignment: .leading, spacing: 6) {
+            if library.isLoading, !library.items.isEmpty {
+                HStack(spacing: 6) {
+                    ProgressView().controlSize(.mini)
+                    Text("Updating…")
+                }
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            } else if let updatedAt = library.updatedAt {
+                Text("Updated \(updatedAt.formatted(.relative(presentation: .named)))")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            if !library.failures.isEmpty {
+                Label(library.failures.joined(separator: "\n"), systemImage: "exclamationmark.triangle")
+                    .font(.footnote)
+                    .foregroundStyle(.orange)
+            }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     @ViewBuilder
@@ -451,9 +465,7 @@ private struct TitleCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             ZStack(alignment: .topTrailing) {
-                AsyncImage(url: title.media?.poster) { image in
-                    image.resizable().scaledToFill()
-                } placeholder: {
+                CachedImage(url: title.media?.poster) {
                     ZStack {
                         Rectangle().fill(.quaternary)
                         Text(title.name)
@@ -710,7 +722,7 @@ struct LibraryItemView: View {
             if let backend = model.backend(item.backend) as? any FileSelecting {
                 FileSelectionView(backend: backend, itemID: item.id) {
                     await loadDetail()
-                    await model.library.refresh(using: model)
+                    await model.library.refresh(using: model, afterChange: true)
                 }
             }
         }
@@ -808,11 +820,11 @@ struct LibraryItemView: View {
             defer { isWorking = false }
             do {
                 let removed = try await action()
-                await model.library.refresh(using: model)
+                await model.library.refresh(using: model, afterChange: true)
                 if removed { dismiss() } else if message == progress { message = nil }
             } catch {
                 message = error.localizedDescription
-                await model.library.refresh(using: model)
+                await model.library.refresh(using: model, afterChange: true)
             }
         }
     }

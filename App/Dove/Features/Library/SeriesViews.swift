@@ -66,6 +66,27 @@ final class SeriesModel {
         open(infuse)
     }
 
+    /// A movie's "Play": the biggest ready release (best version first), its main video. Releases listed without
+    /// files get their detail call here.
+    func playMovie(_ title: LibraryTitle, using model: AppModel, open: OpenURLAction) async {
+        guard preparing == nil else { return }
+        let ready = title.items
+            .filter { $0.item.status == .ready }
+            .sorted { ($0.item.size ?? 0) > ($1.item.size ?? 0) }
+        guard let item = ready.first, let backend = model.backend(item.item.backend) else { return }
+        message = nil
+        preparing = (0, 1)
+        defer { preparing = nil }
+        do {
+            let file = try await Self.resolve(EpisodeFile(item: item, file: nil), on: backend)
+            let url = try await backend.playbackURL(itemID: item.item.id, fileID: file.id)
+            let name = (file.name as NSString).lastPathComponent
+            if let infuse = Infuse.playURL(for: [(url, name)]) { open(infuse) }
+        } catch {
+            message = error.localizedDescription
+        }
+    }
+
     func copyLink(_ episode: LibraryEpisode, using model: AppModel) async {
         guard let file = file(for: episode) else { return }
         do {
@@ -155,15 +176,26 @@ struct SeasonRow: View {
     let season: LibrarySeason
     let play: () -> Void
 
+    private var fraction: Double {
+        season.episodes.isEmpty ? 0 : Double(season.available.count) / Double(season.episodes.count)
+    }
+
     var body: some View {
-        HStack {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(season.title).font(.headline)
-                Text(season.summary).font(.caption).foregroundStyle(.secondary)
+        HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 5) {
+                HStack(alignment: .firstTextBaseline) {
+                    Text(season.title).font(.headline)
+                    Spacer()
+                    Text("\(season.available.count)/\(season.episodes.count)")
+                        .font(.caption.monospacedDigit())
+                        .foregroundStyle(.secondary)
+                }
+                ProgressView(value: fraction)
+                    .tint(fraction == 1 ? .green : .accentColor)
+                Text(season.summary).font(.caption).foregroundStyle(.secondary).lineLimit(1)
             }
-            Spacer()
             if !season.available.isEmpty {
-                Button(action: play) { Image(systemName: "play.circle.fill").font(.title2) }
+                Button(action: play) { Image(systemName: "play.circle.fill").font(.title2).foregroundStyle(.tint) }
                     // Borderless keeps the button's own tap inside a navigation row.
                     .buttonStyle(.borderless)
                     .accessibilityLabel("Play \(season.title)")
@@ -192,9 +224,14 @@ struct LibrarySeasonView: View {
                     Button {
                         play(season.available, of: title)
                     } label: {
-                        Label("Play \(season.title)", systemImage: "play.fill").frame(maxWidth: .infinity)
+                        Label("Play \(season.title)", systemImage: "play.fill")
+                            .labelStyle(.titleAndIcon)
+                            .font(.headline)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 6)
                     }
                     .buttonStyle(.borderedProminent)
+                    .buttonBorderShape(.roundedRectangle(radius: 12))
                     .disabled(season.available.isEmpty)
                     .listRowInsets(EdgeInsets())
                     .listRowBackground(Color.clear)
@@ -255,23 +292,44 @@ private struct EpisodeRow: View {
 
     var body: some View {
         Button(action: play) {
-            HStack(alignment: .firstTextBaseline, spacing: 12) {
-                Text("\(episode.number)")
-                    .font(.subheadline.monospacedDigit())
-                    .foregroundStyle(.secondary)
-                    .frame(minWidth: 24, alignment: .trailing)
+            HStack(alignment: .top, spacing: 12) {
+                still
                 VStack(alignment: .leading, spacing: 3) {
-                    Text(episode.info?.title ?? episode.code).font(.subheadline)
+                    Text("\(episode.number). \(episode.info?.title ?? episode.code)")
+                        .font(.subheadline.weight(.medium))
+                        .lineLimit(2)
                     Text(details).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                    if let overview = episode.info?.overview, !overview.isEmpty {
+                        Text(overview).font(.caption).foregroundStyle(.secondary).lineLimit(2)
+                    }
                 }
-                Spacer()
-                if episode.isAvailable {
-                    Image(systemName: "play.fill").font(.caption).foregroundStyle(.tint)
-                }
+                Spacer(minLength: 0)
             }
+            .contentShape(Rectangle())
         }
         .tint(.primary)
         .disabled(!episode.isAvailable)
+        .opacity(episode.isAvailable ? 1 : 0.55)
+    }
+
+    /// The episode's still (TMDB or the metadata addon), with a play mark when it can be played.
+    private var still: some View {
+        CachedImage(url: episode.info?.thumbnail) {
+            ZStack {
+                Rectangle().fill(.quaternary)
+                Text(episode.code).font(.caption2.weight(.semibold)).foregroundStyle(.secondary)
+            }
+        }
+        .frame(width: 112, height: 63)
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .overlay {
+            if episode.isAvailable {
+                Image(systemName: "play.circle.fill")
+                    .font(.title2)
+                    .symbolRenderingMode(.palette)
+                    .foregroundStyle(.white, .black.opacity(0.35))
+            }
+        }
     }
 
     private var details: String {

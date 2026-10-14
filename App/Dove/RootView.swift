@@ -10,16 +10,21 @@ struct RootView: View {
     }
 
     var body: some View {
-        TabView {
+        @Bindable var model = model
+        TabView(selection: $model.selectedTab) {
             SearchView()
                 .tabItem { Label("Search", systemImage: "magnifyingglass") }
+                .tag(AppTab.search)
             LibraryView()
                 .tabItem { Label("Library", systemImage: "books.vertical") }
+                .tag(AppTab.library)
             DownloadsView()
                 .tabItem { Label("Downloads", systemImage: "arrow.down.circle") }
                 .badge(model.downloads.records.filter { $0.state == .downloading }.count + waitingJobs)
+                .tag(AppTab.downloads)
             SettingsView()
                 .tabItem { Label("Settings", systemImage: "gearshape") }
+                .tag(AppTab.settings)
         }
         .onOpenURL { model.open($0) }
         // Download-only jobs wait for the service only while Dove is open: iOS has no background polling.

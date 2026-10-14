@@ -31,9 +31,7 @@ struct BookCover: View {
     let book: BookTitle
 
     var body: some View {
-        AsyncImage(url: book.book?.cover) { image in
-            image.resizable().scaledToFill()
-        } placeholder: {
+        CachedImage(url: book.book?.cover) {
             GeneratedCover(title: book.name, author: book.author, format: book.format)
         }
         .frame(minWidth: 0, maxWidth: .infinity)
@@ -244,9 +242,7 @@ private struct BookRow: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            AsyncImage(url: book.cover) { image in
-                image.resizable().scaledToFill()
-            } placeholder: {
+            CachedImage(url: book.cover) {
                 Rectangle().fill(.quaternary)
             }
             .frame(width: 46, height: format == .audiobook ? 46 : 69)

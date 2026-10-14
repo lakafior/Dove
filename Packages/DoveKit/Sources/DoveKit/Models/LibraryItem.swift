@@ -23,8 +23,8 @@ public enum BackendID: String, Sendable, Codable, CaseIterable, Identifiable {
 }
 
 /// One entry in a backend's library: a torrent, a hoster download or an NZB job.
-public struct LibraryItem: Identifiable, Sendable, Hashable {
-    public enum Status: Sendable, Hashable {
+public struct LibraryItem: Identifiable, Sendable, Hashable, Codable {
+    public enum Status: Sendable, Hashable, Codable {
         case queued
         /// Waits for the user to choose files (see `FileSelecting`).
         case awaitingFileSelection
@@ -101,7 +101,7 @@ public enum InfoHash {
     }
 }
 
-public struct LibraryFile: Identifiable, Sendable, Hashable {
+public struct LibraryFile: Identifiable, Sendable, Hashable, Codable {
     public let id: String
     public var name: String
     public var size: Int64?

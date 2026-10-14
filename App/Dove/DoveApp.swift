@@ -9,7 +9,12 @@ struct DoveApp: App {
         WindowGroup {
             RootView()
                 .environment(delegate.model)
-                .task { await delegate.model.loadAddons() }
+                .task {
+                    await delegate.model.loadAddons()
+                    // Statuses are refreshed on launch (iOS gives no background polling); the cached list shows
+                    // meanwhile. After the addons: new titles are matched through them.
+                    await delegate.model.library.start(using: delegate.model)
+                }
         }
     }
 }
@@ -19,9 +24,8 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
     let model = AppModel()
 
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
-        // AsyncImage loads through URLSession.shared; the default cache is too small to hold a library's posters,
-        // so they were fetched again on every scroll. Poster CDNs (TMDB, metahub) send long max-age headers.
-        URLCache.shared = URLCache(memoryCapacity: 50 * 1024 * 1024, diskCapacity: 300 * 1024 * 1024)
+        // Artwork has its own disk cache (`ImageCache`); this one serves the rest of URLSession.shared.
+        URLCache.shared = URLCache(memoryCapacity: 50 * 1024 * 1024, diskCapacity: 50 * 1024 * 1024)
         return true
     }
 

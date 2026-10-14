@@ -45,6 +45,12 @@ public struct TMDBMetadata: Sendable {
         return page.results.compactMap { $0.summary(as: type) }
     }
 
+    /// This week's popular movies and series (`/trending/{all|movie|tv}/week`), for the home screen.
+    public func trending(_ type: MediaType? = nil) async throws -> [MediaSummary] {
+        let page = try await get(TMDBPage.self, "trending/\(type?.tmdbPath ?? "all")/week")
+        return page.results.compactMap { $0.summary(as: type) }
+    }
+
     // MARK: - Detail
 
     /// Full metadata for a `tmdb:<id>` or `tt…` ID; seasons and episodes for series unless `includeEpisodes`

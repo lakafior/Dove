@@ -112,7 +112,9 @@ struct TorBoxUsenetToggle: View {
     @State private var isOn = false
 
     var body: some View {
-        Toggle("TorBox Usenet", isOn: $isOn)
+        Toggle(isOn: $isOn) {
+            SettingsRow("TorBox Usenet", symbol: "newspaper.fill", color: BackendID.torBox.settingsColor)
+        }
             .disabled(!model.isConfigured(.torBox))
             .onAppear { isOn = (try? model.keychain.get(.torBoxUsenet)) == "1" }
             .onChange(of: isOn) {

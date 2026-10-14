@@ -28,101 +28,165 @@ struct SearchView: View {
         return results.filter { $0.type == typeFilter }
     }
 
+    @State private var home = HomeModel()
+
+    /// Results (or a search on its way, or why there are none) replace the home screen; clearing the field
+    /// brings it back.
+    private var showsResults: Bool {
+        isSearching || !results.isEmpty || !otherResults.isEmpty || (message != nil && !text.isEmpty)
+    }
+
     var body: some View {
         NavigationStack {
-            List {
-                if pasteboardHasContent, pasteboardChange != answeredChange {
-                    clipboardBanner
-                }
-                Section {
-                    TextField(scope == .media ? "Title, magnet or link" : "Name, magnet or link", text: $text)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
-                        .submitLabel(.search)
-                        .onSubmit(handleSubmit)
-                    if scope == .other {
-                        Picker("Category", selection: $category) {
-                            ForEach(NewznabCategory.allCases.filter { $0 != .adult || model.showAdult }, id: \.self) {
-                                Text($0.displayName).tag($0)
+            Group {
+                if showsResults {
+                    resultsList
+                } else {
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 16) {
+                            if pasteboardHasContent, pasteboardChange != answeredChange {
+                                clipboardBanner.padding(.horizontal)
+                            }
+                            if let message {
+                                Text(message)
+                                    .font(.footnote)
+                                    .foregroundStyle(.secondary)
+                                    .padding(.horizontal)
+                            }
+                            HomeView(home: home) { search in
+                                text = search.text
+                                // A scope change searches by itself (`onChange(of: scope)`).
+                                if scope == search.scope { handleSubmit() } else { scope = search.scope }
                             }
                         }
                     }
-                } header: {
-                    Picker("Search", selection: $scope) {
-                        ForEach(SearchScope.allCases, id: \.self) { Text($0.label).tag($0) }
-                    }
-                    .pickerStyle(.segmented)
-                    .textCase(nil)
-                    .padding(.bottom, 4)
-                } footer: {
-                    if let message { Text(message) }
-                }
-
-                if isSearching {
-                    HStack { Spacer(); ProgressView(); Spacer() }
-                        .listRowBackground(Color.clear)
-                }
-
-                if scope == .other, !otherResults.isEmpty {
-                    otherResultsSection
-                }
-
-                if scope == .media, !results.isEmpty {
-                    Section {
-                        ForEach(visibleResults) { item in
-                            NavigationLink(value: item) { MediaRow(item: item) }
-                        }
-                    } header: {
-                        Picker("Type", selection: $typeFilter) {
-                            Text("All").tag(MediaType?.none)
-                            Text("Movies").tag(MediaType?.some(.movie))
-                            Text("Series").tag(MediaType?.some(.series))
-                        }
-                        .pickerStyle(.segmented)
-                        .textCase(nil)
-                        .padding(.bottom, 4)
-                    }
                 }
             }
+            .scrollDismissesKeyboard(.immediately)
             .navigationTitle("Dove")
+            .searchable(
+                text: $text,
+                placement: .navigationBarDrawer(displayMode: .always),
+                prompt: scope == .media ? "Title, magnet or link" : "Name, magnet or link"
+            )
+            .searchScopes($scope) {
+                ForEach(SearchScope.allCases, id: \.self) { Text($0.label).tag($0) }
+            }
+            .textInputAutocapitalization(.never)
+            .autocorrectionDisabled()
+            .onSubmit(of: .search, handleSubmit)
+            .toolbar {
+                if scope == .other {
+                    ToolbarItem(placement: .topBarTrailing) { categoryMenu }
+                }
+            }
             .navigationDestination(for: MediaSummary.self) { MediaDetailView(item: $0) }
-            .onChange(of: scope) { message = nil }
-            .onChange(of: category) { otherResults = [] }
+            .navigationDestination(for: TitleRoute.self) { LibraryTitleView(titleID: $0.id) }
+            .navigationDestination(for: ShelfItem.self) { LibraryItemView(item: $0.item) }
+            // The field's clear button and Cancel empty the text: back to the home screen.
+            .onChange(of: text) {
+                if text.isEmpty { clearResults() }
+            }
+            // Same words, other scope or category: search again rather than leave stale results.
+            .onChange(of: scope) {
+                clearResults()
+                if !text.isEmpty { handleSubmit() }
+            }
+            .onChange(of: category) {
+                otherResults = []
+                if scope == .other, !text.isEmpty { handleSubmit() }
+            }
             .onAppear(perform: checkPasteboard)
             .onChange(of: scenePhase) { if scenePhase == .active { checkPasteboard() } }
             .onReceive(NotificationCenter.default.publisher(for: UIPasteboard.changedNotification)) { _ in checkPasteboard() }
+            .task(id: model.addonSet.tmdb == nil) {
+                await home.loadTrending(using: model.addonSet.tmdb)
+            }
             .sheet(item: $pendingSource) { source in
                 AddSourceSheet(source: source) { result in
                     pendingSource = nil
-                    message = result
                     if result.hasPrefix("Added") { text = "" }
+                    message = result.isEmpty ? nil : result
                 }
             }
         }
     }
 
+    private var resultsList: some View {
+        List {
+            if isSearching {
+                HStack { Spacer(); ProgressView(); Spacer() }
+                    .listRowBackground(Color.clear)
+            }
+            if let message {
+                Section { Text(message).font(.footnote).foregroundStyle(.secondary) }
+            }
+            if scope == .other, !otherResults.isEmpty {
+                otherResultsSection
+            }
+            if scope == .media, !results.isEmpty {
+                Section {
+                    ForEach(visibleResults) { item in
+                        NavigationLink(value: item) { MediaRow(item: item) }
+                    }
+                } header: {
+                    Picker("Type", selection: $typeFilter) {
+                        Text("All").tag(MediaType?.none)
+                        Text("Movies").tag(MediaType?.some(.movie))
+                        Text("Series").tag(MediaType?.some(.series))
+                    }
+                    .pickerStyle(.segmented)
+                    .textCase(nil)
+                    .padding(.bottom, 4)
+                }
+            }
+        }
+    }
+
+    /// Search › Other: which Newznab category to search (adult only when shown).
+    private var categoryMenu: some View {
+        Menu {
+            Picker("Category", selection: $category) {
+                ForEach(NewznabCategory.allCases.filter { $0 != .adult || model.showAdult }, id: \.self) {
+                    Text($0.displayName).tag($0)
+                }
+            }
+        } label: {
+            Label(category.displayName, systemImage: "line.3.horizontal.decrease.circle")
+                .labelStyle(.titleAndIcon)
+        }
+    }
+
+    private func clearResults() {
+        results = []
+        otherResults = []
+        message = nil
+        typeFilter = nil
+    }
+
     /// Offers what was copied in another app. Only `hasStrings`/`hasURLs` are read here, which iOS does not report
     /// as pasting; the content itself comes through `PasteButton`, i.e. only when the user taps it.
     private var clipboardBanner: some View {
-        Section {
-            HStack(spacing: 12) {
-                Image(systemName: "doc.on.clipboard").foregroundStyle(.secondary)
-                Text("Add what you copied?").font(.subheadline)
-                Spacer()
-                PasteButton(payloadType: String.self) { strings in
-                    Task { @MainActor in usePasted(strings.first ?? "") }
-                }
-                .labelStyle(.iconOnly)
-                .buttonBorderShape(.capsule)
-                Button {
-                    answeredChange = pasteboardChange
-                } label: {
-                    Image(systemName: "xmark").foregroundStyle(.secondary)
-                }
-                .buttonStyle(.borderless)
-                .accessibilityLabel("Dismiss")
+        HStack(spacing: 12) {
+            Image(systemName: "doc.on.clipboard").foregroundStyle(.secondary)
+            Text("Add what you copied?").font(.subheadline)
+            Spacer()
+            PasteButton(payloadType: String.self) { strings in
+                Task { @MainActor in usePasted(strings.first ?? "") }
             }
+            .labelStyle(.iconOnly)
+            .buttonBorderShape(.capsule)
+            Button {
+                answeredChange = pasteboardChange
+            } label: {
+                Image(systemName: "xmark").foregroundStyle(.secondary)
+            }
+            .buttonStyle(.borderless)
+            .accessibilityLabel("Dismiss")
         }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .background(.background.secondary, in: RoundedRectangle(cornerRadius: 14))
     }
 
     private func checkPasteboard() {
@@ -154,12 +218,14 @@ struct SearchView: View {
         }
         let query = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !query.isEmpty else { return }
+        home.remember(query, scope: scope)
         if scope == .other { return searchOther(query) }
         guard model.addonSet.canSearch else {
             message = "Add a TMDB key or a Stremio addon that can search (for example AIOMetadata or Cinemeta) in Settings."
             return
         }
         isSearching = true
+        results = []
         Task {
             do {
                 results = try await model.addonSet.search(query)
@@ -286,9 +352,7 @@ struct PosterImage: View {
     let url: URL?
 
     var body: some View {
-        AsyncImage(url: url) { image in
-            image.resizable().scaledToFill()
-        } placeholder: {
+        CachedImage(url: url) {
             Rectangle().fill(.quaternary)
         }
         .clipShape(RoundedRectangle(cornerRadius: 6))

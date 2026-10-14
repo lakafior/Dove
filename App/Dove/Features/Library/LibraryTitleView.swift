@@ -16,9 +16,16 @@ struct LibraryTitleView: View {
         List {
             if let title {
                 Section {
-                    header(title)
-                    Button("Wrong title?", systemImage: "arrow.triangle.2.circlepath") { isFixingMatch = true }
-                        .font(.footnote)
+                    TitleHeader(title: title, detail: series.detail)
+                        .listRowInsets(EdgeInsets())
+                        .listRowBackground(Color.clear)
+                        .listRowSeparator(.hidden)
+                    playButton(title)
+                        .listRowInsets(EdgeInsets(top: 4, leading: 0, bottom: 0, trailing: 0))
+                        .listRowBackground(Color.clear)
+                        .listRowSeparator(.hidden)
+                } footer: {
+                    if let message = series.message { Text(message) }
                 }
                 if title.type == .series {
                     seriesSections(title)
@@ -29,8 +36,21 @@ struct LibraryTitleView: View {
                 ContentUnavailableView("Not in your library anymore", systemImage: "tray")
             }
         }
+        .listSectionSpacing(.compact)
         .navigationTitle(title?.name ?? "")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            if title != nil {
+                ToolbarItem(placement: .primaryAction) {
+                    Menu("More", systemImage: "ellipsis.circle") {
+                        Button("Wrong title?", systemImage: "magnifyingglass") { isFixingMatch = true }
+                        Button("Refresh status", systemImage: "arrow.triangle.2.circlepath") {
+                            Task { await model.library.refresh(using: model) }
+                        }
+                    }
+                }
+            }
+        }
         .navigationDestination(for: SeasonRoute.self) { route in
             LibrarySeasonView(series: series, titleID: route.titleID, number: route.season)
         }
@@ -49,22 +69,35 @@ struct LibraryTitleView: View {
         }
     }
 
+    /// Series: every episode in the library as one playlist. Movies: the biggest ready release's main video.
+    @ViewBuilder
+    private func playButton(_ title: LibraryTitle) -> some View {
+        let available = title.type == .series ? series.layout(of: title).available : []
+        let canPlay = title.type == .series ? !available.isEmpty : title.items.contains { $0.item.status == .ready }
+        if canPlay {
+            Button {
+                if title.type == .series {
+                    play(available, of: title)
+                } else {
+                    Task { await series.playMovie(title, using: model, open: openURL) }
+                }
+            } label: {
+                Label(title.type == .series ? "Play all" : "Play", systemImage: "play.fill")
+                    .labelStyle(.titleAndIcon)
+                    .font(.headline)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 6)
+            }
+            .buttonStyle(.borderedProminent)
+            .buttonBorderShape(.roundedRectangle(radius: 12))
+            .disabled(series.preparing != nil)
+        }
+    }
+
     @ViewBuilder
     private func seriesSections(_ title: LibraryTitle) -> some View {
         let layout = series.layout(of: title)
         if layout.hasEpisodes {
-            Section {
-                Button {
-                    play(layout.available, of: title)
-                } label: {
-                    Label("Play all", systemImage: "play.fill").frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.borderedProminent)
-                .listRowInsets(EdgeInsets())
-                .listRowBackground(Color.clear)
-            } footer: {
-                if let message = series.message { Text(message) }
-            }
             Section("Seasons") {
                 ForEach(layout.seasons) { season in
                     NavigationLink(value: SeasonRoute(titleID: titleID, season: season.number)) {
@@ -103,33 +136,91 @@ struct LibraryTitleView: View {
     private func play(_ episodes: [LibraryEpisode], of title: LibraryTitle) {
         Task { await series.play(episodes, of: title, using: model, open: openURL) }
     }
+}
 
-    private func header(_ title: LibraryTitle) -> some View {
-        HStack(alignment: .top, spacing: 12) {
-            PosterImage(url: title.media?.poster)
-                .frame(width: 90, height: 135)
-            VStack(alignment: .leading, spacing: 6) {
-                Text(title.name).font(.title3.bold())
-                HStack(spacing: 6) {
-                    Text(title.type == .movie ? "Movie" : "Series")
-                    if let year = title.year { Text(year) }
-                    if title.size > 0 { Text(title.size.formatted(.byteCount(style: .file))) }
+/// Backdrop (or the poster, blurred) with the poster, name and facts over it; then genres and the description,
+/// which opens up on a tap.
+private struct TitleHeader: View {
+    let title: LibraryTitle
+    let detail: MediaDetail?
+    @State private var showsFullDescription = false
+
+    private var backdrop: URL? { detail?.summary.background ?? title.media?.background }
+    private var poster: URL? { title.media?.poster ?? detail?.summary.poster }
+
+    private var facts: String {
+        var parts = [title.type == .movie ? "Movie" : "Series"]
+        if let year = title.year { parts.append(year) }
+        if let runtime = detail?.runtime { parts.append(runtime) }
+        if title.size > 0 { parts.append(title.size.formatted(.byteCount(style: .file))) }
+        return parts.joined(separator: " · ")
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            ZStack(alignment: .bottomLeading) {
+                artwork
+                LinearGradient(colors: [.clear, .black.opacity(0.75)], startPoint: .center, endPoint: .bottom)
+                HStack(alignment: .bottom, spacing: 12) {
+                    CachedImage(url: poster) { Rectangle().fill(.ultraThinMaterial) }
+                        .frame(width: 76, height: 114)
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                        .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(.white.opacity(0.25), lineWidth: 0.5))
+                        .shadow(radius: 6, y: 2)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(title.name).font(.title2.bold()).lineLimit(2)
+                        Text(facts).font(.caption)
+                            .foregroundStyle(.white.opacity(0.85))
+                        HStack(spacing: 4) {
+                            ForEach(title.backends, id: \.self) { BackendBadge(backend: $0) }
+                            if let coverage = title.coverage {
+                                Text(coverage).font(.caption2.bold())
+                                    .padding(.horizontal, 6).padding(.vertical, 1)
+                                    .background(.white.opacity(0.2), in: Capsule())
+                            }
+                        }
+                    }
+                    .foregroundStyle(.white)
+                    .shadow(color: .black.opacity(0.4), radius: 4)
                 }
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                HStack(spacing: 4) {
-                    ForEach(title.backends, id: \.self) { BackendBadge(backend: $0) }
-                }
-                if let genres = series.detail?.genres, !genres.isEmpty {
-                    Text(genres.prefix(3).joined(separator: ", ")).font(.caption).foregroundStyle(.secondary)
-                }
-                if let description = series.detail?.summary.description ?? title.media?.description {
-                    Text(description).font(.footnote).lineLimit(6)
-                }
-                if title.media == nil {
-                    Text("No match from your metadata addon yet.").font(.footnote).foregroundStyle(.secondary)
-                }
+                .padding(14)
             }
+            .frame(maxWidth: .infinity)
+            .frame(height: 230)
+            .clipShape(RoundedRectangle(cornerRadius: 16))
+
+            if let genres = detail?.genres, !genres.isEmpty {
+                Text(genres.prefix(4).joined(separator: " · "))
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(.secondary)
+            }
+            if let description = detail?.summary.description ?? title.media?.description {
+                Text(description)
+                    .font(.subheadline)
+                    .lineLimit(showsFullDescription ? nil : 4)
+                    .onTapGesture { withAnimation(.snappy) { showsFullDescription.toggle() } }
+                    .accessibilityAddTraits(.isButton)
+                    .accessibilityHint(showsFullDescription ? "Shows less" : "Shows the whole description")
+            }
+            if title.media == nil {
+                Text("No match from TMDB or your metadata addon yet. Use ⋯ › Wrong title? to pick one.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .padding(.vertical, 4)
+    }
+
+    @ViewBuilder
+    private var artwork: some View {
+        if let backdrop {
+            CachedImage(url: backdrop) { Rectangle().fill(.quaternary) }
+        } else if let poster {
+            CachedImage(url: poster) { Rectangle().fill(.quaternary) }
+                .blur(radius: 24)
+                .scaleEffect(1.3)
+        } else {
+            LinearGradient(colors: [.accentColor.opacity(0.6), .accentColor.opacity(0.2)], startPoint: .topLeading, endPoint: .bottomTrailing)
         }
     }
 }

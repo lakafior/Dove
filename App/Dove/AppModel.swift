@@ -14,6 +14,9 @@ final class AppModel {
     /// A magnet or file opened from another app; RootView shows the add sheet for it.
     var openedSource: Source?
 
+    /// The tab on screen, so the home screen can send the user to Downloads or Settings.
+    var selectedTab: AppTab = .search
+
     /// Handles `onOpenURL`. Copies iOS made into Documents/Inbox are removed once read,
     /// so they do not pile up next to downloads in Files.
     func open(_ url: URL) {
@@ -393,4 +396,8 @@ final class AppModel {
         guard let data = try? JSONEncoder().encode(strings) else { return }
         try? keychain.set(String(decoding: data, as: UTF8.self), for: .stremioAddons)
     }
+}
+
+enum AppTab: Hashable {
+    case search, library, downloads, settings
 }

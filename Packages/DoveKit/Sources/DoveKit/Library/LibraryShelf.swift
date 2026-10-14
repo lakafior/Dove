@@ -290,6 +290,8 @@ public enum LibraryLoader {
     public struct Result: Sendable {
         public var items: [ShelfItem]
         public var failures: [String]
+        /// Services that did not answer; their items are missing from `items`, not gone.
+        public var failed: Set<BackendID> = []
     }
 
     /// Every backend's items in parallel, newest first. A failing backend is reported, the rest still load.
@@ -303,14 +305,17 @@ public enum LibraryLoader {
             }
             var items: [ShelfItem] = []
             var failures: [String] = []
+            var failed: Set<BackendID> = []
             for await (id, result) in group {
                 switch result {
                 case .success(let list): items += list.map { ShelfItem(item: $0) }
-                case .failure(let error): failures.append("\(id.displayName): \(error.localizedDescription)")
+                case .failure(let error):
+                    failed.insert(id)
+                    failures.append("\(id.displayName): \(error.localizedDescription)")
                 }
             }
             items.sort { ($0.item.addedAt ?? .distantPast) > ($1.item.addedAt ?? .distantPast) }
-            return Result(items: items, failures: failures.sorted())
+            return Result(items: items, failures: failures.sorted(), failed: failed)
         }
     }
 }

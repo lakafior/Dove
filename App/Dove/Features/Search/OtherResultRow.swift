@@ -2,7 +2,7 @@ import DoveKit
 import SwiftUI
 
 /// Search › Other: how Dove's results outside movies and series are searched and shown.
-enum SearchScope: String, CaseIterable {
+enum SearchScope: String, CaseIterable, Codable {
     case media
     case other
 
