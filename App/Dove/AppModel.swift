@@ -11,6 +11,8 @@ final class AppModel {
     let library = LibraryModel()
     /// Online/offline from library refreshes, and premium days left.
     let services = ServiceStatusModel()
+    /// The player links go to (Infuse, VLC, Kodi…).
+    let playback = PlaybackModel(keychain: SharedConfiguration.keychain())
     private(set) var backends: [any LibraryBackend] = []
 
     /// A magnet or file opened from another app; RootView shows the add sheet for it.

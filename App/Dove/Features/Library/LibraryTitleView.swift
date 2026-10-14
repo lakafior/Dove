@@ -5,7 +5,6 @@ import SwiftUI
 /// releases they come from. Movies: artwork and releases.
 struct LibraryTitleView: View {
     @Environment(AppModel.self) private var model
-    @Environment(\.openURL) private var openURL
     let titleID: String
     @State private var isFixingMatch = false
     @State private var series = SeriesModel()
@@ -79,7 +78,7 @@ struct LibraryTitleView: View {
                 if title.type == .series {
                     play(available, of: title)
                 } else {
-                    Task { await series.playMovie(title, using: model, open: openURL) }
+                    Task { await series.playMovie(title, using: model) }
                 }
             } label: {
                 Label(title.type == .series ? "Play all" : "Play", systemImage: "play.fill")
@@ -134,7 +133,7 @@ struct LibraryTitleView: View {
     }
 
     private func play(_ episodes: [LibraryEpisode], of title: LibraryTitle) {
-        Task { await series.play(episodes, of: title, using: model, open: openURL) }
+        Task { await series.play(episodes, of: title, using: model) }
     }
 }
 

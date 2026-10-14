@@ -35,6 +35,8 @@ public enum CredentialKey: String, Sendable, CaseIterable {
     case offcloudUsenet
     /// JSON array of `NewznabIndexer` (they carry API keys).
     case newznabIndexers
+    /// JSON of `KodiServer` (it carries the password).
+    case kodi
     /// JSON of `SyncedPreferences`: settings that are not secrets, kept here so iCloud Keychain carries them too.
     case preferences
 }

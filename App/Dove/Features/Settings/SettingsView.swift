@@ -89,6 +89,11 @@ struct SettingsView: View {
 
                 Section("This iPhone") {
                     NavigationLink {
+                        PlaybackSettingsView()
+                    } label: {
+                        SettingsRow("Playback", symbol: "play.fill", color: .pink, value: model.playback.player.displayName)
+                    }
+                    NavigationLink {
                         FilesLocationView()
                     } label: {
                         SettingsRow("Files app", symbol: "folder.fill", color: .blue)

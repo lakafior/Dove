@@ -53,6 +53,8 @@ targets:
         NSLocalNetworkUsageDescription: Dove talks to servers you add on your home network, such as Jackett, Prowlarr or nzbdav.
         NSAppTransportSecurity:
           NSAllowsLocalNetworking: true
+        # Players Dove hands links to (ExternalPlayer.scheme): canOpenURL tells which are installed.
+        LSApplicationQueriesSchemes: [infuse, vlc-x-callback, outplayer, senplayer, nplayer-https, open-vidhub]
         # Downloaded files (Documents) show in Files under On My iPhone › Dove.
         UIFileSharingEnabled: true
         LSSupportsOpeningDocumentsInPlace: true

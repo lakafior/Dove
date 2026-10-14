@@ -3,10 +3,9 @@ import SwiftUI
 
 /// Sources for one movie or episode, or the season/series packs for a series, from every stream addon.
 /// Each row is one release (merged by info hash) with its traits and per-service cache status,
-/// and two buttons: play in Infuse, add to the library.
+/// and two buttons: play in the user's player, add to the library.
 struct SourcesView: View {
     @Environment(AppModel.self) private var model
-    @Environment(\.openURL) private var openURL
     let title: String
     let type: MediaType
     let id: String
@@ -175,8 +174,11 @@ struct SourcesView: View {
 
     @ViewBuilder
     private func menu(for group: StreamGroup) -> some View {
+        if canPlay(group) {
+            Button(model.playback.playLabel, systemImage: "play") { play(group) }
+            PlayInMenu { play(group, in: $0) }
+        }
         if let url = group.playURL {
-            Button("Play in Infuse", systemImage: "play") { openInInfuse(url) }
             Button("Copy link", systemImage: "link") { UIPasteboard.general.url = url }
         }
         if let source = group.librarySource {
@@ -217,16 +219,31 @@ struct SourcesView: View {
         return await newznab.search(query)
     }
 
-    /// NZBs play through Dove's own nzbdav job when nzbdav is set up: addon play links make Infuse wait
+    /// NZBs play through Dove's own nzbdav job when nzbdav is set up: addon play links make players wait
     /// for nzbdav and time out. Everything else plays the addon's link.
     private func playAction(for group: StreamGroup) -> (() -> Void)? {
-        if group.kind == .usenet, let source = group.librarySource, source.kind == .nzb, let nzbdav = model.backend(.nzbdav) {
-            return { playUsenet(group, source: source, on: nzbdav) }
-        }
-        return group.playURL.map { url in { openInInfuse(url) } }
+        canPlay(group) ? { play(group) } : nil
     }
 
-    private func playUsenet(_ group: StreamGroup, source: Source, on backend: any LibraryBackend) {
+    private func canPlay(_ group: StreamGroup) -> Bool {
+        usenetSource(of: group) != nil || group.playURL != nil
+    }
+
+    private func usenetSource(of group: StreamGroup) -> (source: Source, backend: any LibraryBackend)? {
+        guard group.kind == .usenet, let source = group.librarySource, source.kind == .nzb,
+              let nzbdav = model.backend(.nzbdav) else { return nil }
+        return (source, nzbdav)
+    }
+
+    private func play(_ group: StreamGroup, in player: ExternalPlayer? = nil) {
+        if let usenet = usenetSource(of: group) {
+            playUsenet(group, source: usenet.source, on: usenet.backend, in: player)
+        } else if let url = group.playURL {
+            Task { await open(url, in: player) }
+        }
+    }
+
+    private func playUsenet(_ group: StreamGroup, source: Source, on backend: any LibraryBackend, in player: ExternalPlayer?) {
         busy.insert(group.id)
         status = Status(text: "Preparing in \(backend.id.displayName)…", isError: false)
         Task {
@@ -237,15 +254,19 @@ struct SourcesView: View {
                 )
                 usenetJobs[group.id] = prepared.itemID
                 status = nil
-                openInInfuse(prepared.url)
+                await open(prepared.url, in: player)
             } catch {
                 status = Status(text: error.localizedDescription, isError: true)
             }
         }
     }
 
-    private func openInInfuse(_ url: URL) {
-        if let infuse = Infuse.playURL(for: url) { openURL(infuse) }
+    private func open(_ url: URL, in player: ExternalPlayer?) async {
+        do {
+            try await model.playback.play([PlayEntry(url: url)], in: player)
+        } catch {
+            status = Status(text: error.localizedDescription, isError: true)
+        }
     }
 
     /// Automatic: services that have it cached first, then the user's priority. Or one service only.
@@ -386,7 +407,7 @@ private struct SourceRow: View {
                     Image(systemName: "play.fill").frame(width: 22, height: 22)
                 }
                 .buttonStyle(.bordered)
-                .accessibilityLabel("Play in Infuse")
+                .accessibilityLabel("Play")
             }
             if let onAdd {
                 Button(action: onAdd) {

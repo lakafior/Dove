@@ -580,10 +580,9 @@ struct ShelfItemRow: View {
     }
 }
 
-/// Files of one item, each playable in Infuse or copyable as a link.
+/// Files of one item, each playable in the user's player or copyable as a link.
 struct LibraryItemView: View {
     @Environment(AppModel.self) private var model
-    @Environment(\.openURL) private var openURL
     @Environment(\.dismiss) private var dismiss
     let item: LibraryItem
     @State private var detail: LibraryItem?
@@ -652,9 +651,11 @@ struct LibraryItemView: View {
         group.files.filter { FileKind.isVideo($0.name) && !FileKind.isSample($0.name) }
     }
 
-    /// The season's videos as one Infuse playlist, named by their own file names (scene names read well).
+    /// The season's videos as one playlist, named by their own file names (scene names read well). Players
+    /// without playlists get the first video.
     private func playAll(in group: FileGroup) {
-        let files = videos(in: group)
+        let all = videos(in: group)
+        let files = model.playback.limit(all)
         guard preparing == nil, !files.isEmpty, let backend = model.backend(item.backend) else { return }
         let itemID = item.id
         let jobs = files.map { file in
@@ -666,16 +667,23 @@ struct LibraryItemView: View {
             defer { preparing = nil }
             let (urls, failure) = await LinkBatch.fetch(jobs) { preparing = ($0, files.count) }
             let playable = zip(files, urls).compactMap { file, url in
-                url.map { (url: $0, filename: Optional((file.name as NSString).lastPathComponent)) }
+                url.map { PlayEntry(url: $0, filename: (file.name as NSString).lastPathComponent) }
             }
-            guard let infuse = Infuse.playURL(for: playable) else {
+            guard !playable.isEmpty else {
                 message = failure ?? "Nothing to play."
+                return
+            }
+            do {
+                try await model.playback.play(playable)
+            } catch {
+                message = error.localizedDescription
                 return
             }
             if let failure, playable.count < files.count {
                 message = "Skipped \(files.count - playable.count) of \(files.count): \(failure)"
+            } else {
+                message = model.playback.singleFileNote(requested: all.count)
             }
-            openURL(infuse)
         }
     }
 
@@ -690,10 +698,10 @@ struct LibraryItemView: View {
                 Button { copyLink(file) } label: { Image(systemName: "link") }
                     .accessibilityLabel("Copy link")
                 downloadButton(file)
-                // Infuse plays video; other files are for the link or the phone.
+                // Players take video; other files are for the link or the phone.
                 if FileKind.isVideo(file.name) {
                     Button { play(file) } label: { Image(systemName: "play.fill") }
-                        .accessibilityLabel("Play in Infuse")
+                        .accessibilityLabel(model.playback.playLabel)
                 }
             }
             // Bordered buttons keep their own tap areas inside a list row.
@@ -702,7 +710,8 @@ struct LibraryItemView: View {
         }
         .contextMenu {
             if FileKind.isVideo(file.name) {
-                Button("Play in Infuse", systemImage: "play") { play(file) }
+                Button(model.playback.playLabel, systemImage: "play") { play(file) }
+                PlayInMenu { play(file, in: $0) }
             }
             Button("Copy link", systemImage: "link") { copyLink(file) }
             Button("Download to phone", systemImage: "arrow.down.circle") { download(file) }
@@ -899,11 +908,16 @@ struct LibraryItemView: View {
         }
     }
 
-    private func play(_ file: LibraryFile) {
+    private func play(_ file: LibraryFile, in player: ExternalPlayer? = nil) {
         Task {
             // The file name lets Infuse recognise the episode or movie whatever the link's path says.
             let name = (file.name as NSString).lastPathComponent
-            if let url = await link(for: file), let infuse = Infuse.playURL(for: [(url, name)]) { openURL(infuse) }
+            guard let url = await link(for: file) else { return }
+            do {
+                try await model.playback.play([PlayEntry(url: url, filename: name)], in: player)
+            } catch {
+                message = error.localizedDescription
+            }
         }
     }
 

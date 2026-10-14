@@ -39,11 +39,13 @@ final class SeriesModel {
         }
     }
 
-    /// Fetches a link per episode (a few at a time, kept in order) and hands Infuse one playlist.
+    /// Fetches a link per episode (a few at a time, kept in order) and hands the player one playlist. Players
+    /// without playlists get the first episode only, and only its link is fetched.
     /// Episodes whose link fails are skipped and reported.
-    func play(_ episodes: [LibraryEpisode], of title: LibraryTitle, using model: AppModel, open: OpenURLAction) async {
+    func play(_ episodes: [LibraryEpisode], of title: LibraryTitle, using model: AppModel, in player: ExternalPlayer? = nil) async {
         guard preparing == nil else { return }
-        let entries = EpisodePlaylist(episodes, title: title.name, choice: choice).entries
+        let all = EpisodePlaylist(episodes, title: title.name, choice: choice).entries
+        let entries = model.playback.limit(all, for: player)
         guard !entries.isEmpty else { return }
         message = nil
         preparing = (0, entries.count)
@@ -55,20 +57,27 @@ final class SeriesModel {
         }
         let (urls, failure) = await LinkBatch.fetch(jobs) { done in self.preparing = (done, entries.count) }
 
-        let playable = zip(entries, urls).compactMap { entry, url in url.map { (url: $0, filename: Optional(entry.filename)) } }
-        guard let infuse = Infuse.playURL(for: playable) else {
+        let playable = zip(entries, urls).compactMap { entry, url in url.map { PlayEntry(url: $0, filename: entry.filename) } }
+        guard !playable.isEmpty else {
             message = failure ?? "Nothing to play."
+            return
+        }
+        do {
+            try await model.playback.play(playable, in: player)
+        } catch {
+            message = error.localizedDescription
             return
         }
         if let failure, playable.count < entries.count {
             message = "Skipped \(entries.count - playable.count) of \(entries.count): \(failure)"
+        } else {
+            message = model.playback.singleFileNote(requested: all.count, for: player)
         }
-        open(infuse)
     }
 
     /// A movie's "Play": the biggest ready release (best version first), its main video. Releases listed without
     /// files get their detail call here.
-    func playMovie(_ title: LibraryTitle, using model: AppModel, open: OpenURLAction) async {
+    func playMovie(_ title: LibraryTitle, using model: AppModel, in player: ExternalPlayer? = nil) async {
         guard preparing == nil else { return }
         let ready = title.items
             .filter { $0.item.status == .ready }
@@ -81,7 +90,7 @@ final class SeriesModel {
             let file = try await Self.resolve(EpisodeFile(item: item, file: nil), on: backend)
             let url = try await backend.playbackURL(itemID: item.item.id, fileID: file.id)
             let name = (file.name as NSString).lastPathComponent
-            if let infuse = Infuse.playURL(for: [(url, name)]) { open(infuse) }
+            try await model.playback.play([PlayEntry(url: url, filename: name)], in: player)
         } catch {
             message = error.localizedDescription
         }
@@ -209,7 +218,6 @@ struct SeasonRow: View {
 /// link and download.
 struct LibrarySeasonView: View {
     @Environment(AppModel.self) private var model
-    @Environment(\.openURL) private var openURL
     let series: SeriesModel
     let titleID: String
     let number: Int
@@ -258,7 +266,8 @@ struct LibrarySeasonView: View {
     @ViewBuilder
     private func menu(for episode: LibraryEpisode, in layout: SeriesLayout, of title: LibraryTitle) -> some View {
         if episode.isAvailable {
-            Button("Play", systemImage: "play") { play([episode], of: title) }
+            Button(model.playback.playLabel, systemImage: "play") { play([episode], of: title) }
+            PlayInMenu { player in play([episode], of: title, in: player) }
             Button("Play from here", systemImage: "play.square.stack") { play(layout.available(from: episode), of: title) }
             if episode.files.count > 1 {
                 Menu("Version", systemImage: "square.stack.3d.up") {
@@ -280,8 +289,8 @@ struct LibrarySeasonView: View {
         }
     }
 
-    private func play(_ episodes: [LibraryEpisode], of title: LibraryTitle) {
-        Task { await series.play(episodes, of: title, using: model, open: openURL) }
+    private func play(_ episodes: [LibraryEpisode], of title: LibraryTitle, in player: ExternalPlayer? = nil) {
+        Task { await series.play(episodes, of: title, using: model, in: player) }
     }
 }
 
