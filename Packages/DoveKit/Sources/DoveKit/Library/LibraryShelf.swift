@@ -32,6 +32,8 @@ public struct LibraryTitle: Identifiable, Sendable, Hashable {
         Array(Set(items.map(\.item.backend))).sorted { $0.rawValue < $1.rawValue }
     }
     public var latestAdded: Date? { items.compactMap(\.item.addedAt).max() }
+    /// The lowest upload ratio among its seeding releases (Debrid-Link): the one a private tracker cares about.
+    public var seedingRatio: Double? { items.compactMap(\.item.seeding?.ratio).min() }
     public var size: Int64 { items.compactMap(\.item.size).reduce(0, +) }
 
     /// The least finished state among its items, so a title shows "downloading" until everything is ready.
@@ -112,6 +114,8 @@ public struct BookTitle: Identifiable, Sendable, Hashable {
         Array(Set(items.map(\.item.backend))).sorted { $0.rawValue < $1.rawValue }
     }
     public var latestAdded: Date? { items.compactMap(\.item.addedAt).max() }
+    /// The lowest upload ratio among its seeding releases (Debrid-Link): the one a private tracker cares about.
+    public var seedingRatio: Double? { items.compactMap(\.item.seeding?.ratio).min() }
     public var size: Int64 { items.compactMap(\.item.size).reduce(0, +) }
     public var status: LibraryFilter.Status { LibraryFilter.Status(least: items) }
 }

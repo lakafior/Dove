@@ -81,14 +81,17 @@ struct DebridLinkBackendTests {
         #expect(movie.infoHash == "36a64b53dcd23d32cf743ae87282b69c7dceb4b0")
         #expect(movie.files.map(\.id) == ["2115ca3cf4356d24510-1"])
         #expect(movie.addedAt == Date(timeIntervalSince1970: 1792005709))
+        #expect(movie.seeding == LibraryItem.Seeding(ratio: 1.42, isActive: true, uploadSpeed: 0, peers: 0))
 
         let show = try #require(items.first { $0.id == "torrent:6acfd64d5877e" })
         #expect(show.status == .downloading(progress: 0.425))
         #expect(show.files.isEmpty, "the ZIP stand-in is not a file of the torrent")
+        #expect(show.seeding?.isActive == false, "still downloading")
 
         let link = try #require(items.last)
         #expect(link.status == .ready)
         #expect(link.files.map(\.id) == ["ab034778198a045c1ed80be271cdd029b76874f6fc"])
+        #expect(link.seeding == nil, "hoster links do not seed")
 
         let listRequest = try #require(await transport.requests.first { $0.url?.path().hasSuffix("/seedbox/list") == true })
         #expect(listRequest.url?.query()?.contains("perPage=100") == true)

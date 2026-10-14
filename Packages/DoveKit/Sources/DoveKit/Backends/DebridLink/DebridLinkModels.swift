@@ -33,9 +33,14 @@ struct DebridLinkTorrent: Decodable {
     /// Many files come as one ZIP entry here; `seedbox/list?ids=` lists them all.
     let isZip: Bool?
     let files: [DebridLinkFile]?
+    let uploadRatio: Double?
+    /// Bytes per second.
+    let uploadSpeed: Int64?
+    let peersConnected: Int?
 
     enum CodingKeys: String, CodingKey {
         case id, name, created, hashString, wait, totalSize, downloadPercent, isZip, files
+        case uploadRatio, uploadSpeed, peersConnected
         case state = "status"
     }
 }
@@ -115,7 +120,10 @@ extension DebridLinkTorrent {
             // A ZIP stand-in is no file of the torrent; `item(_:)` asks for the real list.
             files: isZip == true ? [] : (files ?? []).map(\.libraryFile),
             addedAt: created.map { Date(timeIntervalSince1970: $0) },
-            infoHash: hashString
+            infoHash: hashString,
+            seeding: uploadRatio.map {
+                LibraryItem.Seeding(ratio: $0, isActive: state == 8, uploadSpeed: uploadSpeed, peers: peersConnected)
+            }
         )
     }
 

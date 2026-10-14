@@ -502,9 +502,30 @@ private struct TitleCard: View {
             HStack(spacing: 3) {
                 if let year = title.year { Text(year).font(.caption2).foregroundStyle(.secondary) }
                 Spacer(minLength: 2)
+                if let ratio = title.seedingRatio { SeedingRatio(ratio: ratio).font(.caption2) }
                 ForEach(title.backends, id: \.self) { BackendBadge(backend: $0) }
             }
         }
+    }
+}
+
+/// Upload ratio of a seeding torrent: red below 0.5, orange below 1, green from 1 (most private trackers ask for 1).
+struct SeedingRatio: View {
+    let ratio: Double
+    var isActive = true
+
+    var body: some View {
+        Label(ratio.formatted(.number.precision(.fractionLength(2))), systemImage: isActive ? "arrow.up.circle.fill" : "arrow.up.circle")
+            .labelStyle(.titleAndIcon)
+            .monospacedDigit()
+            .foregroundStyle(color)
+            .accessibilityLabel("Seeding ratio \(ratio.formatted(.number.precision(.fractionLength(2))))")
+    }
+
+    private var color: Color {
+        if ratio >= 1 { return .green }
+        if ratio >= 0.5 { return .orange }
+        return .red
     }
 }
 
@@ -549,6 +570,9 @@ struct ShelfItemRow: View {
                 Text(item.item.status.label)
                 if let size = item.item.size {
                     Text(size.formatted(.byteCount(style: .file)))
+                }
+                if let seeding = item.item.seeding {
+                    SeedingRatio(ratio: seeding.ratio, isActive: seeding.isActive)
                 }
             }
             .font(.caption)
@@ -699,6 +723,22 @@ struct LibraryItemView: View {
                 LabeledContent("Status", value: (detail ?? item).status.label)
                 if let size = item.size {
                     LabeledContent("Size", value: size.formatted(.byteCount(style: .file)))
+                }
+            }
+            if let seeding = current.seeding {
+                Section {
+                    LabeledContent("Ratio") { SeedingRatio(ratio: seeding.ratio) }
+                    LabeledContent("Seeding", value: seeding.isActive ? "Yes" : "Stopped")
+                    if seeding.isActive, let speed = seeding.uploadSpeed {
+                        LabeledContent("Upload", value: speed.formatted(.byteCount(style: .file)) + "/s")
+                    }
+                    if seeding.isActive, let peers = seeding.peers {
+                        LabeledContent("Peers", value: "\(peers)")
+                    }
+                } header: {
+                    Text("Seeding")
+                } footer: {
+                    Text("\(item.backend.displayName) keeps seeding after the download, which private trackers count toward your ratio. Pull down to update.")
                 }
             }
             if let message {
