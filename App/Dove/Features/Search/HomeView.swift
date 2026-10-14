@@ -34,7 +34,7 @@ struct HomeView: View {
         VStack(alignment: .leading, spacing: 10) {
             Label("Set up Dove", systemImage: "sparkles").font(.headline)
             if model.backends.isEmpty {
-                Text("Add a debrid service (Real-Debrid, TorBox, Offcloud) or nzbdav to keep what you find.")
+                Text("Add a debrid service (Real-Debrid, TorBox, Offcloud, Debrid-Link) or nzbdav to keep what you find.")
             }
             if !model.addonSet.canSearch {
                 Text("Add a TMDB key or a Stremio addon that can search, so titles can be found here.")

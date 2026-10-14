@@ -47,7 +47,9 @@ struct AddSourceView: View {
                 ContentUnavailableView(
                     "No service for this source",
                     systemImage: "exclamationmark.triangle",
-                    description: Text("Add a service that accepts \(source.kind.rawValue) sources in Dove's Settings.")
+                    description: Text(source.isPrivateTorrent
+                        ? "This torrent is from a private tracker. Only a service that seeds may take it: add Debrid-Link in Dove's Settings."
+                        : "Add a service that accepts \(source.kind.rawValue) sources in Dove's Settings.")
                 )
             } else {
                 if candidates.count > 1 {

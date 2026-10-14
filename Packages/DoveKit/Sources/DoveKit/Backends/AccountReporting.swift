@@ -22,7 +22,7 @@ public struct AccountStatus: Sendable, Hashable, Codable {
     }
 }
 
-/// Services that tell how long the account's premium lasts (Real-Debrid, TorBox, Offcloud). nzbdav has no account.
+/// Services that tell how long the account's premium lasts (Real-Debrid, TorBox, Offcloud, Debrid-Link). nzbdav has no account.
 public protocol AccountReporting: LibraryBackend {
     func account() async throws -> AccountStatus
 }

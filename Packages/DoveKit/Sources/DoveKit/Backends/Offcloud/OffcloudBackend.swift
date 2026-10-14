@@ -49,6 +49,7 @@ public struct OffcloudBackend: LibraryBackend {
 
     @discardableResult
     public func add(_ source: Source) async throws -> LibraryItem.ID {
+        try refusePrivateTorrent(source)
         let request: URLRequest
         switch source {
         case .magnet(let magnet):

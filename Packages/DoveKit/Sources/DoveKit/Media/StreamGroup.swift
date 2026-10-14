@@ -30,16 +30,46 @@ public struct StreamGroup: Identifiable, Sendable, Hashable {
     public var kind: StreamCandidate.Kind { primary.kind }
     /// Newznab category from Dove's own indexers (Search › Other shows the kind).
     public var category: Int? { candidates.lazy.compactMap(\.category).first }
-    /// The most seeders any tracker reported (Torznab).
+    /// The most seeders any tracker reported.
     public var seeders: Int? { candidates.compactMap(\.seeders).max() }
+    public var sourceType: SourceType { primary.sourceType }
+    /// True when any tracker that has it is private, false when they all said public, nil when nobody said.
+    public var isPrivate: Bool? {
+        let known = candidates.compactMap(\.isPrivate)
+        return known.isEmpty ? nil : known.contains(true)
+    }
+    /// The newest upload date anyone gave.
+    public var published: Date? { candidates.compactMap(\.published).max() }
+    /// Each distinct path it was found by ("AIOStreams › Torrentio › 1337x"), in candidate order.
+    public var origins: [[String]] {
+        var seen = Set<[String]>()
+        return candidates.map(\.origin).filter { !$0.isEmpty && seen.insert($0).inserted }
+    }
+    /// Who answered Dove (AIOStreams, an addon, an indexer) and the addons inside AIOStreams.
+    public var providers: [String] {
+        unique(candidates.flatMap { [$0.addon ?? $0.provider].compactMap { $0 } })
+    }
+    /// Trackers and Usenet indexers behind it. AIOStreams lists several as `uindex,zilean`.
+    public var trackers: [String] {
+        unique(candidates.compactMap(\.tracker).flatMap {
+            $0.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }
+        })
+    }
+
+    private func unique(_ names: [String]) -> [String] {
+        var seen = Set<String>()
+        return names.filter { !$0.isEmpty && seen.insert($0.lowercased()).inserted }
+    }
 
     /// Link to play: a cached one if any service has it, otherwise the first.
     public var playURL: URL? {
         candidates.first { $0.cached == true && $0.url != nil }?.url ?? candidates.lazy.compactMap(\.url).first
     }
 
+    /// An indexer's `.torrent` first (see `StreamCandidate.librarySource`), then whatever the first candidate has.
     public var librarySource: Source? {
-        candidates.lazy.compactMap(\.librarySource).first
+        candidates.lazy.compactMap { $0.torrentURL.map(Source.torrentURL) }.first
+            ?? candidates.lazy.compactMap(\.librarySource).first
     }
 
     /// Dove's own indexers that found this release (their names are the candidates' labels).
@@ -168,6 +198,7 @@ extension BackendID {
         case "realdebrid", "rd": self = .realDebrid
         case "torbox", "tb": self = .torBox
         case "offcloud", "oc": self = .offcloud
+        case "debridlink", "dl": self = .debridLink
         case "nzbdav", "nd": self = .nzbdav
         default: return nil
         }

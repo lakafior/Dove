@@ -6,6 +6,7 @@ public enum CredentialKey: String, Sendable, CaseIterable {
     case torBoxAPIKey
     case realDebridAPIKey
     case offcloudAPIKey
+    case debridLinkAPIKey
     case nzbdavURL
     case nzbdavAPIKey
     case nzbdavWebDAVUser
@@ -156,6 +157,9 @@ public enum SharedConfiguration {
         }
         if let key = try? keychain.get(.offcloudAPIKey), !key.isEmpty {
             list.append(OffcloudBackend(apiKey: key, usenet: (try? keychain.get(.offcloudUsenet)) == "1"))
+        }
+        if let key = try? keychain.get(.debridLinkAPIKey), !key.isEmpty {
+            list.append(DebridLinkBackend(apiKey: key))
         }
         if let nzbdav = nzbdav(from: keychain) {
             list.append(nzbdav)

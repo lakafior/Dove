@@ -97,7 +97,12 @@ public struct AddonSet: Sendable {
             for (index, addon) in streamAddons.enumerated() {
                 group.addTask {
                     do {
-                        return (index, .success(try await addon.streams(type: type, id: id)), [], addon.manifest.name)
+                        let streams = try await addon.streams(type: type, id: id).map { candidate in
+                            var candidate = candidate
+                            candidate.provider = addon.manifest.name
+                            return candidate
+                        }
+                        return (index, .success(streams), [], addon.manifest.name)
                     } catch {
                         return (index, .failure(error), [], addon.manifest.name)
                     }

@@ -122,11 +122,23 @@ public struct StreamCandidate: Identifiable, Sendable, Hashable {
     public var traits: StreamTraits?
     /// Newznab category (`3010`…) for results from Dove's own indexers.
     public var category: Int?
-    /// A Torznab result's `.torrent` link, when it gave no info hash. It carries the indexer's API key and
+    /// A Torznab result's `.torrent` link (kept with an info hash too: only the file says whether the torrent
+    /// is private, and a private one needs its tracker's passkey). It carries the indexer's API key and
     /// may point to a host only the phone reaches: resolve it with `IndexerTorrent.prepare` before adding.
     public var torrentURL: URL?
-    /// Torznab: seeders the indexer last saw.
+    /// Seeders the indexer or addon last saw (Torznab, AIOStreams, Torrentio's 👤).
     public var seeders: Int?
+    /// Who answered Dove: "AIOStreams", a Stremio addon's name ("Torrentio"), or Dove's own indexer ("Jackett").
+    public var provider: String?
+    /// The addon inside AIOStreams that found it ("Torrentio", "Comet").
+    public var addon: String?
+    /// The tracker or Usenet indexer behind it: Jackett's and Prowlarr's per-result indexer, AIOStreams' `indexer`,
+    /// Torrentio's ⚙️ line.
+    public var tracker: String?
+    /// The tracker is private (Jackett `type`, Prowlarr, AIOStreams `private`). Nil when nobody said.
+    public var isPrivate: Bool?
+    /// When the release was posted (Torznab/Newznab `pubDate`, AIOStreams `age`).
+    public var published: Date?
 
     public init(
         id: String,
@@ -146,7 +158,12 @@ public struct StreamCandidate: Identifiable, Sendable, Hashable {
         traits: StreamTraits? = nil,
         category: Int? = nil,
         torrentURL: URL? = nil,
-        seeders: Int? = nil
+        seeders: Int? = nil,
+        provider: String? = nil,
+        addon: String? = nil,
+        tracker: String? = nil,
+        isPrivate: Bool? = nil,
+        published: Date? = nil
     ) {
         self.id = id
         self.kind = kind
@@ -166,15 +183,38 @@ public struct StreamCandidate: Identifiable, Sendable, Hashable {
         self.category = category
         self.torrentURL = torrentURL
         self.seeders = seeders
+        self.provider = provider
+        self.addon = addon
+        self.tracker = tracker
+        self.isPrivate = isPrivate
+        self.published = published
+    }
+
+    /// Where it came from, outermost first, without repeats: ["AIOStreams", "Torrentio", "1337x"], ["Jackett", "TorrentLeech"].
+    public var origin: [String] {
+        var path: [String] = []
+        for name in [provider, addon, tracker].compactMap({ $0?.trimmingCharacters(in: .whitespaces) }) where !name.isEmpty {
+            if !path.contains(where: { $0.caseInsensitiveCompare(name) == .orderedSame }) { path.append(name) }
+        }
+        return path
+    }
+
+    /// What kind of thing this is, for display and filters.
+    public var sourceType: SourceType {
+        if kind == .usenet || nzbURL != nil { return .usenet }
+        if infoHash != nil || torrentURL != nil || kind == .p2p { return .torrent }
+        if kind == .http { return .web }
+        return .debridLink
     }
 
     /// What "Add to library" sends to a backend: the torrent (whole, no file index) or the NZB.
+    /// An indexer's `.torrent` beats a bare magnet: it names the trackers and tells private torrents apart.
     public var librarySource: Source? {
+        if let torrentURL { return .torrentURL(torrentURL) }
         if let infoHash, !infoHash.isEmpty {
             return .magnet("magnet:?xt=urn:btih:\(infoHash.lowercased())")
         }
         if let nzbURL { return .nzbURL(nzbURL) }
-        if let torrentURL { return .torrentURL(torrentURL) }
         return nil
     }
 
@@ -182,6 +222,25 @@ public struct StreamCandidate: Identifiable, Sendable, Hashable {
     public var isPack: Bool {
         guard let size, let folderSize, size > 0 else { return false }
         return Double(folderSize) > Double(size) * 1.5
+    }
+}
+
+/// The broad kind of a source row.
+public enum SourceType: String, Sendable, Hashable, CaseIterable {
+    case torrent
+    case usenet
+    /// A debrid service's resolve link without an info hash (debrid-configured addons): play only.
+    case debridLink
+    /// Plain HTTP (Easynews, direct links).
+    case web
+
+    public var displayName: String {
+        switch self {
+        case .torrent: "Torrent"
+        case .usenet: "Usenet"
+        case .debridLink: "Debrid link"
+        case .web: "Web"
+        }
     }
 }
 

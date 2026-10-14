@@ -224,6 +224,7 @@ struct StremioStream: Decodable {
     func candidate(id: String) -> StreamCandidate {
         let text = [name, description ?? title].compactMap { $0.map(StremioText.clean) }.filter { !$0.isEmpty }
         let label = text.joined(separator: "\n")
+        let details = [title, description, name].compactMap { $0 }.joined(separator: "\n")
         let kind: StreamCandidate.Kind = if url != nil {
             .debrid
         } else if infoHash != nil {
@@ -243,7 +244,9 @@ struct StremioStream: Decodable {
             fileIndex: fileIdx.flatMap { $0 >= 0 ? $0 : nil },
             url: url.flatMap(URL.init(string:)),
             cached: behaviorHints?.cached,
-            bingeGroup: behaviorHints?.bingeGroup
+            bingeGroup: behaviorHints?.bingeGroup,
+            seeders: StremioText.seeders(in: details),
+            tracker: StremioText.tracker(in: details)
         )
     }
 }
@@ -260,6 +263,18 @@ enum StremioText {
         default: 1_000
         }
         return Int64(value * unit)
+    }
+
+    /// Seeders as Torrentio writes them (`👤 123`).
+    static func seeders(in text: String) -> Int? {
+        text.firstMatch(of: /(?:👤|👥)\s*([0-9]+)/).flatMap { Int($0.1) }
+    }
+
+    /// The tracker as Torrentio writes it (`⚙️ ThePirateBay`), up to the end of the line.
+    static func tracker(in text: String) -> String? {
+        guard let match = text.firstMatch(of: /(?:⚙️|⚙)\s*([^\n]+)/) else { return nil }
+        let name = clean(String(match.1))
+        return name.isEmpty ? nil : name
     }
 
     /// Formatters pad names with non-breaking and zero-width characters for alignment in Stremio.

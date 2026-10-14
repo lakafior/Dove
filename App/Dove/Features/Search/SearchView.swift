@@ -17,6 +17,13 @@ struct SearchView: View {
     @AppStorage("otherCategory") private var category: NewznabCategory = .all
     @State private var otherResults: [StreamGroup] = []
     @State private var busy: Set<StreamGroup.ID> = []
+    /// Search › Other's own filter (type, private, who found it), for this session only.
+    @State var otherFilter: SourceFilter = {
+        var filter = SourceFilter()
+        filter.sort = .addon
+        return filter
+    }()
+    @State var showOtherFilters = false
     @Environment(\.scenePhase) private var scenePhase
     /// `UIPasteboard.changeCount` the banner was last answered for, so it does not come back for the same copy.
     @AppStorage("clipboardAnsweredChange") private var answeredChange = -1
@@ -99,6 +106,7 @@ struct SearchView: View {
             .onAppear(perform: checkPasteboard)
             .onChange(of: scenePhase) { if scenePhase == .active { checkPasteboard() } }
             .onReceive(NotificationCenter.default.publisher(for: UIPasteboard.changedNotification)) { _ in checkPasteboard() }
+            .sheet(isPresented: $showOtherFilters) { otherFilterSheet }
             .sheet(item: $pendingSource) { source in
                 AddSourceSheet(source: source) { result in
                     pendingSource = nil
@@ -243,7 +251,17 @@ extension SearchView {
         @Bindable var model = model
         Section {
             Toggle("Download only", isOn: $model.downloadOnly)
-            ForEach(otherResults) { group in
+            Button {
+                showOtherFilters = true
+            } label: {
+                Label(
+                    otherFilter.isActive
+                        ? "Showing \(visibleOtherResults.count) of \(otherResults.count) · filters on"
+                        : "Filter and sort",
+                    systemImage: otherFilter.isActive ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease.circle"
+                )
+            }
+            ForEach(visibleOtherResults) { group in
                 OtherResultRow(
                     group: group,
                     isBusy: busy.contains(group.id),
@@ -252,10 +270,25 @@ extension SearchView {
                 )
             }
         } footer: {
-            if otherResults.contains(where: { !canAdd($0) }) {
+            if visibleOtherResults.contains(where: { !canAdd($0) }) {
                 Text("NZBs need nzbdav, TorBox or Offcloud Usenet, torrents a debrid service: set them up in Settings.")
             }
         }
+    }
+
+    var visibleOtherResults: [StreamGroup] {
+        otherFilter.apply(to: otherResults)
+    }
+
+    var otherFilterSheet: some View {
+        SourceFilterSheet(
+            filter: $otherFilter,
+            groups: otherResults,
+            dimensions: [.type, .privacy, .provider, .tracker, .cached],
+            sorts: [.addon, .seeders, .newest, .sizeDescending, .sizeAscending],
+            showsAppleTV: false
+        )
+        .presentationDetents([.medium, .large])
     }
 
     /// Words in the picked category, through Dove's own indexers. Same release from several indexers: one row.
@@ -305,7 +338,7 @@ extension SearchView {
             defer { busy.remove(group.id) }
             do {
                 // A Torznab result's .torrent link carries the indexer's key: fetch it here, never hand it over.
-                let router = model.router(preferring: group.cachedBackends())
+                let router = model.router(preferring: group.cachedBackends()).forPrivateTracker(group.isPrivate == true)
                 // NZBs are filed by the indexer's category (audio, software, books, xxx…).
                 let category = group.category.flatMap(AddCategory.init(newznabCategory:))
                 let result = try await router.add(try await IndexerTorrent.prepare(source), category: category)

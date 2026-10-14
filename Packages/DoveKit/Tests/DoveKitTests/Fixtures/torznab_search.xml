@@ -6,6 +6,8 @@
       <title>Some.Movie.2023.1080p.BluRay.x264-GRP</title>
       <guid>https://tracker.example/details/1</guid>
       <jackettindexer id="publictracker">Public Tracker</jackettindexer>
+      <type>public</type>
+      <pubDate>Mon, 13 Oct 2026 10:00:00 +0000</pubDate>
       <link>http://192.168.1.10:9117/dl/publictracker/?jackett_apikey=KEY&amp;path=abc&amp;file=Some.Movie</link>
       <size>9000000000</size>
       <enclosure url="http://192.168.1.10:9117/dl/publictracker/?jackett_apikey=KEY&amp;path=abc&amp;file=Some.Movie" length="9000000000" type="application/x-bittorrent" />
@@ -26,6 +28,8 @@
     <item>
       <title>Some.Program.v2.0.x64</title>
       <guid>https://private.example/details/3</guid>
+      <jackettindexer id="privatetracker">Private Tracker</jackettindexer>
+      <type>semi-private</type>
       <link>http://192.168.1.10:9117/dl/private/?jackett_apikey=KEY&amp;path=xyz</link>
       <enclosure url="http://192.168.1.10:9117/dl/private/?jackett_apikey=KEY&amp;path=xyz" length="300000000" type="application/x-bittorrent" />
       <torznab:attr name="category" value="4000" />

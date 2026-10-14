@@ -37,6 +37,7 @@ public struct TorBoxBackend: LibraryBackend {
 
     @discardableResult
     public func add(_ source: Source) async throws -> LibraryItem.ID {
+        try refusePrivateTorrent(source)
         switch source {
         case .magnet(let magnet):
             var form = MultipartFormData()

@@ -1,0 +1,18 @@
+{
+  "success": true,
+  "value": [
+    {
+      "created": 1792000000,
+      "id": "ab034778198a045c1ed80be271cdd029b76874f6fc",
+      "name": "Some.Archive.part1.rar",
+      "url": "https://host.example/file/123",
+      "downloadUrl": "https://dl6.debrid.link/dl/xyz/Some.Archive.part1.rar",
+      "expired": false,
+      "chunk": 8,
+      "host": "host",
+      "size": 125002,
+      "isProcessing": false
+    }
+  ],
+  "pagination": { "page": 0, "pages": 1, "next": -1, "previous": -1 }
+}

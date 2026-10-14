@@ -9,6 +9,8 @@ public enum BackendError: Error, Sendable, Equatable, LocalizedError {
     case http(status: Int)
     case api(message: String)
     case invalidResponse
+    /// A private tracker's torrent sent to a service that does not seed.
+    case privateTorrent
 
     public var errorDescription: String? {
         switch self {
@@ -20,6 +22,7 @@ public enum BackendError: Error, Sendable, Equatable, LocalizedError {
         case .http(let status): "Server returned HTTP \(status)."
         case .api(let message): message
         case .invalidResponse: "Unexpected response from server."
+        case .privateTorrent: "This torrent is from a private tracker. Only a service that seeds (Debrid-Link) may take it: the others would get your tracker account banned."
         }
     }
 }

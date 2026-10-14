@@ -1,0 +1,60 @@
+{
+  "success": true,
+  "value": [
+    {
+      "id": "2115ca3cf4356d24510",
+      "name": "Some.Movie.2023.1080p.BluRay.x264-GRP",
+      "created": 1792005709,
+      "hashString": "36A64B53DCD23D32CF743AE87282B69C7DCEB4B0",
+      "uploadRatio": 1.42,
+      "wait": false,
+      "peersConnected": 0,
+      "status": 8,
+      "totalSize": 2556175746,
+      "downloadPercent": 100,
+      "downloadSpeed": 0,
+      "uploadSpeed": 0,
+      "isZip": false,
+      "srvMaint": false,
+      "files": [
+        {
+          "id": "2115ca3cf4356d24510-1",
+          "name": "Some.Movie.2023.1080p.BluRay.x264-GRP.mkv",
+          "size": 2556000000,
+          "downloadUrl": "https://seed20.debrid.link/dl/abc/Some.Movie.mkv",
+          "downloadPercent": 100
+        }
+      ],
+      "trackers": [{ "announce": "https://tracker.example/announce" }],
+      "zip": {}
+    },
+    {
+      "id": "6acfd64d5877e",
+      "name": "Some.Show.S01.1080p.WEB-DL",
+      "created": 1792009999,
+      "hashString": "1a07d876aaaebe797c21eff39df7436d2f739b7a",
+      "uploadRatio": 0,
+      "wait": false,
+      "peersConnected": 12,
+      "status": 4,
+      "totalSize": 9000000000,
+      "downloadPercent": 42.5,
+      "downloadSpeed": 1000000,
+      "uploadSpeed": 0,
+      "isZip": true,
+      "srvMaint": false,
+      "files": [
+        {
+          "id": "6acfd64d5877e-zip",
+          "name": "Some.Show.S01.1080p.WEB-DL.zip",
+          "size": 9000000000,
+          "downloadUrl": "",
+          "downloadPercent": 42
+        }
+      ],
+      "trackers": [],
+      "zip": {}
+    }
+  ],
+  "pagination": { "page": 0, "pages": 1, "next": -1, "previous": -1 }
+}

@@ -41,9 +41,6 @@ struct OtherResultRow: View {
                         Text(size.formatted(.byteCount(style: .file))).monospacedDigit()
                     }
                     Text(kind.displayName)
-                    if let seeders = group.seeders {
-                        Label("\(seeders)", systemImage: "arrow.up").labelStyle(.titleAndIcon)
-                    }
                 }
                 .font(.caption)
                 .foregroundStyle(.secondary)
@@ -57,12 +54,10 @@ struct OtherResultRow: View {
                         }
                         .foregroundStyle(availability.cached == true ? .primary : .secondary)
                     }
-                    if !group.indexers.isEmpty {
-                        Text("via " + group.indexers.joined(separator: " · ")).lineLimit(1)
-                    }
                 }
                 .font(.caption)
                 .foregroundStyle(.secondary)
+                SourceOriginLine(group: group)
             }
             Spacer(minLength: 0)
             if let onAdd {

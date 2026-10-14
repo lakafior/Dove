@@ -289,6 +289,15 @@ public struct AIOStreamsSearch: Sendable {
         let errors: [SourceError]
     }
 
+    struct LossyDouble: Decodable {
+        let value: Double?
+
+        init(from decoder: any Decoder) throws {
+            let container = try decoder.singleValueContainer()
+            value = (try? container.decode(Double.self)) ?? (try? container.decode(String.self)).flatMap(Double.init)
+        }
+    }
+
     struct SourceError: Decodable {
         let title: String
         let description: String
@@ -310,6 +319,10 @@ public struct AIOStreamsSearch: Sendable {
         let addon: String?
         let indexer: String?
         let message: String?
+        let seeders: Int?
+        /// Hours since upload. A number in the schema; tolerated as text, and ignored when neither.
+        let age: LossyDouble?
+        let `private`: Bool?
         let parsedFile: ParsedFile?
 
         struct ParsedFile: Decodable {
@@ -326,7 +339,7 @@ public struct AIOStreamsSearch: Sendable {
             let folderSeasons: [Int]?
         }
 
-        func candidate(id: String) -> StreamCandidate {
+        func candidate(id: String, now: Date = .now) -> StreamCandidate {
             let kind: StreamCandidate.Kind = switch type {
             case "debrid": .debrid
             case "usenet": .usenet
@@ -350,22 +363,32 @@ public struct AIOStreamsSearch: Sendable {
                 service: service,
                 cached: cached,
                 bingeGroup: bingeGroup,
-                traits: parsedFile.map {
-                    StreamTraits(
-                        resolution: $0.resolution,
-                        quality: $0.quality,
-                        encode: $0.encode,
-                        releaseGroup: $0.releaseGroup,
-                        visualTags: $0.visualTags ?? [],
-                        audioTags: $0.audioTags ?? [],
-                        languages: ($0.languages ?? []).map(LanguageName.code),
-                        seasons: $0.seasons ?? [],
-                        episodes: $0.episodes ?? [],
-                        seasonPack: $0.seasonPack ?? false,
-                        folderSeasons: $0.folderSeasons ?? []
-                    )
-                }
+                traits: traits,
+                seeders: seeders,
+                provider: "AIOStreams",
+                addon: addon,
+                tracker: indexer,
+                isPrivate: `private`,
+                published: age?.value.map { now.addingTimeInterval(-$0 * 3600) }
             )
+        }
+
+        private var traits: StreamTraits? {
+            parsedFile.map {
+                StreamTraits(
+                    resolution: $0.resolution,
+                    quality: $0.quality,
+                    encode: $0.encode,
+                    releaseGroup: $0.releaseGroup,
+                    visualTags: $0.visualTags ?? [],
+                    audioTags: $0.audioTags ?? [],
+                    languages: ($0.languages ?? []).map(LanguageName.code),
+                    seasons: $0.seasons ?? [],
+                    episodes: $0.episodes ?? [],
+                    seasonPack: $0.seasonPack ?? false,
+                    folderSeasons: $0.folderSeasons ?? []
+                )
+            }
         }
     }
 }

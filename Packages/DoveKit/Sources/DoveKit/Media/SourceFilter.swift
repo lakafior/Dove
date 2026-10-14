@@ -4,10 +4,14 @@ import Foundation
 /// dimensions combine (AND): "2160p or 1080p" and "DV" and "PL".
 public struct SourceFilter: Codable, Equatable, Sendable {
     public enum Dimension: String, Codable, CaseIterable, Sendable {
-        case resolution, quality, encode, video, audio, language, cached
+        case type, privacy, provider, tracker, resolution, quality, encode, video, audio, language, cached
 
         public var title: String {
             switch self {
+            case .type: "Type"
+            case .privacy: "Tracker access"
+            case .provider: "Found by"
+            case .tracker: "Tracker / indexer"
             case .resolution: "Resolution"
             case .quality: "Source"
             case .encode: "Codec"
@@ -26,6 +30,8 @@ public struct SourceFilter: Codable, Equatable, Sendable {
         case addon
         case sizeDescending
         case sizeAscending
+        case seeders
+        case newest
 
         public var title: String {
             switch self {
@@ -33,6 +39,8 @@ public struct SourceFilter: Codable, Equatable, Sendable {
             case .addon: "Addon order"
             case .sizeDescending: "Largest first"
             case .sizeAscending: "Smallest first"
+            case .seeders: "Most seeders"
+            case .newest: "Newest first"
             }
         }
     }
@@ -85,6 +93,8 @@ public struct SourceFilter: Codable, Equatable, Sendable {
         case .addon: return kept
         case .sizeDescending: return kept.sorted { ($0.size ?? 0) > ($1.size ?? 0) }
         case .sizeAscending: return kept.sorted { ($0.size ?? .max) < ($1.size ?? .max) }
+        case .seeders: return kept.sorted { ($0.seeders ?? -1) > ($1.seeders ?? -1) }
+        case .newest: return kept.sorted { ($0.published ?? .distantPast) > ($1.published ?? .distantPast) }
         }
     }
 
@@ -107,6 +117,20 @@ public struct SourceFilter: Codable, Equatable, Sendable {
     static func values(of dimension: Dimension, in group: StreamGroup) -> Set<String> {
         let traits = group.traits
         switch dimension {
+        case .type:
+            return [group.sourceType.displayName]
+        case .privacy:
+            // Only torrents have trackers that are private or not.
+            guard group.sourceType == .torrent else { return [] }
+            return switch group.isPrivate {
+            case true?: ["Private"]
+            case false?: ["Public"]
+            case nil: ["Unknown"]
+            }
+        case .provider:
+            return Set(group.providers)
+        case .tracker:
+            return Set(group.trackers)
         case .resolution:
             return traits.resolution.map { [$0] } ?? ["Unknown"]
         case .quality:
@@ -127,6 +151,8 @@ public struct SourceFilter: Codable, Equatable, Sendable {
     }
 
     private static let preferredOrder: [Dimension: [String]] = [
+        .type: ["Torrent", "Usenet", "Debrid link", "Web"],
+        .privacy: ["Private", "Public", "Unknown"],
         .resolution: ["2160p", "1440p", "1080p", "720p", "480p", "Unknown"],
         .quality: ["BluRay REMUX", "BluRay", "WEB-DL", "WEBRip", "WEB", "HDTV", "DVD", "CAM", "Unknown"],
         .encode: ["HEVC", "AVC", "AV1", "XviD", "Unknown"],

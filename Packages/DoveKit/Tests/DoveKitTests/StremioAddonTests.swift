@@ -203,6 +203,26 @@ struct AIOStreamsSearchTests {
         #expect(candidates[1].librarySource == .magnet("magnet:?xt=urn:btih:3133f1ac4b86226ca105e69b1c1374ef552380b5"))
         #expect(candidates[0].librarySource == nil)
         #expect(results.sourceErrors.contains { $0.contains("NOAUTH") })
+
+        #expect(candidates.allSatisfy { $0.provider == "AIOStreams" && $0.isPrivate == false })
+        #expect(candidates[1].addon == "Meteor")
+        #expect(candidates[1].origin == ["AIOStreams", "Meteor", "uindex,stremthru-corpus,zilean"])
+        #expect(StreamGroup.group([candidates[1]])[0].trackers == ["uindex", "stremthru-corpus", "zilean"])
+        #expect(candidates[1].seeders == 10)
+        #expect(candidates[0].sourceType == .usenet && candidates[0].tracker == "Miatrix")
+        #expect(candidates[3].sourceType == .torrent)
+    }
+
+    @Test func ageBecomesAnUploadDate() throws {
+        let json = #"{"type":"p2p","infoHash":"3133f1ac4b86226ca105e69b1c1374ef552380b5","age":48,"private":true,"seeders":7}"#
+        let result = try JSONDecoder().decode(AIOStreamsSearch.Result.self, from: Data(json.utf8))
+        let now = Date(timeIntervalSince1970: 1_000_000)
+        let candidate = result.candidate(id: "a", now: now)
+        #expect(candidate.published == now.addingTimeInterval(-48 * 3600))
+        #expect(candidate.isPrivate == true && candidate.seeders == 7)
+
+        let text = #"{"type":"p2p","age":"12"}"#
+        #expect(try JSONDecoder().decode(AIOStreamsSearch.Result.self, from: Data(text.utf8)).age?.value == 12)
     }
 
     @Test func badCredentialsAreUnauthorized() async {
@@ -236,6 +256,9 @@ struct TorrentioStreamTests {
         let group = StreamGroup.group([first])[0]
         #expect(group.traits.resolution == "2160p")
         #expect(group.traits.quality == "WEB-DL")
+        #expect(first.seeders == 239)
+        #expect(first.tracker == "ThePirateBay")
+        #expect(streams[1].tracker == "ilCorSaRoNeRo", "the language line below is not part of it")
     }
 
     @Test func sizeIsReadFromTitleText() {

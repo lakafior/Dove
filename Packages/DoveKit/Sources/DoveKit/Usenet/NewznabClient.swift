@@ -210,6 +210,32 @@ struct NewznabItem {
     var attrs: [String: String] = [:]
     /// Every `category` attribute, parent first (`3000`, `3010`).
     var categories: [Int] = []
+    /// The tracker behind an aggregate feed: Jackett's `jackettindexer`, Prowlarr's `prowlarrindexer`.
+    var tracker: String?
+    /// Jackett's `type` element or Prowlarr's `type` attribute: `public`, `semi-private`, `private`.
+    var trackerType: String?
+    var pubDate: String?
+
+    /// Semi-private trackers count as private: they also want seeding back.
+    var isPrivate: Bool? {
+        guard let type = trackerType?.lowercased(), !type.isEmpty else { return nil }
+        return type.contains("private")
+    }
+
+    var published: Date? {
+        (pubDate ?? attrs["usenetdate"]).flatMap(Self.parseDate)
+    }
+
+    /// RSS dates (`Tue, 14 Oct 2026 10:00:00 +0000`), with or without the weekday.
+    static func parseDate(_ text: String) -> Date? {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        for format in ["EEE, dd MMM yyyy HH:mm:ss Z", "dd MMM yyyy HH:mm:ss Z"] {
+            formatter.dateFormat = format
+            if let date = formatter.date(from: text.trimmingCharacters(in: .whitespaces)) { return date }
+        }
+        return nil
+    }
 
     /// The most specific standard category the indexer gave. Jackett adds its trackers' own categories
     /// (100000 and up); they say nothing Dove understands.
@@ -222,9 +248,13 @@ struct NewznabItem {
         switch indexer.kind {
         case .newznab:
             guard let nzb = links.first else { return nil }
-            return StreamCandidate(id: id, kind: .usenet, title: title, label: indexer.name, size: size, nzbURL: nzb, category: category)
+            return StreamCandidate(
+                id: id, kind: .usenet, title: title, label: indexer.name, size: size, nzbURL: nzb, category: category,
+                provider: indexer.name, tracker: tracker, published: published
+            )
         case .torznab:
-            // An info hash adds as a magnet (and shows cache status); otherwise the .torrent link, fetched later.
+            // The info hash shows cache status; adds fetch the .torrent when there is one (private trackers need
+            // the file), else use the magnet.
             let magnet = ([attrs["magneturl"]] + links.map(\.absoluteString)).compactMap { $0 }.first { $0.hasPrefix("magnet:") }
             let hash = attrs["infohash"].flatMap(Self.validHash) ?? magnet.flatMap(Self.hash(inMagnet:))
             let torrent = links.first { $0.scheme == "http" || $0.scheme == "https" }
@@ -237,8 +267,12 @@ struct NewznabItem {
                 size: size,
                 infoHash: hash,
                 category: category,
-                torrentURL: hash == nil ? torrent : nil,
-                seeders: attrs["seeders"].flatMap(Int.init)
+                torrentURL: torrent,
+                seeders: attrs["seeders"].flatMap(Int.init),
+                provider: indexer.name,
+                tracker: tracker,
+                isPrivate: isPrivate,
+                published: published
             )
         }
     }
@@ -302,6 +336,8 @@ final class NewznabParser: NSObject, XMLParserDelegate {
             }
         case "item":
             item = NewznabItem()
+        case "prowlarrindexer":
+            item?.trackerType = attributes["type"]
         case "enclosure":
             item?.enclosureURL = attributes["url"]
             item?.enclosureLength = attributes["length"].flatMap(Int64.init)
@@ -335,6 +371,9 @@ final class NewznabParser: NSObject, XMLParserDelegate {
         case "title": item?.title = value
         case "guid": item?.guid = value
         case "link": item?.link = value
+        case "jackettindexer", "prowlarrindexer": item?.tracker = value.isEmpty ? nil : value
+        case "type": if item != nil, !value.isEmpty { item?.trackerType = value }
+        case "pubDate": item?.pubDate = value
         case "item":
             if let item { document.items.append(item) }
             item = nil

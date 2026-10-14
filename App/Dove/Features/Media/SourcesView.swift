@@ -113,7 +113,8 @@ struct SourcesView: View {
         .task { await load() }
         .refreshable { await load() }
         .sheet(isPresented: $showFilters) {
-            SourceFilterSheet(groups: groups ?? [])
+            @Bindable var model = model
+            SourceFilterSheet(filter: $model.sourceFilter, groups: groups ?? [])
                 .presentationDetents([.medium, .large])
         }
     }
@@ -180,7 +181,7 @@ struct SourcesView: View {
         }
         if let source = group.librarySource {
             Section(model.downloadOnly ? "Download only, through" : "Add only to") {
-                ForEach(model.router.candidates(for: source).map(\.id), id: \.self) { backend in
+                ForEach(model.router.forPrivateTracker(group.isPrivate == true).candidates(for: source).map(\.id), id: \.self) { backend in
                     let cached = group.cachedBackends().contains(backend)
                     Button(backend.displayName + (cached ? " ⚡" : "")) { add(source, of: group, only: backend) }
                 }
@@ -262,10 +263,14 @@ struct SourcesView: View {
                 // NZBs land in nzbdav's `movies` or `tv` folder.
                 let category = AddCategory(mediaType: type)
                 if let backend, let service = model.backend(backend) {
+                    // An indexer said private: the magnet cannot tell, so check here too.
+                    if group.isPrivate == true, !service.seedsTorrents { throw BackendError.privateTorrent }
                     itemID = try await service.add(source, category: category)
                     added = backend
                 } else {
-                    let result = try await model.router(preferring: group.cachedBackends()).add(source, category: category)
+                    let result = try await model.router(preferring: group.cachedBackends())
+                        .forPrivateTracker(group.isPrivate == true)
+                        .add(source, category: category)
                     added = result.backend
                     itemID = result.itemID
                     skipped = result.skipped.map { "\($0.backend.displayName): \($0.error.localizedDescription)" }
@@ -306,6 +311,7 @@ private struct SourceRow: View {
                 }
                 .font(.caption)
                 .foregroundStyle(.secondary)
+                SourceOriginLine(group: group)
                 let warnings = group.appleTVWarnings + [warning].compactMap { $0 }
                 if !warnings.isEmpty {
                     Label(warnings.joined(separator: " · "), systemImage: "exclamationmark.triangle")
@@ -370,8 +376,6 @@ private struct SourceRow: View {
                     }
                     .foregroundStyle(availability.cached == true ? .primary : .secondary)
                 }
-                if group.kind == .usenet { Text("Usenet") }
-                if !group.indexers.isEmpty { Text("via " + group.indexers.joined(separator: " · ")).lineLimit(1) }
             }
         }
     }

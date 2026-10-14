@@ -5,6 +5,7 @@ public enum BackendID: String, Sendable, Codable, CaseIterable, Identifiable {
     case realDebrid
     case torBox
     case offcloud
+    case debridLink
     case nzbdav
 
     public var id: String { rawValue }
@@ -14,6 +15,7 @@ public enum BackendID: String, Sendable, Codable, CaseIterable, Identifiable {
         case .realDebrid: "Real-Debrid"
         case .torBox: "TorBox"
         case .offcloud: "Offcloud"
+        case .debridLink: "Debrid-Link"
         case .nzbdav: "nzbdav"
         }
     }

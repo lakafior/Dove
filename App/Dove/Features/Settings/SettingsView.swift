@@ -10,7 +10,7 @@ struct SettingsView: View {
         NavigationStack {
             Form {
                 Section {
-                    ForEach([BackendID.realDebrid, .torBox, .offcloud], id: \.self) { backend in
+                    ForEach([BackendID.realDebrid, .torBox, .offcloud, .debridLink], id: \.self) { backend in
                         NavigationLink {
                             DebridKeyView(backend: backend)
                         } label: {
@@ -27,7 +27,7 @@ struct SettingsView: View {
                 } header: {
                     Text("Debrid")
                 } footer: {
-                    Text("Torrents and links go to the first service in Priority. If it fails, Dove tries the next one.")
+                    Text("Torrents and links go to the first service in Priority. If it fails, Dove tries the next one. Torrents from private trackers go only to Debrid-Link, the one service that seeds.")
                 }
 
                 Section {
@@ -175,6 +175,7 @@ extension BackendID {
         case .realDebrid: "bolt.fill"
         case .torBox: "shippingbox.fill"
         case .offcloud: "cloud.fill"
+        case .debridLink: "link"
         case .nzbdav: "server.rack"
         }
     }
@@ -184,6 +185,7 @@ extension BackendID {
         case .realDebrid: .green
         case .torBox: .purple
         case .offcloud: .blue
+        case .debridLink: .teal
         case .nzbdav: .orange
         }
     }
@@ -194,6 +196,7 @@ extension BackendID {
         case .realDebrid: "real-debrid.com › My account › API token (real-debrid.com/apitoken)."
         case .torBox: "torbox.app › Settings › API key."
         case .offcloud: "offcloud.com › Account › API key."
+        case .debridLink: "debrid-link.com › My account › API key. Debrid-Link seeds, so torrents from private trackers go here."
         case .nzbdav: ""
         }
     }
@@ -212,6 +215,7 @@ private struct DebridKeyView: View {
         case .realDebrid: .realDebridAPIKey
         case .torBox: .torBoxAPIKey
         case .offcloud: .offcloudAPIKey
+        case .debridLink: .debridLinkAPIKey
         case .nzbdav: .nzbdavAPIKey
         }
     }

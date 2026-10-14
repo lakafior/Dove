@@ -25,13 +25,22 @@ struct TorznabTests {
         #expect(movie.seeders == 120)
         #expect(movie.category == 2000, "Jackett's own 100000+ categories are ignored")
         #expect(movie.size == 9_000_000_000)
-        #expect(movie.torrentURL == nil, "a hash is enough; the link with the API key is not kept")
-        #expect(movie.librarySource == .magnet("magnet:?xt=urn:btih:" + String(repeating: "a", count: 40)))
+        // The .torrent wins over the magnet: only the file says whether it is private (and carries the passkey).
+        #expect(movie.torrentURL?.host() == "192.168.1.10")
+        #expect(movie.librarySource == .torrentURL(movie.torrentURL!))
 
         #expect(found[1].infoHash == String(repeating: "b", count: 40), "hash read from a magnet link")
         #expect(found[1].category == 3040)
+        #expect(found[1].torrentURL == nil)
+        #expect(found[1].librarySource == .magnet("magnet:?xt=urn:btih:" + String(repeating: "b", count: 40)))
 
         let program = found[2]
+        #expect(movie.provider == "Jackett" && movie.tracker == "Public Tracker" && movie.isPrivate == false)
+        #expect(movie.origin == ["Jackett", "Public Tracker"])
+        #expect(movie.published == Date(timeIntervalSince1970: 1791885600))
+        #expect(found[1].tracker == nil && found[1].isPrivate == nil, "no jackettindexer or type")
+        #expect(program.tracker == "Private Tracker")
+        #expect(program.isPrivate == true, "semi-private trackers want seeding too")
         #expect(program.infoHash == nil)
         #expect(program.torrentURL?.host() == "192.168.1.10")
         #expect(program.librarySource == .torrentURL(program.torrentURL!))

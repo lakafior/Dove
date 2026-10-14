@@ -1,40 +1,52 @@
 import DoveKit
 import SwiftUI
 
-/// Chips for every value present in the current list, per dimension. Choices persist (AppModel.sourceFilter).
+/// Chips for every value present in the current list, per dimension. The source list edits the persisted
+/// `AppModel.sourceFilter`; Search › Other passes its own filter and only the dimensions that make sense there.
 struct SourceFilterSheet: View {
-    @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
+    @Binding var filter: SourceFilter
     let groups: [StreamGroup]
+    var dimensions: [SourceFilter.Dimension] = SourceFilter.Dimension.allCases
+    var sorts: [SourceFilter.Sort] = SourceFilter.Sort.allCases
+    var showsAppleTV = true
 
     var body: some View {
-        @Bindable var model = model
         NavigationStack {
             Form {
                 Section {
-                    Picker("Sort", selection: $model.sourceFilter.sort) {
-                        ForEach(SourceFilter.Sort.allCases, id: \.self) { Text($0.title).tag($0) }
+                    Picker("Sort", selection: $filter.sort) {
+                        ForEach(sorts, id: \.self) { Text($0.title).tag($0) }
                     }
-                    Toggle("Apple TV friendly", isOn: $model.sourceFilter.appleTVFriendly)
+                    if showsAppleTV {
+                        Toggle("Apple TV friendly", isOn: $filter.appleTVFriendly)
+                    }
                 } footer: {
-                    Text("Apple TV friendly hides AV1 and TrueHD Atmos releases.")
+                    if showsAppleTV {
+                        Text("Apple TV friendly hides AV1 and TrueHD Atmos releases.")
+                    }
                 }
 
-                ForEach(SourceFilter.Dimension.allCases, id: \.self) { dimension in
+                ForEach(dimensions, id: \.self) { dimension in
                     let options = SourceFilter.options(for: dimension, in: groups)
-                    if !options.isEmpty {
-                        Section(dimension.title) {
+                    // A single value filters nothing, unless it is already selected (so it can be turned off).
+                    if options.count > 1 || options.contains(where: { filter.isSelected($0.value, in: dimension) }) {
+                        Section {
                             FlowLayout(spacing: 6) {
                                 ForEach(options, id: \.value) { option in
                                     Chip(
                                         text: "\(option.value) \(option.count)",
-                                        isOn: model.sourceFilter.isSelected(option.value, in: dimension)
+                                        isOn: filter.isSelected(option.value, in: dimension)
                                     ) {
-                                        model.sourceFilter.toggle(option.value, in: dimension)
+                                        filter.toggle(option.value, in: dimension)
                                     }
                                 }
                             }
                             .padding(.vertical, 4)
+                        } header: {
+                            Text(dimension.title)
+                        } footer: {
+                            if let hint = dimension.hint { Text(hint) }
                         }
                     }
                 }
@@ -43,13 +55,24 @@ struct SourceFilterSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Reset") { model.sourceFilter.reset() }
-                        .disabled(!model.sourceFilter.isActive)
+                    Button("Reset") { filter.reset() }
+                        .disabled(!filter.isActive)
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Done") { dismiss() }
                 }
             }
+        }
+    }
+}
+
+private extension SourceFilter.Dimension {
+    var hint: String? {
+        switch self {
+        case .privacy: "Private and semi-private trackers want seeding back: Dove adds those only to Debrid-Link."
+        case .provider: "The addon or indexer that answered Dove (inside AIOStreams: the addon that found it)."
+        case .tracker: "The tracker or Usenet indexer behind the result, when the source names it."
+        default: nil
         }
     }
 }

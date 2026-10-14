@@ -7,6 +7,9 @@ import Foundation
 public protocol LibraryBackend: Sendable {
     var id: BackendID { get }
     var supportedSources: Set<SourceKind> { get }
+    /// Keeps seeding finished torrents, so private trackers' torrents may go here (Debrid-Link).
+    /// Everyone else refuses them (`TorrentFile.isPrivate`).
+    var seedsTorrents: Bool { get }
 
     /// Cheap authenticated call used by the "Test connection" button in Settings.
     func validateCredentials() async throws
@@ -37,8 +40,15 @@ extension LibraryBackend {
         try await add(source)
     }
 
+    public var seedsTorrents: Bool { false }
+
     public func supports(_ source: Source) -> Bool {
-        supportedSources.contains(source.kind)
+        supportedSources.contains(source.kind) && (seedsTorrents || !source.isPrivateTorrent)
+    }
+
+    /// Throws for a private tracker's torrent on a service that does not seed. Adapters call it before adding.
+    func refusePrivateTorrent(_ source: Source) throws {
+        if !seedsTorrents, source.isPrivateTorrent { throw BackendError.privateTorrent }
     }
 
     public func item(_ itemID: LibraryItem.ID) async throws -> LibraryItem {

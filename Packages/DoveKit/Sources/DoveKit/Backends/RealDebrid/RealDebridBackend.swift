@@ -55,6 +55,7 @@ public struct RealDebridBackend: LibraryBackend, FileSelecting {
 
     @discardableResult
     public func add(_ source: Source) async throws -> LibraryItem.ID {
+        try refusePrivateTorrent(source)
         switch source {
         case .magnet(let magnet):
             let created = try await addRefusingBlockedNames(
