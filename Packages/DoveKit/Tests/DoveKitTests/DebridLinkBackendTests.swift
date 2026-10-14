@@ -18,7 +18,7 @@ struct DebridLinkBackendTests {
 
     @Test func seedsSoPrivateTorrentsAreAccepted() {
         let (backend, _) = makeBackend()
-        #expect(backend.seedsTorrents)
+        #expect(backend.takesPrivateTorrents)
         #expect(backend.supports(.torrentFile(data: TorrentFixture.privateTorrent, filename: "a.torrent")))
         #expect(!backend.supports(.nzbURL(URL(string: "https://x.example/a.nzb")!)))
     }

@@ -58,6 +58,25 @@ final class AppModel {
         didSet { SharedConfiguration.saveUsenetOrder(usenetOrder, to: keychain) }
     }
 
+    /// TorBox plan as `user/me` reported it (`refreshAccounts`) or as picked in Settings. Decides TorBox Usenet
+    /// and whether TorBox may take private trackers' torrents. Kept in the Keychain for the share extension.
+    var torBoxPlan = TorBoxPlanSetting() {
+        didSet {
+            guard torBoxPlan != oldValue else { return }
+            SharedConfiguration.saveTorBoxPlan(torBoxPlan, to: keychain)
+            reloadBackends()
+        }
+    }
+
+    /// Where private trackers' torrents go (Settings › Debrid › Private trackers).
+    var privateTrackers: PrivateTrackerTarget = .automatic {
+        didSet {
+            guard privateTrackers != oldValue else { return }
+            try? keychain.set(privateTrackers == .automatic ? nil : privateTrackers.rawValue, for: .privateTrackers)
+            reloadBackends()
+        }
+    }
+
     /// Where the order lived before the share extension needed it.
     private static let legacyOrderKey = "debridOrder"
     private static let migratedKey = "keychainMovedToSharedGroup"
@@ -134,6 +153,8 @@ final class AppModel {
         }
         debridOrder = SharedConfiguration.debridOrder(from: keychain)
         usenetOrder = SharedConfiguration.usenetOrder(from: keychain)
+        torBoxPlan = SharedConfiguration.torBoxPlan(from: keychain)
+        privateTrackers = SharedConfiguration.privateTrackers(from: keychain)
         if let preferences = SharedConfiguration.preferences(from: keychain) {
             downloadOnly = preferences.downloadOnly
             sourceFilter = preferences.sourceFilter
@@ -248,6 +269,45 @@ final class AppModel {
 
     func isConfigured(_ id: BackendID) -> Bool {
         backend(id) != nil
+    }
+
+    /// Plans and premium days (`ServiceStatusModel`); TorBox's plan also sets its Usenet and seeding.
+    func refreshAccounts(force: Bool = false) async {
+        await services.loadAccounts(backends, force: force)
+        if let account = services.accounts[.torBox], let plan = TorBoxPlan(account: account) {
+            torBoxPlan.detected = plan
+        }
+    }
+
+    /// TorBox has a key and a plan that keeps seeding.
+    var torBoxSeeds: Bool {
+        isConfigured(.torBox) && torBoxPlan.plan?.seedingTime != nil
+    }
+
+    /// Both seeding services are set up, so the user picks where private trackers' torrents go.
+    var canChoosePrivateTrackers: Bool {
+        isConfigured(.debridLink) && torBoxSeeds
+    }
+
+    /// Services that take private trackers' torrents, in priority order.
+    var privateTrackerServices: [BackendID] {
+        let allowed = Set(backends.filter(\.takesPrivateTorrents).map(\.id))
+        return debridOrder.filter(allowed.contains)
+    }
+
+    /// Whether the service takes NZBs now (its toggle, and TorBox's plan).
+    func usenetEnabled(_ id: BackendID) -> Bool {
+        backend(id)?.supportedSources.contains(.nzb) == true
+    }
+
+    /// TorBox stores "0" when turned off, so a Pro plan does not turn it back on; unset follows the plan.
+    func setUsenet(_ id: BackendID, enabled: Bool) {
+        switch id {
+        case .torBox: try? keychain.set(enabled ? "1" : "0", for: .torBoxUsenet)
+        case .offcloud: try? keychain.set(enabled ? "1" : nil, for: .offcloudUsenet)
+        default: return
+        }
+        reloadBackends()
     }
 
     // MARK: - Re-adding and moving

@@ -24,8 +24,13 @@ public enum CredentialKey: String, Sendable, CaseIterable {
     case debridOrder
     /// JSON array of `BackendID` raw values: where NZBs go, highest priority first (nzbdav, TorBox, Offcloud).
     case usenetOrder
-    /// "1" when the TorBox plan includes Usenet. Not a secret; shared with the extension like `debridOrder`.
+    /// "1" / "0" when the user turned TorBox Usenet on or off; unset follows the plan (`TorBoxPlanSetting.usenet`).
+    /// Not a secret; shared with the extension like `debridOrder`.
     case torBoxUsenet
+    /// JSON of `TorBoxPlanSetting`: the plan `user/me` reported and the one picked in Settings.
+    case torBoxPlan
+    /// `PrivateTrackerTarget` raw value: where private trackers' torrents go.
+    case privateTrackers
     /// "1" when NZBs may go to Offcloud. Not a secret, like `torBoxUsenet`.
     case offcloudUsenet
     /// JSON array of `NewznabIndexer` (they carry API keys).
@@ -152,14 +157,25 @@ public enum SharedConfiguration {
         if let key = try? keychain.get(.realDebridAPIKey), !key.isEmpty {
             list.append(RealDebridBackend(apiKey: key))
         }
-        if let key = try? keychain.get(.torBoxAPIKey), !key.isEmpty {
-            list.append(TorBoxBackend(apiKey: key, usenet: (try? keychain.get(.torBoxUsenet)) == "1"))
+        let torBoxKey = (try? keychain.get(.torBoxAPIKey)) ?? ""
+        let debridLinkKey = (try? keychain.get(.debridLinkAPIKey)) ?? ""
+        let torBoxPlan = torBoxPlan(from: keychain)
+        let privateServices = privateTrackers(from: keychain).services(
+            debridLink: !debridLinkKey.isEmpty,
+            torBox: !torBoxKey.isEmpty && torBoxPlan.plan?.seedingTime != nil
+        )
+        if !torBoxKey.isEmpty {
+            list.append(TorBoxBackend(
+                apiKey: torBoxKey,
+                usenet: torBoxPlan.usenet(toggle: try? keychain.get(.torBoxUsenet)),
+                takesPrivateTorrents: privateServices.contains(.torBox)
+            ))
         }
         if let key = try? keychain.get(.offcloudAPIKey), !key.isEmpty {
             list.append(OffcloudBackend(apiKey: key, usenet: (try? keychain.get(.offcloudUsenet)) == "1"))
         }
-        if let key = try? keychain.get(.debridLinkAPIKey), !key.isEmpty {
-            list.append(DebridLinkBackend(apiKey: key))
+        if !debridLinkKey.isEmpty {
+            list.append(DebridLinkBackend(apiKey: debridLinkKey, takesPrivateTorrents: privateServices.contains(.debridLink)))
         }
         if let nzbdav = nzbdav(from: keychain) {
             list.append(nzbdav)
@@ -184,6 +200,20 @@ public enum SharedConfiguration {
 
     public static let debrids = BackendID.allCases.filter { !$0.isUsenet }
 
+    public static func torBoxPlan(from keychain: KeychainStore) -> TorBoxPlanSetting {
+        (try? keychain.get(.torBoxPlan))
+            .flatMap { try? JSONDecoder().decode(TorBoxPlanSetting.self, from: Data($0.utf8)) } ?? TorBoxPlanSetting()
+    }
+
+    public static func saveTorBoxPlan(_ setting: TorBoxPlanSetting, to keychain: KeychainStore) {
+        guard let data = try? JSONEncoder().encode(setting) else { return }
+        try? keychain.set(setting == TorBoxPlanSetting() ? nil : String(decoding: data, as: UTF8.self), for: .torBoxPlan)
+    }
+
+    public static func privateTrackers(from keychain: KeychainStore) -> PrivateTrackerTarget {
+        (try? keychain.get(.privateTrackers)).flatMap(PrivateTrackerTarget.init(rawValue:)) ?? .automatic
+    }
+
     /// The user's debrid priority; services missing from the stored list are appended in default order.
     public static func debridOrder(from keychain: KeychainStore) -> [BackendID] {
         let stored = stored(.debridOrder, in: keychain)
@@ -194,7 +224,7 @@ public enum SharedConfiguration {
         save(order, as: .debridOrder, to: keychain)
     }
 
-    /// Services that can take NZBs (TorBox and Offcloud only with their Usenet toggle on).
+    /// Services that can take NZBs (TorBox with Usenet on or a Pro plan, Offcloud with its toggle on).
     public static let usenetServices: [BackendID] = [.nzbdav, .torBox, .offcloud]
 
     /// The user's NZB priority. Until it is set: nzbdav, then the debrids in their own order.

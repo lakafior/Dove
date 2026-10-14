@@ -109,24 +109,22 @@ struct NzbdavSettingsView: View {
 /// "NZBs may go to this debrid" (TorBox with a Usenet plan, Offcloud): after nzbdav, in the priority order.
 struct DebridUsenetToggle: View {
     let backend: BackendID
-    let key: CredentialKey
     @Environment(AppModel.self) private var model
-    @State private var isOn = false
 
     var body: some View {
-        Toggle(isOn: $isOn) {
+        Toggle(isOn: Binding { model.usenetEnabled(backend) } set: { model.setUsenet(backend, enabled: $0) }) {
             Label {
                 Text("\(backend.displayName) Usenet")
             } icon: {
                 SettingsIcon(symbol: "newspaper.fill", color: backend.settingsColor)
             }
         }
-            .disabled(!model.isConfigured(backend))
-            .onAppear { isOn = (try? model.keychain.get(key)) == "1" }
-            .onChange(of: isOn) {
-                try? model.keychain.set(isOn ? "1" : "", for: key)
-                model.reloadBackends()
-            }
+            .disabled(!model.isConfigured(backend) || planWithoutUsenet)
+    }
+
+    /// TorBox on a known plan other than Pro.
+    private var planWithoutUsenet: Bool {
+        backend == .torBox && model.torBoxPlan.plan.map { !$0.includesUsenet } == true
     }
 }
 

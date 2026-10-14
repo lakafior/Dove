@@ -7,8 +7,8 @@ import Foundation
 /// Torrents live in the "seedbox" (`seedbox/add|list|<ids>/remove`), hoster links in the "downloader"
 /// (`downloader/add|list|<ids>/remove`); this adapter merges both into one library.
 ///
-/// Unlike the other debrid services, Debrid-Link keeps seeding what it downloads, so private trackers'
-/// torrents go here and nowhere else (`seedsTorrents`, `TorrentFile.isPrivate`).
+/// Debrid-Link keeps seeding what it downloads, so private trackers' torrents may go here
+/// (`takesPrivateTorrents`, `TorrentFile.isPrivate`) unless the user sends them only to TorBox.
 ///
 /// - `seedbox/add` takes a magnet or hash (`url`, JSON) or a `.torrent` (`file`, multipart). A bare hash is
 ///   added only when Debrid-Link has it cached; torrent URLs must be public, so Dove fetches them and uploads
@@ -20,7 +20,7 @@ import Foundation
 public struct DebridLinkBackend: LibraryBackend {
     public let id: BackendID = .debridLink
     public let supportedSources: Set<SourceKind> = [.torrent, .hoster]
-    public let seedsTorrents = true
+    public let takesPrivateTorrents: Bool
 
     private let apiKey: String
     private let transport: any HTTPTransport
@@ -28,10 +28,12 @@ public struct DebridLinkBackend: LibraryBackend {
 
     public init(
         apiKey: String,
+        takesPrivateTorrents: Bool = true,
         transport: any HTTPTransport = URLSession.shared,
         baseURL: URL = URL(string: "https://debrid-link.com/api/v2")!
     ) {
         self.apiKey = apiKey
+        self.takesPrivateTorrents = takesPrivateTorrents
         self.transport = transport
         self.baseURL = baseURL
     }
@@ -44,6 +46,7 @@ public struct DebridLinkBackend: LibraryBackend {
 
     @discardableResult
     public func add(_ source: Source) async throws -> LibraryItem.ID {
+        try refusePrivateTorrent(source)
         switch source {
         case .magnet(let magnet):
             let torrent = try await perform(jsonRequest("seedbox/add", body: ["url": magnet]), as: DebridLinkTorrent.self)

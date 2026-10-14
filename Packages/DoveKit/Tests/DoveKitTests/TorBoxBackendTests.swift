@@ -15,7 +15,7 @@ struct TorBoxBackendTests {
 
         let items = try await backend.items()
 
-        #expect(items.map(\.id) == ["webdl:7", "torrent:102", "torrent:101", "torrent:103"])
+        #expect(items.map(\.id) == ["webdl:7", "torrent:102", "torrent:101", "torrent:103", "torrent:104"])
         let season = try #require(items.first { $0.id == "torrent:101" })
         #expect(season.status == .ready)
         #expect(season.files.map(\.name) == ["Some.Show.S02E01.mkv", "Some.Show.S02E02.mkv"])
@@ -38,6 +38,53 @@ struct TorBoxBackendTests {
         #expect(request.value(forHTTPHeaderField: "Content-Type")?.hasPrefix("multipart/form-data") == true)
         let body = String(decoding: request.httpBody ?? Data(), as: UTF8.self)
         #expect(body.contains("name=\"magnet\""))
+    }
+
+    @Test func seedingTorrentsReportTheirRatio() async throws {
+        let (backend, transport) = makeBackend()
+        await transport.stub("torrents/mylist", body: try Fixture.data("torbox_torrents_mylist"))
+        await transport.stub("webdl/mylist", body: try Fixture.data("torbox_webdl_mylist"))
+
+        let items = try await backend.items()
+
+        let seeding = try #require(items.first { $0.id == "torrent:104" }?.seeding)
+        #expect(seeding == LibraryItem.Seeding(ratio: 0.73, isActive: true, uploadSpeed: 524_288, peers: 3))
+        #expect(items.first { $0.id == "torrent:104" }?.status == .ready)
+        #expect(items.first { $0.id == "torrent:101" }?.seeding == nil, "cached, ratio 0: nothing to show")
+        #expect(items.first { $0.id == "webdl:7" }?.seeding == nil)
+    }
+
+    @Test func privateTrackersAreSeededOnRequest() async throws {
+        let transport = MockTransport()
+        let backend = TorBoxBackend(apiKey: "k", takesPrivateTorrents: true, transport: transport)
+        await transport.stub("torrents/createtorrent", json: #"{"success":true,"data":{"torrent_id":7}}"#)
+
+        _ = try await backend.add(.torrentFile(data: TorrentFixture.privateTorrent, filename: "a.torrent"))
+        _ = try await backend.add(.magnet("magnet:?xt=urn:btih:abc"), category: nil, privateTracker: true)
+        _ = try await backend.add(.magnet("magnet:?xt=urn:btih:abc"))
+
+        let bodies = await transport.requests.map { String(decoding: $0.httpBody ?? Data(), as: UTF8.self) }
+        #expect(bodies.count == 3)
+        #expect(bodies[0].contains("name=\"seed\"\r\n\r\n2"))
+        #expect(bodies[1].contains("name=\"seed\"\r\n\r\n2"))
+        #expect(!bodies[2].contains("name=\"seed\""), "public torrents keep the account's setting")
+    }
+
+    @Test func privateTrackersAreRefusedUnlessAllowed() async {
+        let (backend, transport) = makeBackend()
+        await #expect(throws: BackendError.privateTorrent) {
+            try await backend.add(.magnet("magnet:?xt=urn:btih:abc"), category: nil, privateTracker: true)
+        }
+        #expect(await transport.requests.isEmpty)
+    }
+
+    @Test func accountNamesThePlan() async throws {
+        let (backend, transport) = makeBackend()
+        await transport.stub("user/me", json: #"{"success":true,"data":{"plan":3,"premium_expires_at":"2027-01-01T00:00:00Z"}}"#)
+        let account = try await backend.account()
+        #expect(account.isPremium && account.plan == "Standard")
+        #expect(TorBoxPlan(account: account) == .standard)
+        #expect(TorBoxPlan(account: AccountStatus(isPremium: false)) == .free)
     }
 
     @Test func nzbIsRejected() async {
@@ -167,5 +214,37 @@ struct TorBoxBackendTests {
         let body = try JSONSerialization.jsonObject(with: delete.httpBody ?? Data()) as? [String: Any]
         #expect(body?["usenet_id"] as? Int == 77)
         #expect(body?["operation"] as? String == "delete")
+    }
+}
+
+struct TorBoxPlanTests {
+    @Test func usenetFollowsThePlanUnlessTurnedOff() {
+        #expect(TorBoxPlanSetting(detected: .pro).usenet(toggle: nil))
+        #expect(!TorBoxPlanSetting(detected: .pro).usenet(toggle: "0"))
+        #expect(!TorBoxPlanSetting(detected: .standard).usenet(toggle: "1"), "no Usenet on Standard")
+        #expect(TorBoxPlanSetting(detected: .standard, chosen: .pro).usenet(toggle: nil), "the user's pick wins")
+        #expect(TorBoxPlanSetting().usenet(toggle: "1"), "plan unknown: the toggle decides")
+        #expect(!TorBoxPlanSetting().usenet(toggle: nil))
+    }
+
+    @Test func onlyPaidPlansSeed() {
+        #expect(TorBoxPlan.free.seedingTime == nil)
+        #expect(TorBoxPlan.ordered.dropFirst().allSatisfy { $0.seedingTime != nil })
+        #expect(TorBoxPlan.essential.seedingTime! < TorBoxPlan.standard.seedingTime!)
+    }
+}
+
+struct PrivateTrackerTargetTests {
+    @Test func automaticPrefersDebridLink() {
+        #expect(PrivateTrackerTarget.automatic.services(debridLink: true, torBox: true) == [.debridLink])
+        #expect(PrivateTrackerTarget.automatic.services(debridLink: false, torBox: true) == [.torBox])
+        #expect(PrivateTrackerTarget.automatic.services(debridLink: false, torBox: false).isEmpty)
+    }
+
+    @Test func choicesAreKeptWhenPossible() {
+        #expect(PrivateTrackerTarget.torBox.services(debridLink: true, torBox: true) == [.torBox])
+        #expect(PrivateTrackerTarget.both.services(debridLink: true, torBox: true) == [.debridLink, .torBox])
+        #expect(PrivateTrackerTarget.both.services(debridLink: false, torBox: true) == [.torBox])
+        #expect(PrivateTrackerTarget.torBox.services(debridLink: true, torBox: false) == [.debridLink], "TorBox stopped seeding")
     }
 }

@@ -171,7 +171,7 @@ struct LibraryShelfTests {
             OffcloudBackend(apiKey: "k", transport: bad),
         ])
 
-        #expect(result.items.count == 4)
+        #expect(result.items.count == 5)
         #expect(result.failures == ["Offcloud: Invalid or expired API key."])
     }
 }

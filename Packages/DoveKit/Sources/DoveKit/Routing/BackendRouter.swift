@@ -2,7 +2,7 @@ import Foundation
 
 /// Picks the backend for a source. The source type decides the family
 /// (torrent/hoster go to debrid, NZB goes to nzbdav and debrids with Usenet); the user's priority order decides within it.
-/// A private tracker's `.torrent` only goes to services that seed (`LibraryBackend.supports`).
+/// A private tracker's `.torrent` only goes to services that seed and that the user allows (`LibraryBackend.supports`).
 public struct BackendRouter: Sendable {
     public var backends: [any LibraryBackend]
     /// Highest priority first. Backends missing from the list keep their relative order after the listed ones.
@@ -22,7 +22,7 @@ public struct BackendRouter: Sendable {
     /// Compatible backends, in priority order. NZBs follow `usenetOrder`; without one they go to Usenet
     /// backends (nzbdav) before debrids that also take them (TorBox/Offcloud with Usenet on).
     public func candidates(for source: Source) -> [any LibraryBackend] {
-        let compatible = backends.filter { $0.supports(source) && (!seedingOnly || $0.seedsTorrents) }
+        let compatible = backends.filter { $0.supports(source) && (!seedingOnly || $0.takesPrivateTorrents) }
         let order = source.kind == .nzb && !usenetOrder.isEmpty ? usenetOrder : self.order
         let rank = { (id: BackendID) in order.firstIndex(of: id) ?? order.count }
         let family = { (id: BackendID) in source.kind == .nzb && usenetOrder.isEmpty && id.isUsenet ? 0 : 1 }
@@ -70,7 +70,7 @@ public struct BackendRouter: Sendable {
         for backend in candidates {
             try Task.checkCancellation()
             do {
-                let id = try await backend.add(source, category: category)
+                let id = try await backend.add(source, category: category, privateTracker: seedingOnly)
                 return AddResult(backend: backend.id, itemID: id, skipped: failures)
             } catch is CancellationError {
                 throw CancellationError()

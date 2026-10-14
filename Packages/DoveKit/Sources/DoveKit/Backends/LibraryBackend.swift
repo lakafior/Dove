@@ -7,9 +7,9 @@ import Foundation
 public protocol LibraryBackend: Sendable {
     var id: BackendID { get }
     var supportedSources: Set<SourceKind> { get }
-    /// Keeps seeding finished torrents, so private trackers' torrents may go here (Debrid-Link).
-    /// Everyone else refuses them (`TorrentFile.isPrivate`).
-    var seedsTorrents: Bool { get }
+    /// Private trackers' torrents may go here: the service keeps seeding (Debrid-Link, TorBox on a paid plan)
+    /// and the user lets them in (`PrivateTrackerTarget`). Everyone else refuses them (`TorrentFile.isPrivate`).
+    var takesPrivateTorrents: Bool { get }
 
     /// Cheap authenticated call used by the "Test connection" button in Settings.
     func validateCredentials() async throws
@@ -22,6 +22,11 @@ public protocol LibraryBackend: Sendable {
     /// Everyone else ignores the category.
     @discardableResult
     func add(_ source: Source, category: AddCategory?) async throws -> LibraryItem.ID
+
+    /// Adds a source that an indexer says comes from a private tracker (`privateTracker`), which a bare magnet
+    /// cannot tell. Services that seed only on request (TorBox) ask for it then. Defaults to `add(_:category:)`.
+    @discardableResult
+    func add(_ source: Source, category: AddCategory?, privateTracker: Bool) async throws -> LibraryItem.ID
 
     func items() async throws -> [LibraryItem]
 
@@ -40,15 +45,21 @@ extension LibraryBackend {
         try await add(source)
     }
 
-    public var seedsTorrents: Bool { false }
+    @discardableResult
+    public func add(_ source: Source, category: AddCategory?, privateTracker: Bool) async throws -> LibraryItem.ID {
+        if privateTracker, !takesPrivateTorrents { throw BackendError.privateTorrent }
+        return try await add(source, category: category)
+    }
+
+    public var takesPrivateTorrents: Bool { false }
 
     public func supports(_ source: Source) -> Bool {
-        supportedSources.contains(source.kind) && (seedsTorrents || !source.isPrivateTorrent)
+        supportedSources.contains(source.kind) && (takesPrivateTorrents || !source.isPrivateTorrent)
     }
 
     /// Throws for a private tracker's torrent on a service that does not seed. Adapters call it before adding.
     func refusePrivateTorrent(_ source: Source) throws {
-        if !seedsTorrents, source.isPrivateTorrent { throw BackendError.privateTorrent }
+        if !takesPrivateTorrents, source.isPrivateTorrent { throw BackendError.privateTorrent }
     }
 
     public func item(_ itemID: LibraryItem.ID) async throws -> LibraryItem {

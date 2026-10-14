@@ -25,7 +25,7 @@ enum TorrentFixture {
 private struct FakeBackend: LibraryBackend {
     let id: BackendID
     let supportedSources: Set<SourceKind> = [.torrent, .hoster]
-    var seedsTorrents = false
+    var takesPrivateTorrents = false
     func validateCredentials() async throws {}
     func add(_ source: Source) async throws -> LibraryItem.ID {
         try refusePrivateTorrent(source)
@@ -60,7 +60,7 @@ struct PrivateTorrentTests {
     private let backends: [any LibraryBackend] = [
         FakeBackend(id: .realDebrid),
         FakeBackend(id: .torBox),
-        FakeBackend(id: .debridLink, seedsTorrents: true)
+        FakeBackend(id: .debridLink, takesPrivateTorrents: true)
     ]
 
     @Test func privateTorrentsGoOnlyToSeedingServices() async throws {

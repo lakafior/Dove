@@ -263,9 +263,8 @@ struct SourcesView: View {
                 // NZBs land in nzbdav's `movies` or `tv` folder.
                 let category = AddCategory(mediaType: type)
                 if let backend, let service = model.backend(backend) {
-                    // An indexer said private: the magnet cannot tell, so check here too.
-                    if group.isPrivate == true, !service.seedsTorrents { throw BackendError.privateTorrent }
-                    itemID = try await service.add(source, category: category)
+                    // An indexer said private: the magnet cannot tell, so the service checks (and TorBox seeds it).
+                    itemID = try await service.add(source, category: category, privateTracker: group.isPrivate == true)
                     added = backend
                 } else {
                     let result = try await model.router(preferring: group.cachedBackends())

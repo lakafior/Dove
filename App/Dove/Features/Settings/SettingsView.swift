@@ -24,10 +24,21 @@ struct SettingsView: View {
                         SettingsRow("Priority", symbol: "arrow.up.arrow.down", color: .gray,
                                     value: priorityOrder.map(\.displayName).joined(separator: " → "))
                     }
+                    if model.canChoosePrivateTrackers {
+                        Picker(selection: privateTrackers) {
+                            ForEach([PrivateTrackerTarget.debridLink, .torBox, .both]) { Text($0.name).tag($0) }
+                        } label: {
+                            Label {
+                                Text("Private trackers")
+                            } icon: {
+                                SettingsIcon(symbol: "lock.fill", color: .red)
+                            }
+                        }
+                    }
                 } header: {
                     Text("Debrid")
                 } footer: {
-                    Text("Torrents and links go to the first service in Priority. If it fails, Dove tries the next one. Torrents from private trackers go only to Debrid-Link, the one service that seeds.")
+                    Text("Torrents and links go to the first service in Priority. If it fails, Dove tries the next one. \(privateTrackersFooter)")
                 }
 
                 Section {
@@ -37,8 +48,8 @@ struct SettingsView: View {
                         SettingsRow("nzbdav", symbol: BackendID.nzbdav.settingsSymbol, color: BackendID.nzbdav.settingsColor,
                                     value: serviceValue(.nzbdav), light: serviceLight(.nzbdav))
                     }
-                    DebridUsenetToggle(backend: .torBox, key: .torBoxUsenet)
-                    DebridUsenetToggle(backend: .offcloud, key: .offcloudUsenet)
+                    DebridUsenetToggle(backend: .torBox)
+                    DebridUsenetToggle(backend: .offcloud)
                     NavigationLink {
                         UsenetPriorityView()
                     } label: {
@@ -48,7 +59,7 @@ struct SettingsView: View {
                 } header: {
                     Text("Usenet")
                 } footer: {
-                    Text("NZBs go to the first service in Priority. If it fails, Dove tries the next one. TorBox needs a plan with Usenet.")
+                    Text("NZBs go to the first service in Priority. If it fails, Dove tries the next one. TorBox Usenet needs the Pro plan.")
                 }
 
                 Section {
@@ -106,6 +117,28 @@ struct SettingsView: View {
 
     private func serviceLight(_ backend: BackendID) -> Color? {
         model.isConfigured(backend) ? model.services.light(backend) : nil
+    }
+
+    /// Automatic sends them to Debrid-Link, so the picker shows it as that.
+    private var privateTrackers: Binding<PrivateTrackerTarget> {
+        Binding {
+            model.privateTrackers == .automatic ? .debridLink : model.privateTrackers
+        } set: {
+            model.privateTrackers = $0
+        }
+    }
+
+    private var privateTrackersFooter: String {
+        let services = model.privateTrackerServices
+        guard !services.isEmpty else {
+            return "Torrents from private trackers need a service that seeds: Debrid-Link, or TorBox on a paid plan."
+        }
+        var text = "Torrents from private trackers go only to \(services.map(\.displayName).joined(separator: " or ")), which seed\(services.count == 1 ? "s" : "")."
+        if services.contains(.torBox), let plan = model.torBoxPlan.plan, let time = plan.seedingTimeText {
+            text += " TorBox \(plan.name) seeds for \(time)"
+            text += plan == .essential ? ": most private trackers ask for 72 hours or more." : "."
+        }
+        return text
     }
 
     /// The summary lists only services with a key; the full order (with "No key" rows) is one tap away.
@@ -196,7 +229,7 @@ extension BackendID {
         case .realDebrid: "real-debrid.com › My account › API token (real-debrid.com/apitoken)."
         case .torBox: "torbox.app › Settings › API key."
         case .offcloud: "offcloud.com › Account › API key."
-        case .debridLink: "debrid-link.com › My account › API key. Debrid-Link seeds, so torrents from private trackers go here."
+        case .debridLink: "debrid-link.com › My account › API key. Debrid-Link seeds, so torrents from private trackers can go here."
         case .nzbdav: ""
         }
     }
@@ -242,6 +275,18 @@ private struct DebridKeyView: View {
                 .disabled(isTesting)
                 if let status { Text(status).font(.footnote) }
             }
+            if backend == .torBox, model.isConfigured(.torBox) {
+                Section {
+                    Picker("Plan", selection: torBoxPlan) {
+                        Text(model.torBoxPlan.detected.map { "Automatic (\($0.name))" } ?? "Automatic").tag(TorBoxPlan?.none)
+                        ForEach(TorBoxPlan.ordered) { Text($0.name).tag(Optional($0)) }
+                    }
+                } header: {
+                    Text("Plan")
+                } footer: {
+                    Text(torBoxPlanFooter)
+                }
+            }
             if model.isConfigured(backend) {
                 Section {
                     Button("Remove key", role: .destructive) {
@@ -254,6 +299,18 @@ private struct DebridKeyView: View {
         .navigationTitle(backend.displayName)
         .navigationBarTitleDisplayMode(.inline)
         .onAppear { value = (try? model.keychain.get(key)) ?? "" }
+    }
+
+    private var torBoxPlan: Binding<TorBoxPlan?> {
+        Binding { model.torBoxPlan.chosen } set: { model.torBoxPlan.chosen = $0 }
+    }
+
+    private var torBoxPlanFooter: String {
+        let source = model.torBoxPlan.detected == nil
+            ? "TorBox has not reported the plan yet; pick it here."
+            : "Read from your TorBox account; pick one only if it is wrong."
+        guard let plan = model.torBoxPlan.plan else { return source }
+        return "\(source) \(plan.name): \(plan.features)."
     }
 
     private func saveAndTest() {
@@ -274,7 +331,7 @@ private struct DebridKeyView: View {
             do {
                 try await service.validateCredentials()
                 status = "✅ Connected to \(backend.displayName)."
-                await model.services.loadAccounts(model.backends, force: true)
+                await model.refreshAccounts(force: true)
             } catch {
                 status = "❌ \(error.localizedDescription)"
             }
@@ -419,5 +476,14 @@ extension ServiceStatusModel {
         case .unknown: needsAttention(backend) ? .orange : .gray
         case .online: needsAttention(backend) ? .orange : .green
         }
+    }
+}
+
+extension TorBoxPlan {
+    /// What the plan means for Dove.
+    var features: String {
+        let seeding = seedingTimeText.map { "seeds finished torrents for \($0), so private trackers can go here" } ?? "no seeding"
+        let usenet = includesUsenet ? "Usenet included" : "no Usenet"
+        return "\(usenet), \(seeding)"
     }
 }

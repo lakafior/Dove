@@ -49,14 +49,14 @@ public struct LibraryItem: Identifiable, Sendable, Hashable, Codable {
     /// nzbdav keeps every job's NZB while it is in the history; with its frontend key Dove can fetch it again
     /// (`NZBProviding`) to retry the job or send it to another Usenet service.
     public var nzbBlobID: String?
-    /// Services that seed (Debrid-Link) say how much the torrent gave back.
+    /// Services that seed (Debrid-Link, TorBox) say how much the torrent gave back.
     public var seeding: Seeding?
 
     /// Upload side of a torrent on a service that keeps seeding it.
     public struct Seeding: Sendable, Hashable, Codable {
         /// Uploaded ÷ downloaded.
         public var ratio: Double
-        /// Still uploading to the swarm (Debrid-Link status 8), not finished or paused.
+        /// Still uploading to the swarm (Debrid-Link status 8, TorBox `uploading`), not finished or paused.
         public var isActive: Bool
         /// Bytes per second.
         public var uploadSpeed: Int64?

@@ -25,6 +25,10 @@ struct TorBoxTransfer: Decodable {
     let downloadPresent: Bool?
     let createdAt: String?
     let files: [TorBoxFile]?
+    /// Torrents only: uploaded ÷ downloaded, bytes per second, connected peers.
+    let ratio: Double?
+    let uploadSpeed: Double?
+    let peers: Double?
 }
 
 struct TorBoxFile: Decodable {
@@ -108,7 +112,22 @@ extension TorBoxTransfer {
             },
             addedAt: createdAt.flatMap(APIDate.parse),
             // Web downloads carry a hash of their URL, not a torrent's.
-            infoHash: ref == .torrent(id) ? hash : nil
+            infoHash: ref == .torrent(id) ? hash : nil,
+            seeding: ref == .torrent(id) ? seeding : nil
+        )
+    }
+
+    /// Upload side, once the torrent seeds or has given something back. Cached torrents (most of them) were
+    /// never downloaded from the swarm: ratio 0 and nothing to show.
+    var seeding: LibraryItem.Seeding? {
+        let state = downloadState?.lowercased() ?? ""
+        let isActive = state.contains("uploading") || state.contains("seeding")
+        guard let ratio, isActive || ratio > 0 else { return nil }
+        return LibraryItem.Seeding(
+            ratio: ratio,
+            isActive: isActive,
+            uploadSpeed: uploadSpeed.map { Int64($0) },
+            peers: peers.map { Int($0) }
         )
     }
 

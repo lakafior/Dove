@@ -5,7 +5,7 @@ import Foundation
 /// Private trackers mark their torrents with `private = 1` in the `info` dictionary (BEP 27): clients then use
 /// only the tracker (no DHT or PEX), and the tracker expects the client to seed back. Debrid services that never
 /// seed (Real-Debrid, TorBox below its top plans, Offcloud) get accounts banned on such trackers, so Dove sends
-/// these torrents only to services that seed (`LibraryBackend.seedsTorrents`, Debrid-Link).
+/// these torrents only to services that seed (`LibraryBackend.takesPrivateTorrents`, Debrid-Link).
 public enum TorrentFile {
     /// True when the file's `info` dictionary has `private` set to 1. False for anything unreadable.
     public static func isPrivate(_ data: Data) -> Bool {

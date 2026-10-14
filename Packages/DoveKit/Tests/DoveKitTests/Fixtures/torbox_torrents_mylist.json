@@ -13,6 +13,9 @@
       "download_finished": true,
       "download_present": true,
       "created_at": "2026-10-10T18:20:11.123456Z",
+      "ratio": 0,
+      "upload_speed": 0,
+      "peers": 0,
       "files": [
         { "id": 0, "name": "Some.Show.S02/Some.Show.S02E01.mkv", "short_name": "Some.Show.S02E01.mkv", "size": 6442450944 },
         { "id": 1, "name": "Some.Show.S02/Some.Show.S02E02.mkv", "short_name": "Some.Show.S02E02.mkv", "size": 6442450944 }
@@ -41,6 +44,25 @@
       "download_present": false,
       "created_at": "2026-10-01T00:00:00Z",
       "files": []
+    },
+    {
+      "id": 104,
+      "hash": "2222222222222222222222222222222222222222",
+      "name": "Private.Tracker.Release.1080p",
+      "size": 4000000000,
+      "progress": 1.0,
+      "download_state": "uploading",
+      "download_finished": true,
+      "download_present": true,
+      "active": true,
+      "created_at": "2026-09-01T00:00:00Z",
+      "ratio": 0.73,
+      "upload_speed": 524288,
+      "seeds": 12,
+      "peers": 3,
+      "files": [
+        { "id": 0, "name": "Private.Tracker.Release.1080p.mkv", "short_name": "Private.Tracker.Release.1080p.mkv", "size": 4000000000 }
+      ]
     }
   ]
 }

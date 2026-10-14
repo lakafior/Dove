@@ -7,9 +7,15 @@ import Foundation
 /// this adapter merges them into one library. Usenet needs a paid plan, so it is off unless the user turns it on:
 /// otherwise every NZB would first fail here. Usenet endpoints follow the official SDK (`usenet/createusenetdownload`
 /// with `link` or `file`, `usenet/mylist`, `usenet/requestdl?usenet_id=`, `usenet/controlusenetdownload`).
+///
+/// Paid plans seed finished torrents for a while (`TorBoxPlan.seedingTime`), so private trackers' torrents may go
+/// here when the user allows it (`takesPrivateTorrents`). Those are added with `seed=2` (from the SDK: 1 auto =
+/// the account's setting, 2 seed, 3 don't seed); everything else keeps the account's setting.
+/// `mylist` reports `ratio`, `upload_speed`, `peers` and the state ("uploading" while seeding).
 public struct TorBoxBackend: LibraryBackend {
     public let id: BackendID = .torBox
     public let supportedSources: Set<SourceKind>
+    public let takesPrivateTorrents: Bool
 
     private let apiKey: String
     private let usenet: Bool
@@ -19,11 +25,13 @@ public struct TorBoxBackend: LibraryBackend {
     public init(
         apiKey: String,
         usenet: Bool = false,
+        takesPrivateTorrents: Bool = false,
         transport: any HTTPTransport = URLSession.shared,
         baseURL: URL = URL(string: "https://api.torbox.app/v1/api")!
     ) {
         self.apiKey = apiKey
         self.usenet = usenet
+        self.takesPrivateTorrents = takesPrivateTorrents
         self.transport = transport
         self.baseURL = baseURL
         supportedSources = usenet ? [.torrent, .hoster, .nzb] : [.torrent, .hoster]
@@ -37,24 +45,31 @@ public struct TorBoxBackend: LibraryBackend {
 
     @discardableResult
     public func add(_ source: Source) async throws -> LibraryItem.ID {
+        try await add(source, category: nil, privateTracker: false)
+    }
+
+    @discardableResult
+    public func add(_ source: Source, category: AddCategory?, privateTracker: Bool) async throws -> LibraryItem.ID {
         try refusePrivateTorrent(source)
+        if privateTracker, !takesPrivateTorrents { throw BackendError.privateTorrent }
+        let seed = privateTracker || source.isPrivateTorrent
         switch source {
         case .magnet(let magnet):
             var form = MultipartFormData()
             form.addField("magnet", magnet)
-            return try await createTorrent(form)
+            return try await createTorrent(form, seed: seed)
 
         case .torrentFile(let data, let filename):
             var form = MultipartFormData()
             form.addFile("file", filename: filename, mimeType: "application/x-bittorrent", data: data)
-            return try await createTorrent(form)
+            return try await createTorrent(form, seed: seed)
 
         case .torrentURL(let url):
             // TorBox wants the file itself, so fetch it first.
             let (data, response) = try await transport.send(URLRequest(url: url))
             if let error = response.backendError { throw error }
             let filename = url.lastPathComponent.isEmpty ? "download.torrent" : url.lastPathComponent
-            return try await add(.torrentFile(data: data, filename: filename))
+            return try await add(.torrentFile(data: data, filename: filename), category: category, privateTracker: privateTracker)
 
         case .hosterURL(let url):
             var form = MultipartFormData()
@@ -138,7 +153,10 @@ public struct TorBoxBackend: LibraryBackend {
     /// Hashes per `checkcached` call; they go in the query string.
     static let cacheCheckChunk = 100
 
-    private func createTorrent(_ form: MultipartFormData) async throws -> LibraryItem.ID {
+    /// `seed`: ask TorBox to seed this one whatever the account's setting says (private trackers).
+    private func createTorrent(_ form: MultipartFormData, seed: Bool) async throws -> LibraryItem.ID {
+        var form = form
+        if seed { form.addField("seed", "2") }
         let result = try await perform(
             request("torrents/createtorrent", method: "POST", body: form.finalized(), contentType: form.contentType),
             as: TorBoxCreateResult.self
@@ -219,20 +237,15 @@ extension TorBoxBackend: CacheChecking {
 }
 
 extension TorBoxBackend: AccountReporting {
-    /// `GET user/me`: `plan` 0 free, 1 Essential, 2 Pro, 3 Standard; `premium_expires_at` (ISO 8601).
+    /// `GET user/me`: `plan` 0 free, 1 Essential, 2 Pro, 3 Standard (`TorBoxPlan`); `premium_expires_at` (ISO 8601).
     public func account() async throws -> AccountStatus {
         guard let user = try await perform(request("user/me"), as: TorBoxUser.self) else { throw BackendError.invalidResponse }
-        let plan: String? = switch user.plan {
-        case 1: "Essential"
-        case 2: "Pro"
-        case 3: "Standard"
-        default: nil
-        }
-        let isPremium = (user.plan ?? 0) > 0
+        let plan = user.plan.flatMap(TorBoxPlan.init(rawValue:)) ?? .free
+        let isPremium = plan != .free
         return AccountStatus(
             isPremium: isPremium,
             premiumUntil: isPremium ? AccountDate.parse(user.premiumExpiresAt) : nil,
-            plan: plan
+            plan: isPremium ? plan.name : nil
         )
     }
 }
