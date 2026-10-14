@@ -502,7 +502,6 @@ private struct TitleCard: View {
             HStack(spacing: 3) {
                 if let year = title.year { Text(year).font(.caption2).foregroundStyle(.secondary) }
                 Spacer(minLength: 2)
-                if let ratio = title.seedingRatio { SeedingRatio(ratio: ratio).font(.caption2) }
                 ForEach(title.backends, id: \.self) { BackendBadge(backend: $0) }
             }
         }
