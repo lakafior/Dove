@@ -1,15 +1,14 @@
 import DoveKit
 import SwiftUI
 
-/// One title across services: artwork and description, then its torrents and downloads by season.
+/// One title across services. Series: artwork, "Play all", seasons (each opening its episodes), then the
+/// releases they come from. Movies: artwork and releases.
 struct LibraryTitleView: View {
     @Environment(AppModel.self) private var model
+    @Environment(\.openURL) private var openURL
     let titleID: String
     @State private var isFixingMatch = false
-    /// Full metadata (description, genres, episodes): search results often leave the description out.
-    @State private var detail: MediaDetail?
-    /// Files of packs whose service lists items without files (Real-Debrid, Offcloud), for episode counts.
-    @State private var packFiles: [ShelfItem.ID: [LibraryFile]] = [:]
+    @State private var series = SeriesModel()
 
     private var title: LibraryTitle? { model.library.title(id: titleID) }
 
@@ -21,23 +20,10 @@ struct LibraryTitleView: View {
                     Button("Wrong title?", systemImage: "arrow.triangle.2.circlepath") { isFixingMatch = true }
                         .font(.footnote)
                 }
-                ForEach(title.seasons, id: \.season) { group in
-                    Section {
-                        ForEach(group.items) { item in
-                            NavigationLink(value: item) { ShelfItemRow(item: item) }
-                                .swipeActions {
-                                    Button("Delete", systemImage: "trash", role: .destructive) {
-                                        Task { await model.library.delete(item, using: model) }
-                                    }
-                                }
-                        }
-                    } header: {
-                        Text(sectionTitle(group.season, items: group.items, of: title))
-                    } footer: {
-                        if let season = group.season, let summary = completeness(of: season, in: title) {
-                            Text(summary)
-                        }
-                    }
+                if title.type == .series {
+                    seriesSections(title)
+                } else {
+                    releasesSection(title, header: "Releases")
                 }
             } else {
                 ContentUnavailableView("Not in your library anymore", systemImage: "tray")
@@ -45,14 +31,77 @@ struct LibraryTitleView: View {
         }
         .navigationTitle(title?.name ?? "")
         .navigationBarTitleDisplayMode(.inline)
+        .navigationDestination(for: SeasonRoute.self) { route in
+            LibrarySeasonView(series: series, titleID: route.titleID, number: route.season)
+        }
+        .overlay(alignment: .bottom) { PreparingBadge(progress: series.preparing) }
         .sheet(isPresented: $isFixingMatch) {
             if let title { MatchPickerSheet(title: title) }
         }
+        // Search results often leave the description out; series also need the episode list.
         .task(id: title?.media?.id) {
             guard let media = title?.media else { return }
-            detail = try? await model.addonSet.detail(of: media)
+            await series.loadDetail(of: media, using: model)
         }
-        .task(id: titleID) { await loadPackFiles() }
+        .task(id: titleID) {
+            guard let title, title.type == .series else { return }
+            await series.loadPackFiles(of: title, using: model)
+        }
+    }
+
+    @ViewBuilder
+    private func seriesSections(_ title: LibraryTitle) -> some View {
+        let layout = series.layout(of: title)
+        if layout.hasEpisodes {
+            Section {
+                Button {
+                    play(layout.available, of: title)
+                } label: {
+                    Label("Play all", systemImage: "play.fill").frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.borderedProminent)
+                .listRowInsets(EdgeInsets())
+                .listRowBackground(Color.clear)
+            } footer: {
+                if let message = series.message { Text(message) }
+            }
+            Section("Seasons") {
+                ForEach(layout.seasons) { season in
+                    NavigationLink(value: SeasonRoute(titleID: titleID, season: season.number)) {
+                        SeasonRow(season: season) { play(season.available, of: title) }
+                    }
+                }
+            }
+        }
+        releasesSection(title, header: "Releases", footer: unplacedNote(layout))
+    }
+
+    /// The torrents and jobs themselves, for actions (reinsert, move, delete) and files Dove could not place.
+    private func releasesSection(_ title: LibraryTitle, header: String, footer: String? = nil) -> some View {
+        Section {
+            ForEach(title.seasons.flatMap(\.items)) { item in
+                NavigationLink(value: item) { ShelfItemRow(item: item) }
+                    .swipeActions {
+                        Button("Delete", systemImage: "trash", role: .destructive) {
+                            Task { await model.library.delete(item, using: model) }
+                        }
+                    }
+            }
+        } header: {
+            Text(header)
+        } footer: {
+            if let footer { Text(footer) }
+        }
+    }
+
+    private func unplacedNote(_ layout: SeriesLayout) -> String? {
+        let count = layout.unplaced.count
+        guard count > 0 else { return nil }
+        return "\(count) video file\(count == 1 ? "" : "s") without an episode number (extras, oddly named files): open the release to play \(count == 1 ? "it" : "them")."
+    }
+
+    private func play(_ episodes: [LibraryEpisode], of title: LibraryTitle) {
+        Task { await series.play(episodes, of: title, using: model, open: openURL) }
     }
 
     private func header(_ title: LibraryTitle) -> some View {
@@ -71,10 +120,10 @@ struct LibraryTitleView: View {
                 HStack(spacing: 4) {
                     ForEach(title.backends, id: \.self) { BackendBadge(backend: $0) }
                 }
-                if let genres = detail?.genres, !genres.isEmpty {
+                if let genres = series.detail?.genres, !genres.isEmpty {
                     Text(genres.prefix(3).joined(separator: ", ")).font(.caption).foregroundStyle(.secondary)
                 }
-                if let description = detail?.summary.description ?? title.media?.description {
+                if let description = series.detail?.summary.description ?? title.media?.description {
                     Text(description).font(.footnote).lineLimit(6)
                 }
                 if title.media == nil {
@@ -82,31 +131,6 @@ struct LibraryTitleView: View {
                 }
             }
         }
-    }
-
-    /// "All 10 episodes" or "Missing E04, E07 · 8 of 10", once the metadata lists the season's episodes.
-    private func completeness(of season: Int, in title: LibraryTitle) -> String? {
-        guard title.type == .series, season > 0, let detail else { return nil }
-        let have = PackCompleteness.episodes(inSeason: season, items: title.items, files: packFiles)
-        return PackCompleteness.summary(have: have, aired: PackCompleteness.airedEpisodes(in: detail, season: season))
-    }
-
-    /// Packs listed without files get one detail call each: only this title's, so a handful at most.
-    private func loadPackFiles() async {
-        guard let title, title.type == .series else { return }
-        for item in title.items where item.guess.scope?.isPack == true && item.item.files.isEmpty {
-            guard let backend = model.backend(item.item.backend),
-                  let loaded = try? await backend.item(item.item.id) else { continue }
-            packFiles[item.id] = loaded.files
-            model.library.learnKind(from: loaded)
-        }
-    }
-
-    private func sectionTitle(_ season: Int?, items: [ShelfItem], of title: LibraryTitle) -> String {
-        guard title.type == .series else { return "Releases" }
-        if let season { return "Season \(season)" }
-        let hasMultiSeason = items.contains { $0.guess.scope?.isPack == true }
-        return hasMultiSeason ? "Several seasons" : "Other"
     }
 }
 

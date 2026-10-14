@@ -52,32 +52,4 @@ struct PackCompletenessTests {
         let complete = pack("Show.Complete.Series.1080p", episodeSize: 1, folderSize: 100)
         #expect(PackCompleteness.seriesPackWarning(for: complete, airedSeasons: [1, 2]) == nil, "no seasons in the name")
     }
-
-    private func item(_ id: String, _ name: String, files: [String] = []) -> ShelfItem {
-        ShelfItem(item: LibraryItem(
-            id: id, backend: .torBox, name: name, status: .ready,
-            files: files.enumerated().map { LibraryFile(id: String($0.offset), name: $0.element) }
-        ))
-    }
-
-    @Test func libraryCountsEpisodesFromNamesAndPackFiles() {
-        let items = [
-            item("a", "Show.S01E09.1080p.mkv"),
-            item("b", "Show.S01.1080p", files: [
-                "Show.S01/Show.S01E01.mkv", "Show.S01/Show.S01E02-E03.mkv", "Show.S01/Sample/Show.S01E04.sample.mkv",
-            ]),
-            item("c", "Show.S01-S02.720p"),
-        ]
-        let files = [items[2].id: [LibraryFile(id: "1", name: "S02/Show.S02E01.mkv"), LibraryFile(id: "2", name: "S01/Show.S01E05.mkv")]]
-
-        #expect(PackCompleteness.episodes(inSeason: 1, items: items, files: files) == [1, 2, 3, 5, 9])
-        #expect(PackCompleteness.episodes(inSeason: 2, items: items, files: files) == [1])
-    }
-
-    @Test func summaryListsWhatIsMissing() {
-        #expect(PackCompleteness.summary(have: Set(1...10), aired: Array(1...10)) == "All 10 episodes")
-        #expect(PackCompleteness.summary(have: [1, 2, 3, 5, 6, 8, 9, 10], aired: Array(1...10)) == "Missing E04, E07 · 8 of 10")
-        #expect(PackCompleteness.summary(have: [], aired: Array(1...8)) == "Missing E01, E02, E03, E04, E05, E06 +2 · 0 of 8")
-        #expect(PackCompleteness.summary(have: [1], aired: []) == nil)
-    }
 }

@@ -562,6 +562,110 @@ struct LibraryItemView: View {
         (detail ?? item).files.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
     }
 
+    /// Seasons when the files are episodes, else folders: multi-season packs are unreadable as one list.
+    private var fileGroups: [FileGroup] {
+        FileGroups.groups(current.files, release: ReleaseParser.guess(item.name))
+    }
+
+    /// Sections the user opened or closed; with three or more, all start closed.
+    @State private var toggledGroups: Set<FileGroup.ID> = []
+    /// Links being fetched for a season's playlist.
+    @State private var preparing: (done: Int, total: Int)?
+
+    private func isExpanded(_ group: FileGroup) -> Bool {
+        (fileGroups.count <= 2) != toggledGroups.contains(group.id)
+    }
+
+    private func groupHeader(_ group: FileGroup) -> some View {
+        HStack(spacing: 14) {
+            Button {
+                if !toggledGroups.insert(group.id).inserted { toggledGroups.remove(group.id) }
+            } label: {
+                HStack {
+                    Text(group.title).font(.subheadline.weight(.semibold)).foregroundStyle(.primary)
+                    Text("\(group.files.count) file\(group.files.count == 1 ? "" : "s")"
+                         + (group.size > 0 ? " · " + group.size.formatted(.byteCount(style: .file)) : ""))
+                    Spacer()
+                    Image(systemName: "chevron.right")
+                        .rotationEffect(.degrees(isExpanded(group) ? 90 : 0))
+                }
+                .contentShape(Rectangle())
+            }
+            .accessibilityHint(isExpanded(group) ? "Hides the files" : "Shows the files")
+            if case .season = group.kind, !videos(in: group).isEmpty {
+                Button { playAll(in: group) } label: { Image(systemName: "play.circle.fill").font(.title3) }
+                    .foregroundStyle(.tint)
+                    .disabled(preparing != nil)
+                    .accessibilityLabel("Play \(group.title)")
+            }
+        }
+        .buttonStyle(.plain)
+        .font(.caption)
+        .textCase(nil)
+        .foregroundStyle(.secondary)
+    }
+
+    private func videos(in group: FileGroup) -> [LibraryFile] {
+        group.files.filter { FileKind.isVideo($0.name) && !FileKind.isSample($0.name) }
+    }
+
+    /// The season's videos as one Infuse playlist, named by their own file names (scene names read well).
+    private func playAll(in group: FileGroup) {
+        let files = videos(in: group)
+        guard preparing == nil, !files.isEmpty, let backend = model.backend(item.backend) else { return }
+        let itemID = item.id
+        let jobs = files.map { file in
+            { @Sendable in try await backend.playbackURL(itemID: itemID, fileID: file.id) }
+        }
+        message = nil
+        preparing = (0, files.count)
+        Task {
+            defer { preparing = nil }
+            let (urls, failure) = await LinkBatch.fetch(jobs) { preparing = ($0, files.count) }
+            let playable = zip(files, urls).compactMap { file, url in
+                url.map { (url: $0, filename: Optional((file.name as NSString).lastPathComponent)) }
+            }
+            guard let infuse = Infuse.playURL(for: playable) else {
+                message = failure ?? "Nothing to play."
+                return
+            }
+            if let failure, playable.count < files.count {
+                message = "Skipped \(files.count - playable.count) of \(files.count): \(failure)"
+            }
+            openURL(infuse)
+        }
+    }
+
+    private func fileRow(_ file: LibraryFile, name: String) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(name).font(.subheadline)
+            HStack(spacing: 10) {
+                if let size = file.size {
+                    Text(size.formatted(.byteCount(style: .file))).font(.caption).foregroundStyle(.secondary)
+                }
+                Spacer()
+                Button { copyLink(file) } label: { Image(systemName: "link") }
+                    .accessibilityLabel("Copy link")
+                downloadButton(file)
+                // Infuse plays video; other files are for the link or the phone.
+                if FileKind.isVideo(file.name) {
+                    Button { play(file) } label: { Image(systemName: "play.fill") }
+                        .accessibilityLabel("Play in Infuse")
+                }
+            }
+            // Bordered buttons keep their own tap areas inside a list row.
+            .buttonStyle(.bordered)
+            .controlSize(.small)
+        }
+        .contextMenu {
+            if FileKind.isVideo(file.name) {
+                Button("Play in Infuse", systemImage: "play") { play(file) }
+            }
+            Button("Copy link", systemImage: "link") { copyLink(file) }
+            Button("Download to phone", systemImage: "arrow.down.circle") { download(file) }
+        }
+    }
+
     /// Set when the service waits for the user to pick files (Real-Debrid).
     private var fileSelector: (any FileSelecting)? {
         guard (detail ?? item).status == .awaitingFileSelection else { return nil }
@@ -587,41 +691,20 @@ struct LibraryItemView: View {
                     Text("\(item.backend.displayName) waits for you to choose which files to download.")
                 }
             }
-            Section("Files") {
-                ForEach(files) { file in
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text(file.name).font(.subheadline)
-                        HStack(spacing: 10) {
-                            if let size = file.size {
-                                Text(size.formatted(.byteCount(style: .file))).font(.caption).foregroundStyle(.secondary)
-                            }
-                            Spacer()
-                            Button { copyLink(file) } label: { Image(systemName: "link") }
-                                .accessibilityLabel("Copy link")
-                            downloadButton(file)
-                            // Infuse plays video; other files are for the link or the phone.
-                            if FileKind.isVideo(file.name) {
-                                Button { play(file) } label: { Image(systemName: "play.fill") }
-                                    .accessibilityLabel("Play in Infuse")
-                            }
-                        }
-                        // Bordered buttons keep their own tap areas inside a list row.
-                        .buttonStyle(.bordered)
-                        .controlSize(.small)
+            ForEach(fileGroups) { group in
+                Section {
+                    if isExpanded(group) {
+                        ForEach(group.files) { file in fileRow(file, name: group.displayName(of: file)) }
                     }
-                    .contextMenu {
-                        if FileKind.isVideo(file.name) {
-                            Button("Play in Infuse", systemImage: "play") { play(file) }
-                        }
-                        Button("Copy link", systemImage: "link") { copyLink(file) }
-                        Button("Download to phone", systemImage: "arrow.down.circle") { download(file) }
-                    }
+                } header: {
+                    groupHeader(group)
                 }
             }
         }
         .overlay {
             if detail == nil && files.isEmpty && message == nil { ProgressView() }
         }
+        .overlay(alignment: .bottom) { PreparingBadge(progress: preparing) }
         .sheet(isPresented: $isChoosingFiles) {
             // Not `fileSelector`: the status changes on success, before the sheet is dismissed.
             if let backend = model.backend(item.backend) as? any FileSelecting {
@@ -759,7 +842,9 @@ struct LibraryItemView: View {
 
     private func play(_ file: LibraryFile) {
         Task {
-            if let url = await link(for: file), let infuse = Infuse.playURL(for: url) { openURL(infuse) }
+            // The file name lets Infuse recognise the episode or movie whatever the link's path says.
+            let name = (file.name as NSString).lastPathComponent
+            if let url = await link(for: file), let infuse = Infuse.playURL(for: [(url, name)]) { openURL(infuse) }
         }
     }
 
