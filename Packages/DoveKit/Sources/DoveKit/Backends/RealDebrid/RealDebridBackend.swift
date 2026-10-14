@@ -79,8 +79,8 @@ public struct RealDebridBackend: LibraryBackend, FileSelecting {
             if let error = response.backendError { throw error }
             return try await add(.torrentFile(data: data, filename: url.lastPathComponent))
 
-        case .hosterURL(let url):
-            let download = try await unrestrict(url.absoluteString)
+        case .hosterURL(let url, let password):
+            let download = try await unrestrict(url.absoluteString, password: password)
             return RealDebridItemRef.download(download.id).id
 
         case .nzbURL, .nzbFile:
@@ -184,8 +184,10 @@ public struct RealDebridBackend: LibraryBackend, FileSelecting {
         try await decode(RealDebridTorrent.self, from: request("torrents/info/\(torrentID)"))
     }
 
-    private func unrestrict(_ link: String) async throws -> RealDebridDownload {
-        try await decode(RealDebridDownload.self, from: request("unrestrict/link", method: "POST", form: [("link", link)]))
+    private func unrestrict(_ link: String, password: String? = nil) async throws -> RealDebridDownload {
+        var form = [("link", link)]
+        if let password, !password.isEmpty { form.append(("password", password)) }
+        return try await decode(RealDebridDownload.self, from: request("unrestrict/link", method: "POST", form: form))
     }
 
     /// `/downloads` has no single-entry endpoint, so look the entry up in the list.
@@ -320,4 +322,85 @@ extension RealDebridBackend: AccountReporting {
 struct RealDebridUser: Decodable {
     let type: String?
     let expiration: String?
+}
+
+extension RealDebridBackend {
+    /// A link `unrestrict/link` refuses may be a folder: `unrestrict/folder` lists its files' links, each
+    /// unrestricted into its own `/downloads` entry. Files that fail are skipped; all failing throws the first error.
+    @discardableResult
+    public func addAll(_ source: Source, category: AddCategory?, privateTracker: Bool) async throws -> [LibraryItem.ID] {
+        guard case .hosterURL(let url, let password) = source else {
+            return [try await add(source, category: category, privateTracker: privateTracker)]
+        }
+        do {
+            return [try await add(source)]
+        } catch let error as BackendError where error != .unauthorized && error != .rateLimited {
+            let links = (try? await decode([String].self, from: request("unrestrict/folder", method: "POST", form: [("link", url.absoluteString)]))) ?? []
+            guard !links.isEmpty else { throw error }
+            var ids: [LibraryItem.ID] = []
+            var firstError: (any Error)?
+            for link in links {
+                do {
+                    ids.append(RealDebridItemRef.download(try await unrestrict(link, password: password).id).id)
+                } catch {
+                    firstError = firstError ?? error
+                }
+            }
+            if ids.isEmpty, let firstError { throw firstError }
+            return ids
+        }
+    }
+}
+
+extension RealDebridBackend: HosterListing {
+    /// `GET hosts` (domain → name, public) grouped by name, with `hosts/status` (`status` "up"/"down") when it
+    /// answers; a failing status call leaves every hoster's state unknown.
+    public func hostList() async throws -> HostList {
+        let hosts = try await decode([String: RealDebridHost].self, from: request("hosts"))
+        let status = (try? await decode([String: RealDebridHostStatus].self, from: request("hosts/status"))) ?? [:]
+        var byName: [String: (domains: [String], online: Bool?)] = [:]
+        for (domain, host) in hosts {
+            var entry = byName[host.name, default: ([], nil)]
+            entry.domains.append(domain)
+            switch status[domain]?.status?.lowercased() {
+            case "up": entry.online = true
+            case "down": entry.online = entry.online ?? false
+            default: break
+            }
+            byName[host.name] = entry
+        }
+        return HostList(hosts: byName
+            .map { HostList.Host(name: $0.key, domains: $0.value.domains.sorted(), online: $0.value.online) }
+            .sorted { $0.name < $1.name })
+    }
+}
+
+struct RealDebridHost: Decodable {
+    let name: String
+}
+
+struct RealDebridHostStatus: Decodable {
+    let status: String?
+}
+
+extension RealDebridBackend: HosterChecking {
+    /// `POST unrestrict/check`: the file's name and size from the hoster, `supported` 1 when Real-Debrid can
+    /// unlock it. Adds nothing. A file that is gone answers with an error (code 24), reported as unavailable.
+    public func check(_ url: URL, password: String?) async throws -> HosterLinkInfo {
+        var form = [("link", url.absoluteString)]
+        if let password, !password.isEmpty { form.append(("password", password)) }
+        do {
+            let check = try await decode(RealDebridLinkCheck.self, from: request("unrestrict/check", method: "POST", form: form))
+            return HosterLinkInfo(filename: check.filename, size: check.filesize, host: check.host, available: check.supported != 0)
+        } catch let error as BackendError where error == Self.map(errorCode: 24, message: nil) {
+            return HosterLinkInfo(filename: nil, size: nil, host: url.host(), available: false)
+        }
+    }
+}
+
+struct RealDebridLinkCheck: Decodable {
+    let host: String?
+    let filename: String?
+    let filesize: Int64?
+    let supported: Int?
 }

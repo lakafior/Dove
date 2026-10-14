@@ -71,9 +71,10 @@ public struct TorBoxBackend: LibraryBackend {
             let filename = url.lastPathComponent.isEmpty ? "download.torrent" : url.lastPathComponent
             return try await add(.torrentFile(data: data, filename: filename), category: category, privateTracker: privateTracker)
 
-        case .hosterURL(let url):
+        case .hosterURL(let url, let password):
             var form = MultipartFormData()
             form.addField("link", url.absoluteString)
+            if let password, !password.isEmpty { form.addField("password", password) }
             let result = try await perform(
                 request("webdl/createwebdownload", method: "POST", body: form.finalized(), contentType: form.contentType),
                 as: TorBoxCreateResult.self
@@ -253,4 +254,26 @@ extension TorBoxBackend: AccountReporting {
 struct TorBoxUser: Decodable {
     let plan: Int?
     let premiumExpiresAt: String?
+}
+
+extension TorBoxBackend: HosterListing {
+    /// `GET webdl/hosters`: domains, `status` (false while down) and the account's daily link usage.
+    public func hostList() async throws -> HostList {
+        let hosters = try await perform(request("webdl/hosters"), as: [TorBoxHoster].self) ?? []
+        return HostList(hosts: hosters.map { hoster in
+            let left = hoster.dailyLinkLimit.flatMap { limit in
+                limit > 0 ? max(0, limit - (hoster.dailyLinkUsed ?? 0)) : nil
+            }
+            return HostList.Host(name: hoster.name, domains: hoster.domains ?? [], online: hoster.status, linksLeft: left)
+        })
+    }
+}
+
+/// Entry of `GET webdl/hosters`. A daily link limit of 0 means none.
+struct TorBoxHoster: Decodable {
+    let name: String
+    let domains: [String]?
+    let status: Bool?
+    let dailyLinkLimit: Int?
+    let dailyLinkUsed: Int?
 }

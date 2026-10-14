@@ -12,16 +12,37 @@ public struct BackendRouter: Sendable {
     /// Only services that seed: for releases an indexer says come from a private tracker, which may arrive
     /// as a bare magnet that `TorrentFile.isPrivate` cannot see.
     public var seedingOnly = false
+    /// Which hosters each service unlocks (`HostCatalog`). Hoster links skip services whose list says no;
+    /// a service without a list is still tried.
+    public var hostLists: [BackendID: HostList] = [:]
 
-    public init(backends: [any LibraryBackend], order: [BackendID] = [], usenetOrder: [BackendID] = []) {
+    public init(
+        backends: [any LibraryBackend],
+        order: [BackendID] = [],
+        usenetOrder: [BackendID] = [],
+        hostLists: [BackendID: HostList] = [:]
+    ) {
         self.backends = backends
         self.order = order
         self.usenetOrder = usenetOrder
+        self.hostLists = hostLists
     }
 
     /// Compatible backends, in priority order. NZBs follow `usenetOrder`; without one they go to Usenet
-    /// backends (nzbdav) before debrids that also take them (TorBox/Offcloud with Usenet on).
+    /// backends (nzbdav) before debrids that also take them (TorBox/Offcloud with Usenet on). Hoster links go only
+    /// to services that unlock the site (`verdict`); `compatible(with:)` lists the rest too, for a manual pick.
     public func candidates(for source: Source) -> [any LibraryBackend] {
+        compatible(with: source).filter { verdict(for: source, on: $0.id).isWorthTrying }
+    }
+
+    /// What a service's host list says about a hoster link: `.unknown` without a list, and for other sources.
+    public func verdict(for source: Source, on backend: BackendID) -> HostVerdict {
+        guard case .hosterURL(let url, _) = source, let list = hostLists[backend] else { return .unknown }
+        return list.verdict(for: url)
+    }
+
+    /// Every service that takes this kind of source, in priority order, whatever its host list says.
+    public func compatible(with source: Source) -> [any LibraryBackend] {
         let compatible = backends.filter { $0.supports(source) && (!seedingOnly || $0.takesPrivateTorrents) }
         let order = source.kind == .nzb && !usenetOrder.isEmpty ? usenetOrder : self.order
         let rank = { (id: BackendID) in order.firstIndex(of: id) ?? order.count }
@@ -37,7 +58,10 @@ public struct BackendRouter: Sendable {
     }
 
     private func noCandidate(for source: Source) -> BackendError {
-        (seedingOnly || source.isPrivateTorrent) && backends.contains { $0.supportedSources.contains(.torrent) }
+        if case .hosterURL(let url, _) = source, !compatible(with: source).isEmpty {
+            return .api(message: "None of your services unlocks \(url.host() ?? "this site").")
+        }
+        return (seedingOnly || source.isPrivateTorrent) && backends.contains { $0.supportedSources.contains(.torrent) }
             ? .privateTorrent
             : .unsupportedSource(source.kind)
     }
@@ -56,7 +80,9 @@ public struct BackendRouter: Sendable {
 
     public struct AddResult: Sendable {
         public let backend: BackendID
-        public let itemID: LibraryItem.ID
+        /// The first item; a folder link adds one per file (`itemIDs`).
+        public var itemID: LibraryItem.ID { itemIDs[0] }
+        public let itemIDs: [LibraryItem.ID]
         /// Backends tried before the one that took the source, with what they answered.
         public let skipped: [Failure]
     }
@@ -70,8 +96,9 @@ public struct BackendRouter: Sendable {
         for backend in candidates {
             try Task.checkCancellation()
             do {
-                let id = try await backend.add(source, category: category, privateTracker: seedingOnly)
-                return AddResult(backend: backend.id, itemID: id, skipped: failures)
+                let ids = try await backend.addAll(source, category: category, privateTracker: seedingOnly)
+                guard !ids.isEmpty else { throw BackendError.invalidResponse }
+                return AddResult(backend: backend.id, itemIDs: ids, skipped: failures)
             } catch is CancellationError {
                 throw CancellationError()
             } catch {

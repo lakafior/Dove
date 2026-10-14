@@ -30,13 +30,14 @@ final class ShareViewController: UIViewController {
 final class ShareModel {
     enum State {
         case reading
-        case ready(Source)
+        case ready([Source])
         case nothing
         case added(String)
     }
 
     private(set) var state: State = .reading
-    let router: BackendRouter
+    private(set) var router: BackendRouter
+    @ObservationIgnored private let hostCatalog = HostCatalog(fileURL: HostCatalog.defaultURL)
     let close: () -> Void
 
     init(close: @escaping () -> Void) {
@@ -44,14 +45,20 @@ final class ShareModel {
         router = BackendRouter(
             backends: SharedConfiguration.backends(from: keychain),
             order: SharedConfiguration.debridOrder(from: keychain),
-            usenetOrder: SharedConfiguration.usenetOrder(from: keychain)
+            usenetOrder: SharedConfiguration.usenetOrder(from: keychain),
+            // The extension's own copy (its Caches): no App Group with the app. Refreshed in `read`.
+            hostLists: HostCatalog.saved(at: HostCatalog.defaultURL)
         )
         self.close = close
     }
 
     func read(_ items: [NSExtensionItem]) async {
         let providers = items.flatMap { $0.attachments ?? [] }
-        state = await Self.source(from: providers).map(State.ready) ?? .nothing
+        let sources = await Self.sources(from: providers)
+        if sources.contains(where: { $0.kind == .hoster }) {
+            router.hostLists = await hostCatalog.refresh(router.backends)
+        }
+        state = sources.isEmpty ? .nothing : .ready(sources)
     }
 
     func added(_ message: String) {
@@ -62,29 +69,30 @@ final class ShareModel {
         }
     }
 
-    /// Files first (they carry the most), then links, then text that contains a magnet or link.
-    private static func source(from providers: [NSItemProvider]) async -> Source? {
+    /// Everything shared, each once: files (they carry the most), then links, then every magnet or link in text.
+    private static func sources(from providers: [NSItemProvider]) async -> [Source] {
+        var found: [Source] = []
         for provider in providers {
             for (type, isTorrent) in [("org.bittorrent.torrent", true), ("org.newzbin.nzb", false)]
             where provider.hasItemConformingToTypeIdentifier(type) {
                 if let data = try? await data(from: provider, type: type) {
                     let name = provider.suggestedName.map { $0.contains(".") ? $0 : $0 + (isTorrent ? ".torrent" : ".nzb") }
                         ?? (isTorrent ? "shared.torrent" : "shared.nzb")
-                    return isTorrent ? .torrentFile(data: data, filename: name) : .nzbFile(data: data, filename: name)
+                    found.append(isTorrent ? .torrentFile(data: data, filename: name) : .nzbFile(data: data, filename: name))
                 }
             }
         }
         for provider in providers where provider.hasItemConformingToTypeIdentifier(UTType.url.identifier) {
             guard let url = try? await url(from: provider) else { continue }
-            if let source = SourceDetector.source(opening: url) { return source }
+            if let source = SourceDetector.source(opening: url) { found.append(source) }
         }
         for provider in providers where provider.hasItemConformingToTypeIdentifier(UTType.plainText.identifier) {
-            if let text = try? await provider.loadItem(forTypeIdentifier: UTType.plainText.identifier) as? String,
-               let source = SourceDetector.firstSource(in: text) {
-                return source
+            if let text = try? await provider.loadItem(forTypeIdentifier: UTType.plainText.identifier) as? String {
+                found += SourceDetector.sources(in: text)
             }
         }
-        return nil
+        var seen = Set<String>()
+        return found.filter { seen.insert($0.id).inserted }
     }
 
     private static func url(from provider: NSItemProvider) async throws -> URL? {
@@ -112,8 +120,8 @@ struct ShareView: View {
             switch model.state {
             case .reading:
                 ProgressView().navigationTitle("Dove")
-            case .ready(let source):
-                AddSourceView(source: source, router: model.router) { message in
+            case .ready(let sources):
+                AddSourceView(sources: sources, router: model.router) { message in
                     if let message { model.added(message) } else { model.close() }
                 }
             case .nothing:

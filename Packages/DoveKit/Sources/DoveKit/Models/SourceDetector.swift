@@ -48,6 +48,41 @@ public enum SourceDetector {
         return nil
     }
 
+    /// Every source in a text, in reading order, each once: magnets, links Dove can use, bare info hashes (outside
+    /// magnets and links). A list of hoster links pasted at once becomes one add.
+    public static func sources(in text: String) -> [Source] {
+        let whole = NSRange(text.startIndex..., in: text)
+        var found: [(location: Int, source: Source)] = []
+        var taken: [NSRange] = []
+
+        if let magnets = try? NSRegularExpression(pattern: #"magnet:\?[^\s"'<>]+"#, options: .caseInsensitive) {
+            for match in magnets.matches(in: text, range: whole) {
+                guard let range = Range(match.range, in: text) else { continue }
+                found.append((match.range.location, .magnet(String(text[range]))))
+                taken.append(match.range)
+            }
+        }
+        if let detector = try? NSDataDetector(types: NSTextCheckingResult.CheckingType.link.rawValue) {
+            for match in detector.matches(in: text, range: whole) where !taken.contains(where: { NSIntersectionRange($0, match.range).length > 0 }) {
+                guard let url = match.url, let source = detect(url.absoluteString) else { continue }
+                found.append((match.range.location, source))
+                taken.append(match.range)
+            }
+        }
+        if let hashes = try? NSRegularExpression(pattern: #"\b[0-9a-fA-F]{40}\b"#) {
+            for match in hashes.matches(in: text, range: whole) where !taken.contains(where: { NSIntersectionRange($0, match.range).length > 0 }) {
+                guard let range = Range(match.range, in: text), let source = detect(String(text[range])) else { continue }
+                found.append((match.range.location, source))
+            }
+        }
+
+        var seen = Set<String>()
+        return found
+            .sorted { $0.location < $1.location }
+            .map(\.source)
+            .filter { seen.insert($0.id).inserted }
+    }
+
     /// A URL handed to the app or the share extension: a `magnet:` link, a `.torrent`/`.nzb` file
     /// (read under security-scoped access, since Files opens them in place), or a web link.
     public static func source(opening url: URL) -> Source? {

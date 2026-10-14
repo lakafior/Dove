@@ -16,7 +16,7 @@ final class AppModel {
     private(set) var backends: [any LibraryBackend] = []
 
     /// A magnet or file opened from another app; RootView shows the add sheet for it.
-    var openedSource: Source?
+    var openedSource: SourceBatch?
 
     /// The tab on screen, so the home screen can send the user to Downloads or Settings.
     var selectedTab: AppTab = .search
@@ -26,7 +26,7 @@ final class AppModel {
     /// Handles `onOpenURL`. Copies iOS made into Documents/Inbox are removed once read,
     /// so they do not pile up next to downloads in Files.
     func open(_ url: URL) {
-        openedSource = SourceDetector.source(opening: url)
+        openedSource = SourceDetector.source(opening: url).map { SourceBatch([$0]) }
         if url.isFileURL, url.deletingLastPathComponent().lastPathComponent == "Inbox",
            url.resolvingSymlinksInPath().path.hasPrefix(URL.documentsDirectory.resolvingSymlinksInPath().path) {
             try? FileManager.default.removeItem(at: url)
@@ -239,14 +239,31 @@ final class AppModel {
     }
 
     var router: BackendRouter {
-        BackendRouter(backends: backends, order: debridOrder, usenetOrder: usenetOrder)
+        BackendRouter(backends: backends, order: debridOrder, usenetOrder: usenetOrder, hostLists: hostLists)
+    }
+
+    // MARK: - Hosters
+
+    /// Which file hosters each service unlocks; hoster links skip services that do not (`BackendRouter.hostLists`).
+    private(set) var hostLists: [BackendID: HostList] = [:]
+    @ObservationIgnored private let hostCatalog = HostCatalog(fileURL: HostCatalog.defaultURL)
+
+    /// Loads the saved lists, then fetches those older than a day. At launch and before a hoster link is added.
+    func refreshHostLists(force: Bool = false) async {
+        if hostLists.isEmpty { hostLists = await hostCatalog.snapshot }
+        hostLists = await hostCatalog.refresh(backends, force: force)
     }
 
     /// Same priority list, but services that already have the release cached go first:
     /// adding there is instant and costs nothing.
     func router(preferring cached: [BackendID]) -> BackendRouter {
         let first = debridOrder.filter(cached.contains)
-        return BackendRouter(backends: backends, order: first + debridOrder.filter { !first.contains($0) }, usenetOrder: usenetOrder)
+        return BackendRouter(
+            backends: backends,
+            order: first + debridOrder.filter { !first.contains($0) },
+            usenetOrder: usenetOrder,
+            hostLists: hostLists
+        )
     }
 
     /// Configured backends that can check cache status without adding anything (TorBox, Offcloud).

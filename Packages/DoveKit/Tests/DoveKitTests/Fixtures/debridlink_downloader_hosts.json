@@ -1,0 +1,56 @@
+{
+ "success": true,
+ "value": [
+  {
+   "name": "1fichier",
+   "type": "host",
+   "status": 1,
+   "domains": [
+    "1fichier.com",
+    "alterupload.com",
+    "cjoint.net",
+    "desfichiers.com",
+    "dfichiers.com",
+    "megadl.org",
+    "megadl.fr",
+    "mesfichiers.fr",
+    "mesfichiers.org",
+    "piecejointe.net",
+    "pjointe.com",
+    "tenvoi.com",
+    "dl4free.com"
+   ]
+  },
+  {
+   "name": "clicknupload",
+   "type": "host",
+   "status": 1,
+   "domains": [
+    "clicknupload.link",
+    "clicknupload.org",
+    "clicknupload.co",
+    "clicknupload.cc",
+    "clicknupload.link",
+    "clicknupload.download",
+    "clicknupload.club",
+    "clicknupload.vip",
+    "clicknupload.space",
+    "clicknupload.name",
+    "clickndownload.org",
+    "clickndownload.space",
+    "clickndownload.click",
+    "clickndownload.link",
+    "clickndownload.name",
+    "clickndownload.one"
+   ]
+  },
+  {
+   "name": "downhost",
+   "type": "host",
+   "status": 0,
+   "domains": [
+    "down.example"
+   ]
+  }
+ ]
+}

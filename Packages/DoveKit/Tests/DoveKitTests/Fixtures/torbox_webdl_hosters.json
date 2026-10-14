@@ -1,0 +1,65 @@
+{
+ "success": true,
+ "error": null,
+ "detail": "Hosters list and information retrieved successfully.",
+ "data": [
+  {
+   "id": 1,
+   "name": "Rapidgator",
+   "domains": [
+    "rapidgator.net",
+    "rg.to"
+   ],
+   "url": "https://rapidgator.net",
+   "icon": "https://torbox.app/images/hoster-icons/rapidgator.png",
+   "status": false,
+   "type": "hoster",
+   "note": null,
+   "nsfw": false,
+   "daily_link_limit": 5,
+   "daily_link_used": 0,
+   "daily_bandwidth_limit": 536870912000,
+   "daily_bandwidth_used": 0,
+   "per_link_size_limit": 107374182400,
+   "regex": "^https?://(?:[^./]+\\.)*(rapidgator\\.net|rg\\.to)(/|$)"
+  },
+  {
+   "id": 2,
+   "name": "1Fichier",
+   "domains": [
+    "1fichier.com"
+   ],
+   "url": "https://1fichier.com",
+   "icon": "https://torbox.app/images/hoster-icons/1fichier.png",
+   "status": true,
+   "type": "hoster",
+   "note": null,
+   "nsfw": false,
+   "daily_link_limit": 50,
+   "daily_link_used": 1,
+   "daily_bandwidth_limit": 10737418240000,
+   "daily_bandwidth_used": 0,
+   "per_link_size_limit": 214748364800,
+   "regex": "^https?://(?:[^./]+\\.)*(1fichier\\.com)(/|$)"
+  },
+  {
+   "id": 99,
+   "name": "Pixeldrain",
+   "domains": [
+    "pixeldrain.com"
+   ],
+   "url": "https://rapidgator.net",
+   "icon": "https://torbox.app/images/hoster-icons/rapidgator.png",
+   "status": true,
+   "type": "hoster",
+   "note": null,
+   "nsfw": false,
+   "daily_link_limit": 0,
+   "daily_link_used": 0,
+   "daily_bandwidth_limit": 536870912000,
+   "daily_bandwidth_used": 0,
+   "per_link_size_limit": 107374182400,
+   "regex": ""
+  }
+ ]
+}

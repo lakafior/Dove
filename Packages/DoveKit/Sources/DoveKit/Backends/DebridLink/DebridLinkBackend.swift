@@ -68,8 +68,8 @@ public struct DebridLinkBackend: LibraryBackend {
             let filename = url.lastPathComponent.lowercased().hasSuffix(".torrent") ? url.lastPathComponent : "download.torrent"
             return try await add(.torrentFile(data: data, filename: filename))
 
-        case .hosterURL(let url):
-            guard let link = try await addLink(url.absoluteString).first else { throw BackendError.invalidResponse }
+        case .hosterURL(let url, let password):
+            guard let link = try await addLink(url.absoluteString, password: password).first else { throw BackendError.invalidResponse }
             return DebridLinkItemRef.link(link.id).id
 
         case .nzbURL, .nzbFile:
@@ -139,8 +139,11 @@ public struct DebridLinkBackend: LibraryBackend {
         return link
     }
 
-    private func addLink(_ url: String) async throws -> [DebridLinkLink] {
-        try await perform(jsonRequest("downloader/add", body: ["url": url]), as: DebridLinkLinks.self).links
+    /// One link, or every file's for a folder link.
+    private func addLink(_ url: String, password: String? = nil) async throws -> [DebridLinkLink] {
+        var body = ["url": url]
+        if let password, !password.isEmpty { body["password"] = password }
+        return try await perform(jsonRequest("downloader/add", body: body), as: DebridLinkLinks.self).links
     }
 
     /// Every page of a list endpoint, 100 items at a time.
@@ -236,4 +239,36 @@ extension DebridLinkBackend: AccountReporting {
             return AccountStatus(isPremium: false)
         }
     }
+}
+
+extension DebridLinkBackend {
+    /// A folder link answers with every file's link: each is its own item.
+    @discardableResult
+    public func addAll(_ source: Source, category: AddCategory?, privateTracker: Bool) async throws -> [LibraryItem.ID] {
+        guard case .hosterURL(let url, let password) = source else {
+            return [try await add(source, category: category, privateTracker: privateTracker)]
+        }
+        let links = try await addLink(url.absoluteString, password: password)
+        guard !links.isEmpty else { throw BackendError.invalidResponse }
+        return links.map { DebridLinkItemRef.link($0.id).id }
+    }
+}
+
+extension DebridLinkBackend: HosterListing {
+    /// `GET downloader/hosts`: hosters (`type` "host"; "stream" and "protect" sites too), online while
+    /// `status` ≥ 1.
+    public func hostList() async throws -> HostList {
+        let query = [URLQueryItem(name: "keys", value: "name,type,status,domains")]
+        let hosts = try await perform(request("downloader/hosts", query: query), as: [DebridLinkHost].self)
+        return HostList(hosts: hosts.map {
+            HostList.Host(name: $0.name, domains: $0.domains ?? [], online: $0.status.map { $0 >= 1 })
+        })
+    }
+}
+
+struct DebridLinkHost: Decodable {
+    let name: String
+    let type: String?
+    let status: Int?
+    let domains: [String]?
 }

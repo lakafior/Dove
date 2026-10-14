@@ -57,7 +57,13 @@ public struct OffcloudBackend: LibraryBackend {
                 throw BackendError.api(message: "This magnet has no valid info hash.")
             }
             request = jsonRequest("cloud", body: ["url": magnet])
-        case .torrentURL(let url), .hosterURL(let url):
+        case .torrentURL(let url):
+            request = jsonRequest("cloud", body: ["url": url.absoluteString])
+        case .hosterURL(let url, let password):
+            // The cloud API has no password field.
+            if let password, !password.isEmpty {
+                throw BackendError.api(message: "Offcloud cannot open password-protected links.")
+            }
             request = jsonRequest("cloud", body: ["url": url.absoluteString])
         case .torrentFile(let data, let filename):
             request = fileRequest(data, filename: filename, mimeType: "application/x-bittorrent")

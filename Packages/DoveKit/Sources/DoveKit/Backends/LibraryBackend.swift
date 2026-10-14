@@ -28,6 +28,11 @@ public protocol LibraryBackend: Sendable {
     @discardableResult
     func add(_ source: Source, category: AddCategory?, privateTracker: Bool) async throws -> LibraryItem.ID
 
+    /// Adds a source that may become several items: a hoster's folder link gives one per file (Real-Debrid,
+    /// Debrid-Link). Defaults to `add(_:category:privateTracker:)`. The router adds through this.
+    @discardableResult
+    func addAll(_ source: Source, category: AddCategory?, privateTracker: Bool) async throws -> [LibraryItem.ID]
+
     func items() async throws -> [LibraryItem]
 
     /// One item with its file list. Backends whose list endpoint omits files override this.
@@ -49,6 +54,11 @@ extension LibraryBackend {
     public func add(_ source: Source, category: AddCategory?, privateTracker: Bool) async throws -> LibraryItem.ID {
         if privateTracker, !takesPrivateTorrents { throw BackendError.privateTorrent }
         return try await add(source, category: category)
+    }
+
+    @discardableResult
+    public func addAll(_ source: Source, category: AddCategory?, privateTracker: Bool) async throws -> [LibraryItem.ID] {
+        [try await add(source, category: category, privateTracker: privateTracker)]
     }
 
     public var takesPrivateTorrents: Bool { false }

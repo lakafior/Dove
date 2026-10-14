@@ -31,8 +31,8 @@ struct RootView: View {
         .onChange(of: scenePhase, initial: true) {
             if scenePhase == .active { model.downloadJobs.startPolling() } else { model.downloadJobs.stopPolling() }
         }
-        .sheet(item: Binding(get: { model.openedSource }, set: { model.openedSource = $0 })) { source in
-            AddSourceSheet(source: source) { result in
+        .sheet(item: Binding(get: { model.openedSource }, set: { model.openedSource = $0 })) { batch in
+            AddSourceSheet(sources: batch.sources) { result in
                 model.openedSource = nil
                 if !result.isEmpty { openedMessage = result }
             }

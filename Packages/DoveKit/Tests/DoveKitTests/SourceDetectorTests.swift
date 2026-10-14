@@ -81,3 +81,30 @@ struct SourceInTextTests {
         #expect(Source.hosterURL(URL(string: "https://host.example/f/1")!).displayName == "host.example/f/1")
     }
 }
+
+struct SourceListTests {
+    @Test func findsEveryLinkInReadingOrderOnce() {
+        let hash = String(repeating: "b", count: 40)
+        let text = """
+        Part 1: https://1fichier.com/?aaa
+        Part 2: https://1fichier.com/?bbb
+        magnet:?xt=urn:btih:\(String(repeating: "a", count: 40))&dn=Show
+        Again https://1fichier.com/?aaa
+        nzb https://indexer.example/api?t=get&id=5&apikey=x
+        hash \(hash)
+        """
+        let sources = SourceDetector.sources(in: text)
+        #expect(sources.map(\.kind) == [.hoster, .hoster, .torrent, .nzb, .torrent])
+        #expect(sources[0] == .hosterURL(URL(string: "https://1fichier.com/?aaa")!))
+        #expect(sources[4] == .magnet("magnet:?xt=urn:btih:\(hash)"))
+    }
+
+    @Test func aMagnetsOwnHashIsNotCountedTwice() {
+        let magnet = "magnet:?xt=urn:btih:\(String(repeating: "c", count: 40))"
+        #expect(SourceDetector.sources(in: "see \(magnet) ok").count == 1)
+    }
+
+    @Test func plainTextHasNone() {
+        #expect(SourceDetector.sources(in: "The Office season 3").isEmpty)
+    }
+}

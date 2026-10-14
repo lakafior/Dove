@@ -13,7 +13,8 @@ public enum Source: Sendable, Equatable {
     case magnet(String)
     case torrentURL(URL)
     case torrentFile(data: Data, filename: String)
-    case hosterURL(URL)
+    /// A file hoster's link, with the password some hosters put on a file.
+    case hosterURL(URL, password: String? = nil)
     case nzbURL(URL)
     case nzbFile(data: Data, filename: String)
 
@@ -30,7 +31,7 @@ extension Source: Identifiable {
     public var id: String {
         switch self {
         case .magnet(let magnet): magnet
-        case .torrentURL(let url), .hosterURL(let url), .nzbURL(let url): url.absoluteString
+        case .torrentURL(let url), .hosterURL(let url, _), .nzbURL(let url): url.absoluteString
         case .torrentFile(_, let name), .nzbFile(_, let name): name
         }
     }
@@ -49,7 +50,7 @@ extension Source {
             return topic.replacingOccurrences(of: "urn:btih:", with: "", options: .caseInsensitive)
         case .torrentFile(_, let name), .nzbFile(_, let name):
             return name
-        case .torrentURL(let url), .hosterURL(let url), .nzbURL(let url):
+        case .torrentURL(let url), .hosterURL(let url, _), .nzbURL(let url):
             return (url.host() ?? "") + url.path()
         }
     }

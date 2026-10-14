@@ -8,7 +8,7 @@ import SwiftUI
 struct SearchView: View {
     @Environment(AppModel.self) private var model
     @State private var text = ""
-    @State private var pendingSource: Source?
+    @State private var pendingSources: SourceBatch?
     @State private var message: String?
     @State private var results: [MediaSummary] = []
     @State private var isSearching = false
@@ -107,9 +107,9 @@ struct SearchView: View {
             .onChange(of: scenePhase) { if scenePhase == .active { checkPasteboard() } }
             .onReceive(NotificationCenter.default.publisher(for: UIPasteboard.changedNotification)) { _ in checkPasteboard() }
             .sheet(isPresented: $showOtherFilters) { otherFilterSheet }
-            .sheet(item: $pendingSource) { source in
-                AddSourceSheet(source: source) { result in
-                    pendingSource = nil
+            .sheet(item: $pendingSources) { batch in
+                AddSourceSheet(sources: batch.sources) { result in
+                    pendingSources = nil
                     if result.hasPrefix("Added") { text = "" }
                     message = result.isEmpty ? nil : result
                 }
@@ -205,9 +205,10 @@ struct SearchView: View {
         answeredChange = pasteboardChange
         let trimmed = pasted.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
-        if let source = SourceDetector.firstSource(in: trimmed) {
+        let sources = SourceDetector.sources(in: trimmed)
+        if !sources.isEmpty {
             results = []
-            pendingSource = source
+            pendingSources = SourceBatch(sources)
         } else {
             text = trimmed
             handleSubmit()
@@ -216,9 +217,10 @@ struct SearchView: View {
 
     private func handleSubmit() {
         message = nil
-        if let source = SourceDetector.firstSource(in: text) {
+        let sources = SourceDetector.sources(in: text)
+        if !sources.isEmpty {
             results = []
-            pendingSource = source
+            pendingSources = SourceBatch(sources)
             return
         }
         let query = text.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -392,22 +394,24 @@ struct PosterImage: View {
 /// The app's add sheet: the shared add screen with the app's configured services and priority.
 struct AddSourceSheet: View {
     @Environment(AppModel.self) private var model
-    let source: Source
+    let sources: [Source]
     let onFinish: (String) -> Void
 
     var body: some View {
         @Bindable var model = model
         NavigationStack {
             AddSourceView(
-                source: source,
+                sources: sources,
                 router: model.router,
                 onClose: { onFinish($0 ?? "") },
                 downloadOnly: $model.downloadOnly,
-                startDownloadOnly: { backend, itemID in
+                startDownloadOnly: { backend, itemID, source in
                     await model.startDownloadOnly(itemID, on: backend, name: source.displayName, pick: .allVideos)
                 }
             )
         }
+        // Hoster links route by the services' host lists: load them if a day old.
+        .task { if sources.contains(where: { $0.kind == .hoster }) { await model.refreshHostLists() } }
         .presentationDetents([.medium, .large])
     }
 }
