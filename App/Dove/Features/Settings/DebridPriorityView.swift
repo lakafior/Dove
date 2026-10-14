@@ -15,7 +15,7 @@ struct DebridPriorityView: View {
     }
 }
 
-/// Where NZBs go: nzbdav, TorBox and Offcloud in any order. Debrids count only with their Usenet toggle on.
+/// Where NZBs go: nzbdav and the debrids with Usenet on, in any order.
 struct UsenetPriorityView: View {
     @Environment(AppModel.self) private var model
 
@@ -30,27 +30,62 @@ struct UsenetPriorityView: View {
     }
 }
 
+/// The order, each service's last measured speed, and a speed test that can reorder the list.
 private struct PriorityList<Footer: View>: View {
+    @Environment(AppModel.self) private var model
     @Binding var order: [BackendID]
     /// Why a service is skipped, or nil when it takes part.
     let skipped: (BackendID) -> String?
     @ViewBuilder let footer: () -> Footer
 
+    private var speed: SpeedTestModel { model.speed }
+    private var active: [BackendID] { order.filter { skipped($0) == nil } }
+
     var body: some View {
         List {
             Section {
                 ForEach(order) { id in
-                    HStack {
-                        Text(id.displayName)
-                        Spacer()
-                        if let reason = skipped(id) {
-                            Text(reason).foregroundStyle(.secondary)
+                    VStack(alignment: .leading, spacing: 3) {
+                        HStack {
+                            Text(id.displayName)
+                            Spacer()
+                            if let reason = skipped(id) {
+                                Text(reason).foregroundStyle(.secondary)
+                            } else if speed.testing == id {
+                                ProgressView()
+                            }
+                        }
+                        if skipped(id) == nil {
+                            if let failure = speed.failures[id] {
+                                Text(failure).font(.caption).foregroundStyle(.red)
+                            } else if let summary = speed.summary(id) {
+                                Text(summary).font(.caption).foregroundStyle(.secondary)
+                            }
                         }
                     }
                 }
                 .onMove { order.move(fromOffsets: $0, toOffset: $1) }
             } footer: {
                 footer()
+            }
+
+            Section {
+                Button {
+                    Task { await speed.run(active, using: model) }
+                } label: {
+                    Label(speed.isRunning ? "Testing…" : "Test speed", systemImage: "speedometer")
+                }
+                .disabled(speed.isRunning || active.isEmpty)
+                Button {
+                    withAnimation { order = SpeedTest.ordered(order, by: speed.samples.filter { active.contains($0.key) }) }
+                } label: {
+                    Label("Order by speed", systemImage: "arrow.up.arrow.down")
+                }
+                .disabled(speed.isRunning || !active.contains { speed.samples[$0] != nil })
+            } header: {
+                Text("Speed")
+            } footer: {
+                Text("Downloads the start of a big file from each service's library (up to 150 MB or 10 seconds) over Wi-Fi, the network your TV uses. Results stay on this iPhone. Ordering by speed is up to you: cached releases still go to the services that have them first.")
             }
         }
         .environment(\.editMode, .constant(.active))

@@ -13,6 +13,8 @@ final class AppModel {
     let services = ServiceStatusModel()
     /// The player links go to (Infuse, VLC, Kodi…).
     let playback = PlaybackModel(keychain: SharedConfiguration.keychain())
+    /// Measured download speed per service, on this device.
+    let speed = SpeedTestModel()
     private(set) var backends: [any LibraryBackend] = []
 
     /// A magnet or file opened from another app; RootView shows the add sheet for it.
