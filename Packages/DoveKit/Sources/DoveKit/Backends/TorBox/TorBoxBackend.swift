@@ -216,3 +216,27 @@ extension TorBoxBackend: CacheChecking {
         return cached
     }
 }
+
+extension TorBoxBackend: AccountReporting {
+    /// `GET user/me`: `plan` 0 free, 1 Essential, 2 Pro, 3 Standard; `premium_expires_at` (ISO 8601).
+    public func account() async throws -> AccountStatus {
+        guard let user = try await perform(request("user/me"), as: TorBoxUser.self) else { throw BackendError.invalidResponse }
+        let plan: String? = switch user.plan {
+        case 1: "Essential"
+        case 2: "Pro"
+        case 3: "Standard"
+        default: nil
+        }
+        let isPremium = (user.plan ?? 0) > 0
+        return AccountStatus(
+            isPremium: isPremium,
+            premiumUntil: isPremium ? AccountDate.parse(user.premiumExpiresAt) : nil,
+            plan: plan
+        )
+    }
+}
+
+struct TorBoxUser: Decodable {
+    let plan: Int?
+    let premiumExpiresAt: String?
+}

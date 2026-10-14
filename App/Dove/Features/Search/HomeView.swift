@@ -1,9 +1,10 @@
 import DoveKit
 import SwiftUI
 
-/// The search tab before a search: what is downloading, what was added lately, what is trending (with a TMDB
-/// key), and recent searches. Everything here comes from the library already loaded (or its cache), TMDB's
-/// weekly list cached for half a day, and this device's own history: opening the app costs no extra calls.
+/// The search tab before a search: how the services are doing, what is downloading, what was added lately, the
+/// library's shelves by kind, and recent searches. Everything here comes from the library already loaded (or its
+/// cache) and this device's own history: opening the home screen costs no extra calls, and a new kind of content
+/// gets its shelf by itself.
 struct HomeView: View {
     @Environment(AppModel.self) private var model
     let home: HomeModel
@@ -14,9 +15,10 @@ struct HomeView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 28) {
             if needsSetup { setupCard }
+            servicesStrip
             activity
             recentlyAdded
-            trending
+            shelves
             recentSearches
         }
         .padding(.vertical, 8)
@@ -116,35 +118,63 @@ struct HomeView: View {
         }
     }
 
+    // MARK: - Shelves
+
+    /// One tile per kind the library holds, with a few of its covers; a tap opens the Library filtered to it.
     @ViewBuilder
-    private var trending: some View {
-        if !home.trending.isEmpty {
-            let owned = Set(library.titles.compactMap(\.media?.id))
+    private var shelves: some View {
+        let shelves = LibraryShelfSummary.all(in: library, showAdult: model.showAdult)
+        if !shelves.isEmpty {
             VStack(alignment: .leading, spacing: 10) {
-                HomeHeading("Trending this week")
-                PosterShelf {
-                    ForEach(home.trending.prefix(20)) { item in
-                        NavigationLink(value: item) {
-                            PosterCard(
-                                url: item.poster,
-                                title: item.name,
-                                subtitle: [item.type == .movie ? "Movie" : "Series", item.releaseInfo]
-                                    .compactMap { $0 }.joined(separator: " · ")
+                HomeHeading("Your shelves")
+                LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)], spacing: 12) {
+                    ForEach(shelves) { shelf in
+                        Button {
+                            model.libraryCategoryRequest = shelf.category
+                            model.selectedTab = .library
+                        } label: {
+                            ShelfTile(shelf: shelf)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(.horizontal)
+            }
+        }
+    }
+
+    // MARK: - Services
+
+    /// One chip per configured service: a light (online, worth a look, offline) and days of premium left.
+    @ViewBuilder
+    private var servicesStrip: some View {
+        let configured = BackendID.allCases.filter(model.isConfigured)
+        if !configured.isEmpty {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    ForEach(configured, id: \.self) { backend in
+                        Button { model.selectedTab = .settings } label: {
+                            ServiceChip(
+                                name: backend.displayName,
+                                light: model.services.light(backend),
+                                detail: chipDetail(backend)
                             )
-                            .overlay(alignment: .topTrailing) {
-                                if owned.contains(item.id) {
-                                    Image(systemName: "checkmark.circle.fill")
-                                        .foregroundStyle(.white, .green)
-                                        .padding(5)
-                                        .accessibilityLabel("In your library")
-                                }
-                            }
                         }
                         .buttonStyle(.plain)
                     }
                 }
             }
+            .contentMargins(.horizontal, 16, for: .scrollContent)
         }
+    }
+
+    /// "213 d", "Expired", "Offline"; nothing while all is well and the service has no account to report.
+    private func chipDetail(_ backend: BackendID) -> String? {
+        if case .offline = model.services.health(of: backend) { return "Offline" }
+        guard let account = model.services.accounts[backend] else { return nil }
+        guard account.isPremium else { return "Free" }
+        if let end = account.premiumUntil, end < .now { return "Expired" }
+        return account.daysLeft().map { "\($0) d" }
     }
 
     // MARK: - Recent searches
@@ -320,5 +350,130 @@ private struct ServiceActivityRow: View {
         .padding(.horizontal, 12)
         .padding(.vertical, 11)
         .contentShape(Rectangle())
+    }
+}
+
+/// A service's name with its light and, for debrids, days of premium left.
+private struct ServiceChip: View {
+    let name: String
+    let light: Color
+    let detail: String?
+
+    var body: some View {
+        HStack(spacing: 6) {
+            StatusLight(color: light)
+            Text(name).font(.footnote.weight(.medium))
+            if let detail {
+                Text(detail).font(.footnote).foregroundStyle(.secondary)
+            }
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .background(.background.secondary, in: Capsule())
+        .contentShape(Capsule())
+        .accessibilityElement(children: .combine)
+    }
+}
+
+/// What one shelf on the home screen holds: its kind, how many titles or items, a few covers.
+struct LibraryShelfSummary: Identifiable {
+    let category: LibraryFilter.Category
+    let count: Int
+    let covers: [URL]
+    var id: LibraryFilter.Category { category }
+
+    /// Square covers for audiobooks, 2:3 for the rest.
+    var coverRatio: CGFloat { category == .audiobooks ? 1 : 2 / 3 }
+
+    var symbol: String {
+        switch category {
+        case .movies: "film"
+        case .series: "tv"
+        case .music: "music.note"
+        case .books: "book.closed"
+        case .audiobooks: "headphones"
+        case .software: "app.badge"
+        case .adult: "eye.slash"
+        case .other: "shippingbox"
+        }
+    }
+
+    /// Kinds in the Library's own order, empty ones left out. Movies and series count titles (releases of one
+    /// title are one), books count books, the rest count items.
+    @MainActor
+    static func all(in library: LibraryModel, showAdult: Bool) -> [LibraryShelfSummary] {
+        let titles = library.titles
+        let books = library.books
+        let items = library.items
+        return LibraryFilter.Category.allCases.compactMap { category in
+            if category == .adult && !showAdult { return nil }
+            let count: Int
+            let covers: [URL]
+            switch category {
+            case .movies, .series:
+                let matching = titles.filter { ($0.type == .movie) == (category == .movies) }
+                    .sorted { ($0.latestAdded ?? .distantPast) > ($1.latestAdded ?? .distantPast) }
+                count = matching.count
+                covers = matching.compactMap(\.media?.poster)
+            case .books, .audiobooks:
+                let matching = books.filter { ($0.format == .audiobook) == (category == .audiobooks) }
+                count = matching.count
+                covers = matching.compactMap(\.book?.cover)
+            case .music, .software, .adult, .other:
+                count = items.filter(category.contains).count
+                covers = []
+            }
+            guard count > 0 else { return nil }
+            // Unique: several releases may share a poster.
+            let unique = covers.reduce(into: [URL]()) { if !$0.contains($1) { $0.append($1) } }
+            return LibraryShelfSummary(category: category, count: count, covers: Array(unique.prefix(3)))
+        }
+    }
+}
+
+/// A shelf tile: name and count, with up to three covers fanned out (or the kind's symbol).
+private struct ShelfTile: View {
+    let shelf: LibraryShelfSummary
+
+    var body: some View {
+        HStack(spacing: 8) {
+            VStack(alignment: .leading, spacing: 2) {
+                Image(systemName: shelf.symbol)
+                    .font(.subheadline)
+                    .foregroundStyle(.tint)
+                Spacer(minLength: 0)
+                Text(shelf.category.title)
+                    .font(.subheadline.weight(.semibold))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.75)
+                Text("\(shelf.count)").font(.caption).foregroundStyle(.secondary)
+            }
+            .layoutPriority(1)
+            Spacer(minLength: 0)
+            covers
+        }
+        .padding(12)
+        .frame(height: 96)
+        .background(.background.secondary, in: RoundedRectangle(cornerRadius: 14))
+        .contentShape(RoundedRectangle(cornerRadius: 14))
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(shelf.category.title), \(shelf.count)")
+        .accessibilityAddTraits(.isButton)
+    }
+
+    private var covers: some View {
+        let height: CGFloat = 64
+        let width = height * shelf.coverRatio
+        return ZStack(alignment: .trailing) {
+            ForEach(Array(shelf.covers.enumerated().reversed()), id: \.element) { index, url in
+                CachedImage(url: url) { Rectangle().fill(.quaternary) }
+                    .frame(width: width, height: height)
+                    .clipShape(RoundedRectangle(cornerRadius: 5))
+                    .shadow(color: .black.opacity(0.2), radius: 2, x: -1)
+                    .offset(x: CGFloat(-index) * width * 0.3)
+                    .scaleEffect(1 - CGFloat(index) * 0.08, anchor: .trailing)
+            }
+        }
+        .frame(width: width * (1 + 0.3 * CGFloat(max(shelf.covers.count - 1, 0))), alignment: .trailing)
     }
 }

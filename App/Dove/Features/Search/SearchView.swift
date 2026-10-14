@@ -99,9 +99,6 @@ struct SearchView: View {
             .onAppear(perform: checkPasteboard)
             .onChange(of: scenePhase) { if scenePhase == .active { checkPasteboard() } }
             .onReceive(NotificationCenter.default.publisher(for: UIPasteboard.changedNotification)) { _ in checkPasteboard() }
-            .task(id: model.addonSet.tmdb == nil) {
-                await home.loadTrending(using: model.addonSet.tmdb)
-            }
             .sheet(item: $pendingSource) { source in
                 AddSourceSheet(source: source) { result in
                     pendingSource = nil

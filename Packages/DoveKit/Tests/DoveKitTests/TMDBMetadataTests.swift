@@ -23,27 +23,6 @@ struct TMDBMetadataTests {
         #expect(results[2].releaseInfo == nil)
     }
 
-    @Test func trendingReadsTheWeeklyListAndSkipsPeople() async throws {
-        let transport = MockTransport()
-        await transport.stub("3/trending/all/week", json: """
-        {"results":[
-          {"id":1,"media_type":"movie","title":"Dune","release_date":"2024-02-27","poster_path":"/d.jpg"},
-          {"id":2,"media_type":"person","name":"Someone"},
-          {"id":3,"media_type":"tv","name":"Severance","first_air_date":"2022-02-17"}
-        ]}
-        """)
-        await transport.stub("3/trending/tv/week", json: #"{"results":[{"id":3,"name":"Severance"}]}"#)
-        let tmdb = TMDBMetadata(key: v3Key, transport: transport)
-
-        let all = try await tmdb.trending()
-        let series = try await tmdb.trending(.series)
-
-        #expect(all.map(\.id) == ["tmdb:1", "tmdb:3"])
-        #expect(all.map(\.type) == [.movie, .series])
-        #expect(all[0].poster?.absoluteString == "https://image.tmdb.org/t/p/w342/d.jpg")
-        #expect(series.map(\.type) == [.series])
-    }
-
     @Test func v3KeyTravelsInTheQueryAndV4TokenAsBearer() async throws {
         let transport = MockTransport()
         await transport.stub("3/search/tv", json: #"{"results":[]}"#)

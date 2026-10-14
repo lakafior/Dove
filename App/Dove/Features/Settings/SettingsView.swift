@@ -15,7 +15,7 @@ struct SettingsView: View {
                             DebridKeyView(backend: backend)
                         } label: {
                             SettingsRow(backend.displayName, symbol: backend.settingsSymbol, color: backend.settingsColor,
-                                        value: model.isConfigured(backend) ? "Connected" : "Not set up")
+                                        value: serviceValue(backend), light: serviceLight(backend))
                         }
                     }
                     NavigationLink {
@@ -35,7 +35,7 @@ struct SettingsView: View {
                         NzbdavSettingsView()
                     } label: {
                         SettingsRow("nzbdav", symbol: BackendID.nzbdav.settingsSymbol, color: BackendID.nzbdav.settingsColor,
-                                    value: model.isConfigured(.nzbdav) ? "Connected" : "Not set up")
+                                    value: serviceValue(.nzbdav), light: serviceLight(.nzbdav))
                     }
                     TorBoxUsenetToggle()
                 } header: {
@@ -90,6 +90,17 @@ struct SettingsView: View {
         }
     }
 
+    /// "213 days left" (debrids), "Online"/"Offline" from the last library refresh, or "Not set up".
+    private func serviceValue(_ backend: BackendID) -> String {
+        guard model.isConfigured(backend) else { return "Not set up" }
+        if case .offline = model.services.health(of: backend) { return "Offline" }
+        return model.services.accountSummary(backend) ?? "Connected"
+    }
+
+    private func serviceLight(_ backend: BackendID) -> Color? {
+        model.isConfigured(backend) ? model.services.light(backend) : nil
+    }
+
     /// The summary lists only services with a key; the full order (with "No key" rows) is one tap away.
     private var priorityOrder: [BackendID] {
         let configured = model.debridOrder.filter(model.isConfigured)
@@ -110,28 +121,44 @@ struct SettingsRow: View {
     let symbol: String
     let color: Color
     var value: String?
+    /// A status light before the value (services).
+    var light: Color?
 
-    init(_ title: String, symbol: String, color: Color, value: String? = nil) {
+    init(_ title: String, symbol: String, color: Color, value: String? = nil, light: Color? = nil) {
         self.title = title
         self.symbol = symbol
         self.color = color
         self.value = value
+        self.light = light
     }
 
     var body: some View {
         LabeledContent {
-            if let value { Text(value).lineLimit(1) }
+            HStack(spacing: 6) {
+                if let light { StatusLight(color: light) }
+                if let value { Text(value).lineLimit(1) }
+            }
         } label: {
             Label {
                 Text(title)
             } icon: {
-                Image(systemName: symbol)
-                    .font(.footnote.weight(.semibold))
-                    .foregroundStyle(.white)
-                    .frame(width: 28, height: 28)
-                    .background(color.gradient, in: RoundedRectangle(cornerRadius: 7))
+                SettingsIcon(symbol: symbol, color: color)
             }
         }
+    }
+}
+
+/// The white symbol on a coloured rounded square that leads every Settings row.
+struct SettingsIcon: View {
+    let symbol: String
+    let color: Color
+
+    var body: some View {
+        Image(systemName: symbol)
+            .font(.footnote.weight(.semibold))
+            .foregroundStyle(.white)
+            .frame(width: 28, height: 28)
+            .background(color.gradient, in: RoundedRectangle(cornerRadius: 7))
     }
 }
 
@@ -236,6 +263,7 @@ private struct DebridKeyView: View {
             do {
                 try await service.validateCredentials()
                 status = "✅ Connected to \(backend.displayName)."
+                await model.services.loadAccounts(model.backends, force: true)
             } catch {
                 status = "❌ \(error.localizedDescription)"
             }
@@ -357,5 +385,28 @@ private struct StorageView: View {
         .navigationTitle("Storage")
         .navigationBarTitleDisplayMode(.inline)
         .task { imageBytes = await ImageCache.shared.size() }
+    }
+}
+
+/// A small coloured dot: green online, orange worth a look, red offline, grey not known yet.
+struct StatusLight: View {
+    let color: Color
+
+    var body: some View {
+        Circle()
+            .fill(color.gradient)
+            .frame(width: 8, height: 8)
+            .shadow(color: color.opacity(0.6), radius: 2)
+            .accessibilityHidden(true)
+    }
+}
+
+extension ServiceStatusModel {
+    func light(_ backend: BackendID) -> Color {
+        switch health(of: backend) {
+        case .offline: .red
+        case .unknown: needsAttention(backend) ? .orange : .gray
+        case .online: needsAttention(backend) ? .orange : .green
+        }
     }
 }

@@ -164,6 +164,7 @@ final class LibraryModel {
         )
         allItems = merged.map(kinds.shelfItem)
         failures = result.failures
+        app.services.record(configured: app.backends.map(\.id), failed: result.failed, failures: result.failures)
         if result.failed.count < app.backends.count { updatedAt = .now }
         try? LibraryCache(items: merged, savedAt: updatedAt ?? .now).save(to: Self.cacheURL)
         FilesLocation.libraryChanged()

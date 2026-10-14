@@ -10,10 +10,13 @@ struct DoveApp: App {
             RootView()
                 .environment(delegate.model)
                 .task {
-                    await delegate.model.loadAddons()
+                    let model = delegate.model
+                    async let accounts: Void = model.services.loadAccounts(model.backends)
+                    await model.loadAddons()
                     // Statuses are refreshed on launch (iOS gives no background polling); the cached list shows
                     // meanwhile. After the addons: new titles are matched through them.
-                    await delegate.model.library.start(using: delegate.model)
+                    await model.library.start(using: model)
+                    await accounts
                 }
         }
     }

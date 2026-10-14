@@ -199,3 +199,12 @@ extension OffcloudBackend: CacheChecking {
         return cached
     }
 }
+
+extension OffcloudBackend: AccountReporting {
+    /// `GET account/info`: `is_premium` and `expiration_date`.
+    public func account() async throws -> AccountStatus {
+        let info = try await decode(OffcloudAccountInfo.self, from: request("account/info"))
+        let isPremium = info.isPremium ?? false
+        return AccountStatus(isPremium: isPremium, premiumUntil: isPremium ? AccountDate.parse(info.expirationDate) : nil)
+    }
+}

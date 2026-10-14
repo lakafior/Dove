@@ -306,3 +306,17 @@ public struct RealDebridBackend: LibraryBackend, FileSelecting {
         return decoder
     }()
 }
+
+extension RealDebridBackend: AccountReporting {
+    /// `GET /user`: `type` is "premium" or "free", `expiration` the premium's end (ISO 8601).
+    public func account() async throws -> AccountStatus {
+        let user = try await decode(RealDebridUser.self, from: request("user"))
+        let isPremium = user.type == "premium"
+        return AccountStatus(isPremium: isPremium, premiumUntil: isPremium ? AccountDate.parse(user.expiration) : nil)
+    }
+}
+
+struct RealDebridUser: Decodable {
+    let type: String?
+    let expiration: String?
+}

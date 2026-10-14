@@ -28,6 +28,7 @@ struct OffcloudCacheResponse: Decodable {
 
 struct OffcloudAccountInfo: Decodable {
     let isPremium: Bool?
+    let expirationDate: String?
 }
 
 /// Library item IDs: everything Offcloud stores is a "cloud" request.

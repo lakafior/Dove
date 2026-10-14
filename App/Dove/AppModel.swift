@@ -9,6 +9,8 @@ final class AppModel {
     /// Shared with the share extension through the `keychain-access-groups` entitlement.
     let keychain = SharedConfiguration.keychain()
     let library = LibraryModel()
+    /// Online/offline from library refreshes, and premium days left.
+    let services = ServiceStatusModel()
     private(set) var backends: [any LibraryBackend] = []
 
     /// A magnet or file opened from another app; RootView shows the add sheet for it.
@@ -16,6 +18,8 @@ final class AppModel {
 
     /// The tab on screen, so the home screen can send the user to Downloads or Settings.
     var selectedTab: AppTab = .search
+    /// A shelf tapped on the home screen: the Library opens filtered to it, then clears this.
+    var libraryCategoryRequest: LibraryFilter.Category?
 
     /// Handles `onOpenURL`. Copies iOS made into Documents/Inbox are removed once read,
     /// so they do not pile up next to downloads in Files.

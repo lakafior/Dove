@@ -131,6 +131,14 @@ struct LibraryView: View {
                 }
             }
             .onChange(of: mode) { endSelecting() }
+            // A shelf tapped on the home screen: just that kind, other filters cleared.
+            .onChange(of: model.libraryCategoryRequest, initial: true) {
+                guard let category = model.libraryCategoryRequest else { return }
+                filter = LibraryFilter()
+                filter.category = category
+                mode = .titles
+                model.libraryCategoryRequest = nil
+            }
             .navigationDestination(for: TitleRoute.self) { LibraryTitleView(titleID: $0.id) }
             .navigationDestination(for: BookRoute.self) { BookTitleView(bookID: $0.id) }
             .navigationDestination(for: ShelfItem.self) { LibraryItemView(item: $0.item) }
