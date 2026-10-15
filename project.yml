@@ -55,6 +55,8 @@ targets:
           NSAllowsLocalNetworking: true
         # Players Dove hands links to (ExternalPlayer.scheme): canOpenURL tells which are installed.
         LSApplicationQueriesSchemes: [infuse, vlc-x-callback, outplayer, senplayer, nplayer-https, open-vidhub]
+        # Audiobooks keep playing with the screen locked (AudiobookPlayer).
+        UIBackgroundModes: [audio]
         # Downloaded files (Documents) show in Files under On My iPhone › Dove.
         UIFileSharingEnabled: true
         LSSupportsOpeningDocumentsInPlace: true

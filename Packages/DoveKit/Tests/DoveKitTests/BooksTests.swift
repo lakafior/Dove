@@ -284,3 +284,69 @@ struct BookFilesTests {
         #expect(url.deletingLastPathComponent().lastPathComponent == "link_https___x.y_a_b")
     }
 }
+
+struct AudiobookTests {
+    private func files(_ names: [String]) -> [LibraryFile] {
+        names.enumerated().map { LibraryFile(id: "f\($0.offset)", name: $0.element) }
+    }
+
+    @Test func tracksFollowNaturalOrderAcrossFolders() throws {
+        let tracks = try AudiobookTracks.tracks(in: files([
+            "Book/CD2/01 - Part.mp3", "Book/CD1/10 - Part.mp3", "Book/CD1/2 - Part.mp3", "Book/cover.jpg",
+            "Book/CD1/1 - Part.mp3", "Book/sample.mp3", "Book/info.nfo",
+        ])).get()
+        #expect(tracks.map(\.path) == ["Book/CD1/1 - Part.mp3", "Book/CD1/2 - Part.mp3", "Book/CD1/10 - Part.mp3", "Book/CD2/01 - Part.mp3"])
+        #expect(tracks.first?.title == "1 - Part")
+    }
+
+    @Test func singleM4bIsOneTrack() throws {
+        let tracks = try AudiobookTracks.tracks(in: files(["Andy Weir - Project Hail Mary.m4b", "cover.jpg"])).get()
+        #expect(tracks.count == 1)
+    }
+
+    @Test func refusesWithoutPlayableAudio() {
+        #expect(AudiobookTracks.tracks(in: files(["a.ogg", "b.opus"])) == .failure(.unplayable(formats: ["OGG", "OPUS"])))
+        #expect(AudiobookTracks.tracks(in: files(["a.jpg"])) == .failure(.noAudio))
+    }
+
+    @Test func resumesByPathThenNameThenIndex() {
+        let tracks = (0..<3).map { AudiobookTrack(fileID: "\($0)", path: "Release/0\($0).mp3") }
+        #expect(AudiobookPosition(trackPath: "Release/02.mp3", trackIndex: 0, seconds: 12).resume(in: tracks) == (2, 12))
+        #expect(AudiobookPosition(trackPath: "Other/01.mp3", trackIndex: 0, seconds: 5).resume(in: tracks) == (1, 5))
+        #expect(AudiobookPosition(trackPath: "x.mp3", trackIndex: 2, seconds: 7).resume(in: tracks) == (2, 7))
+        #expect(AudiobookPosition(trackPath: "x.mp3", trackIndex: 9, seconds: 7).resume(in: tracks) == (0, 0))
+    }
+
+    @Test func mergeKeepsTheNewerPositionAndRoundTrips() throws {
+        var here = AudiobookPositions()
+        here.set(AudiobookPosition(trackPath: "a", trackIndex: 0, seconds: 10, updatedAt: Date(timeIntervalSince1970: 100)), for: "book")
+        var there = AudiobookPositions()
+        there.set(AudiobookPosition(trackPath: "a", trackIndex: 0, seconds: 99, updatedAt: Date(timeIntervalSince1970: 200)), for: "book")
+        there.set(AudiobookPosition(trackPath: "b", trackIndex: 0, seconds: 1, updatedAt: Date(timeIntervalSince1970: 50)), for: "other")
+        here.merge(there)
+        #expect(here["book"]?.seconds == 99)
+        #expect(here["other"]?.trackPath == "b")
+        let decoded = try JSONDecoder().decode(AudiobookPositions.self, from: JSONEncoder().encode(here))
+        #expect(decoded == here)
+    }
+
+    @Test func dropsTheOldestOverTheLimit() {
+        var positions = AudiobookPositions()
+        for i in 0...AudiobookPositions.limit {
+            positions.set(AudiobookPosition(trackPath: "", trackIndex: 0, seconds: 0, updatedAt: Date(timeIntervalSince1970: Double(i))), for: "\(i)")
+        }
+        #expect(positions.entries.count == AudiobookPositions.limit)
+        #expect(positions["0"] == nil)
+    }
+
+    @Test func currentChapterIsTheLastStarted() {
+        let chapters = [
+            AudiobookChapter(trackIndex: 0, title: "One", start: 0, duration: 100),
+            AudiobookChapter(trackIndex: 0, title: "Two", start: 100, duration: 100),
+            AudiobookChapter(trackIndex: 1, title: "Three", start: 0, duration: nil),
+        ]
+        #expect(AudiobookChapter.current(in: chapters, trackIndex: 0, seconds: 150)?.title == "Two")
+        #expect(AudiobookChapter.current(in: chapters, trackIndex: 0, seconds: 10)?.title == "One")
+        #expect(AudiobookChapter.current(in: chapters, trackIndex: 1, seconds: 10)?.title == "Three")
+    }
+}

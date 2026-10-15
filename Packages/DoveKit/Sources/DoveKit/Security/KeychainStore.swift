@@ -43,6 +43,8 @@ public enum CredentialKey: String, Sendable, CaseIterable {
     case kodi
     /// JSON of `SyncedPreferences`: settings that are not secrets, kept here so iCloud Keychain carries them too.
     case preferences
+    /// JSON of `AudiobookPositions`: where each audiobook was left, so another device continues there.
+    case audiobookPositions
 }
 
 public enum KeychainError: Error, Sendable {

@@ -1,3 +1,4 @@
+import AVFoundation
 import DoveKit
 import Foundation
 import Observation
@@ -13,6 +14,8 @@ final class AppModel {
     let services = ServiceStatusModel()
     /// The player links go to (Infuse, VLC, Kodi…).
     let playback = PlaybackModel(keychain: SharedConfiguration.keychain())
+    /// Audiobooks play in Dove (`AudiobookPlayer`); everything else goes to the chosen player.
+    let audiobook = AudiobookPlayer(keychain: SharedConfiguration.keychain())
     /// Measured download speed per service, on this device.
     let speed = SpeedTestModel()
     private(set) var backends: [any LibraryBackend] = []
@@ -215,6 +218,21 @@ final class AppModel {
                 throw BackendError.api(message: "\(record.backend.displayName) is no longer configured.")
             }
             return try await backend.downloadRequest(itemID: record.itemID, fileID: record.fileID)
+        }
+        audiobook.assetProvider = { [weak self] item, track in
+            guard let self else { throw CancellationError() }
+            if let record = downloads.records.first(where: {
+                $0.state == .finished && $0.isSameFile(backend: item.backend, itemID: item.id, fileID: track.fileID)
+            }), let url = downloads.fileURL(for: record) {
+                return AVURLAsset(url: url)
+            }
+            guard let backend = backend(item.backend) else {
+                throw BackendError.api(message: "\(item.backend.displayName) is no longer configured.")
+            }
+            let request = try await backend.downloadRequest(itemID: item.id, fileID: track.fileID)
+            guard let url = request.url else { throw BackendError.invalidResponse }
+            // Not public API, but the long-standing way to send headers (nzbdav's WebDAV login) with AVPlayer.
+            return AVURLAsset(url: url, options: ["AVURLAssetHTTPHeaderFieldsKey": request.allHTTPHeaderFields ?? [:]])
         }
         downloadJobs = DownloadJobs(
             store: DownloadJobStore(fileURL: .applicationSupportDirectory.appending(path: "Dove/Downloads/jobs.json")),

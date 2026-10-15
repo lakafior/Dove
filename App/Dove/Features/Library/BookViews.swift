@@ -123,6 +123,8 @@ struct BookTitleView: View {
                 }
                 if book.format == .ebook {
                     BookReadSection(book: book)
+                } else {
+                    AudiobookPlaySection(book: book)
                 }
                 Section("Releases") {
                     ForEach(book.items) { item in

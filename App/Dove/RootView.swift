@@ -13,20 +13,27 @@ struct RootView: View {
         @Bindable var model = model
         TabView(selection: $model.selectedTab) {
             SearchView()
+                .audiobookMiniPlayer()
                 .tabItem { Label("Search", systemImage: "magnifyingglass") }
                 .tag(AppTab.search)
             LibraryView()
+                .audiobookMiniPlayer()
                 .tabItem { Label("Library", systemImage: "books.vertical") }
                 .tag(AppTab.library)
             DownloadsView()
+                .audiobookMiniPlayer()
                 .tabItem { Label("Downloads", systemImage: "arrow.down.circle") }
                 .badge(model.downloads.records.filter { $0.state == .downloading }.count + waitingJobs)
                 .tag(AppTab.downloads)
             SettingsView()
+                .audiobookMiniPlayer()
                 .tabItem { Label("Settings", systemImage: "gearshape") }
                 .tag(AppTab.settings)
         }
         .onOpenURL { model.open($0) }
+        #if DEBUG
+        .task { AudiobookDemo.startIfRequested(on: model) }
+        #endif
         // Download-only jobs wait for the service only while Dove is open: iOS has no background polling.
         .onChange(of: scenePhase, initial: true) {
             if scenePhase == .active { model.downloadJobs.startPolling() } else { model.downloadJobs.stopPolling() }
@@ -36,6 +43,9 @@ struct RootView: View {
                 model.openedSource = nil
                 if !result.isEmpty { openedMessage = result }
             }
+        }
+        .sheet(isPresented: Binding(get: { model.audiobook.isPresented }, set: { model.audiobook.isPresented = $0 })) {
+            AudiobookPlayerView()
         }
         .alert(openedMessage ?? "", isPresented: Binding(get: { openedMessage != nil }, set: { if !$0 { openedMessage = nil } })) {
             Button("OK") {}
