@@ -24,12 +24,26 @@ struct SourcesView: View {
     @State private var status: Status?
     @State private var busy: Set<String> = []
     @State private var isCheckingCache = false
-    /// nzbdav jobs added by Play, so tapping it again reuses the job.
-    @State private var usenetJobs: [StreamGroup.ID: LibraryItem.ID] = [:]
+    /// Usenet jobs added by Play, so tapping it again reuses the job (and its service, after a fallback).
+    @State private var usenetJobs: [StreamGroup.ID: UsenetJob] = [:]
+
+    struct UsenetJob: Equatable {
+        let backend: BackendID
+        let itemID: LibraryItem.ID
+    }
 
     struct Status: Equatable {
         var text: String
         var isError: Bool
+        /// nzbdav could not open a compressed archive: Play can send the same NZB to this service instead.
+        var fallback: ArchiveFallback?
+    }
+
+    struct ArchiveFallback: Equatable {
+        let group: StreamGroup.ID
+        let target: BackendID
+        let failed: UsenetJob
+        let player: ExternalPlayer?
     }
 
     /// The user's configured debrids, for "Recommended" order and Real-Debrid warnings.
@@ -48,6 +62,12 @@ struct SourcesView: View {
                 Text(status.text)
                     .font(.footnote)
                     .foregroundStyle(status.isError ? .red : .primary)
+                if let fallback = status.fallback {
+                    Button("Play through \(fallback.target.displayName)", systemImage: "play.circle") {
+                        playElsewhere(fallback)
+                    }
+                    .disabled(busy.contains(fallback.group))
+                }
             }
             if let groups {
                 if !groups.isEmpty, !groups.contains(where: { $0.librarySource != nil }),
@@ -242,10 +262,12 @@ struct SourcesView: View {
         usenetSource(of: group) != nil || group.playURL != nil
     }
 
+    /// nzbdav, or the service an earlier Play sent this release to.
     private func usenetSource(of group: StreamGroup) -> (source: Source, backend: any LibraryBackend)? {
         guard group.kind == .usenet, let source = group.librarySource, source.kind == .nzb,
               let nzbdav = model.backend(.nzbdav) else { return nil }
-        return (source, nzbdav)
+        let backend = usenetJobs[group.id].flatMap { model.backend($0.backend) } ?? nzbdav
+        return (source, backend)
     }
 
     private func play(_ group: StreamGroup, in player: ExternalPlayer? = nil) {
@@ -262,16 +284,54 @@ struct SourcesView: View {
         Task {
             defer { busy.remove(group.id) }
             do {
-                let prepared = try await UsenetPlayback.prepare(
-                    source, itemID: usenetJobs[group.id], category: AddCategory(mediaType: type), on: backend
-                )
-                usenetJobs[group.id] = prepared.itemID
+                // Kept before waiting: a service that unpacks takes longer than Play waits, and Play again
+                // must find the job instead of adding it twice.
+                let itemID: LibraryItem.ID
+                if let job = usenetJobs[group.id], job.backend == backend.id {
+                    itemID = job.itemID
+                } else {
+                    itemID = try await backend.add(source, category: AddCategory(mediaType: type))
+                    usenetJobs[group.id] = UsenetJob(backend: backend.id, itemID: itemID)
+                }
+                let prepared = try await UsenetPlayback.prepare(source, itemID: itemID, on: backend)
                 status = nil
                 await open(prepared.url, in: player)
+            } catch let error as UsenetPlayback.CompressedArchiveError {
+                status = archiveFailure(error, of: group, in: player)
             } catch {
                 status = Status(text: error.localizedDescription, isError: true)
             }
         }
+    }
+
+    /// The release cannot stream from nzbdav; offer the next Usenet service, which downloads and unpacks it.
+    /// Never automatic: the user decides where a release goes.
+    private func archiveFailure(_ error: UsenetPlayback.CompressedArchiveError, of group: StreamGroup, in player: ExternalPlayer?) -> Status {
+        guard let target = model.compressedArchiveTarget(after: error.backend) else {
+            return Status(
+                text: error.localizedDescription + " A service that unpacks archives can: turn on Usenet for TorBox, Premiumize or Offcloud in Settings.",
+                isError: true
+            )
+        }
+        return Status(
+            text: error.localizedDescription + " \(target.displayName) can download and unpack it first, which takes longer.",
+            isError: true,
+            fallback: ArchiveFallback(
+                group: group.id, target: target, failed: UsenetJob(backend: error.backend, itemID: error.itemID), player: player
+            )
+        )
+    }
+
+    /// Sends the release to the fallback service, removes the failed job (best effort), and plays from there.
+    private func playElsewhere(_ fallback: ArchiveFallback) {
+        guard let group = groups?.first(where: { $0.id == fallback.group }),
+              let source = group.librarySource,
+              let target = model.backend(fallback.target) else { return }
+        if let failedOn = model.backend(fallback.failed.backend) {
+            Task { try? await failedOn.delete(fallback.failed.itemID) }
+        }
+        usenetJobs[group.id] = nil
+        playUsenet(group, source: source, on: target, in: fallback.player)
     }
 
     private func open(_ url: URL, in player: ExternalPlayer?) async {

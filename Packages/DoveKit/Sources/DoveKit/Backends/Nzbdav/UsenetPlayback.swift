@@ -29,6 +29,9 @@ public enum UsenetPlayback {
             let item = try await backend.item(id)
             switch item.status {
             case .failed(let reason):
+                if CompressedArchive.isFailure(reason) {
+                    throw CompressedArchiveError(backend: backend.id, itemID: id)
+                }
                 throw BackendError.api(message: "\(backend.id.displayName) could not get this release: \(reason) Try another one.")
             case .ready:
                 if let file = mainVideo(in: item.files) {

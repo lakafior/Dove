@@ -360,6 +360,12 @@ final class AppModel {
             .map(\.id)
     }
 
+    /// Where an NZB goes when `failing` cannot open its compressed archive: the next Usenet service in
+    /// `usenetOrder` that is not a streaming server (nzbdav streams archives instead of unpacking them).
+    func compressedArchiveTarget(after failing: BackendID) -> BackendID? {
+        nzbBackends.map(\.id).first { $0 != failing && $0 != .nzbdav }
+    }
+
     /// Why none of these items can be added again or moved, for a disabled menu line.
     func reAddBlocker(_ items: [LibraryItem]) -> String {
         items.count == 1 ? "No magnet or stored NZB: cannot be added again" : "No magnets or stored NZBs: cannot be added again"

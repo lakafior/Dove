@@ -752,6 +752,9 @@ struct LibraryItemView: View {
             if let message {
                 Text(message).font(.footnote)
             }
+            if current.failedOnCompressedArchive {
+                compressedArchiveSection
+            }
             if fileSelector != nil {
                 Section {
                     Button("Choose files", systemImage: "checklist") { isChoosingFiles = true }
@@ -810,6 +813,28 @@ struct LibraryItemView: View {
         .disabled(isWorking)
         .refreshable { await loadDetail() }
         .task { await loadDetail() }
+    }
+
+    /// A job nzbdav failed on a compressed archive: one tap moves the same NZB to the next Usenet service,
+    /// which downloads and unpacks it.
+    @ViewBuilder private var compressedArchiveSection: some View {
+        let target = model.compressedArchiveTarget(after: item.backend)
+        Section {
+            if let target, model.moveTargets(for: current).contains(target) {
+                Button("Send to \(target.displayName)", systemImage: "arrow.right.circle") {
+                    move(to: target, deleteOriginal: true)
+                }
+            }
+        } footer: {
+            let explanation = CompressedArchive.explanation(on: item.backend)
+            if let target {
+                Text(model.canReAdd(current)
+                     ? "\(explanation) \(target.displayName) downloads and unpacks it; Dove removes this job after the add worked."
+                     : "\(explanation) \(item.backend.displayName) did not keep this job's NZB, so add the release again from Search and pick \(target.displayName).")
+            } else {
+                Text("\(explanation) A service that unpacks archives can: turn on Usenet for TorBox, Premiumize or Offcloud in Settings.")
+            }
+        }
     }
 
     /// DMM-style actions for torrents (by info hash) and NZBs nzbdav hands back, and a status refresh for everything.

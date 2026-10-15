@@ -47,6 +47,35 @@ struct UsenetPlaybackTests {
         }
     }
 
+    @Test func aCompressedArchiveFailsWithItsOwnError() async {
+        let reason = "Compressed RAR archives are intentionally unsupported by InfiniDysk: direct streaming and seeking require uncompressed (stored/m0) archive contents."
+        let backend = JobBackend(.nzbdav, item: job(.failed(reason: reason)))
+        await #expect(throws: UsenetPlayback.CompressedArchiveError(backend: .nzbdav, itemID: "nzo:1")) {
+            try await UsenetPlayback.prepare(source, on: backend, interval: .milliseconds(1))
+        }
+    }
+
+    @Test(arguments: [
+        "Compressed RAR archives are intentionally unsupported by InfiniDysk: direct streaming and seeking require uncompressed (stored/m0) archive contents.",
+        "Compressed 7z archives are intentionally unsupported by InfiniDysk: direct streaming and seeking require uncompressed (Copy/store) archive contents.",
+        "Only rar files with compression method m0 are supported.",
+        "Only uncompressed 7z files are supported.",
+    ])
+    func compressedArchiveMessagesAreRecognized(_ reason: String) {
+        #expect(CompressedArchive.isFailure(reason))
+        #expect(job(.failed(reason: reason)).failedOnCompressedArchive)
+    }
+
+    @Test(arguments: [
+        "Article with message-id abc not found.",
+        "Password-protected rar archives cannot be solid.",
+        "failed",
+    ])
+    func otherFailuresAreNot(_ reason: String) {
+        #expect(!CompressedArchive.isFailure(reason))
+        #expect(!job(.failed(reason: reason)).failedOnCompressedArchive)
+    }
+
     @Test func givesUpAfterTheTimeout() async {
         let backend = JobBackend(.nzbdav, item: job(.queued))
         await #expect(throws: BackendError.self) {
