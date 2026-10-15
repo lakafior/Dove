@@ -102,8 +102,32 @@ final class AudiobookPlayer {
         AudiobookChapter.current(in: chapters, trackIndex: trackIndex, seconds: elapsed)
     }
 
+    /// Bumped whenever the saved positions change in a way lists show (a book started, cleared or finished), so
+    /// "Listening" on the home screen updates without redrawing on every tick.
+    private(set) var positionsRevision = 0
+
+    /// Books being listened to, last played first; the current one with its live position.
+    func listening() -> [(key: String, position: AudiobookPosition)] {
+        _ = positionsRevision
+        var list = positions.listening
+        if let session, let live = savedPosition(for: session.key) {
+            list.removeAll { $0.key == session.key }
+            list.insert((session.key, live), at: 0)
+        }
+        return list
+    }
+
+    /// Forgets where the book was: off "Listening", and Play starts from the beginning. Stops it if it is playing.
+    func clearPosition(for key: String) {
+        if session?.key == key { stop(saving: false) }
+        positions.set(nil, for: key)
+        SharedConfiguration.saveAudiobookPositions(positions, to: keychain)
+        positionsRevision += 1
+    }
+
     /// Where this book was left, for "Continue" on its screen.
     func savedPosition(for key: String) -> AudiobookPosition? {
+        _ = positionsRevision
         if session?.key == key, let track = currentTrack {
             return AudiobookPosition(trackPath: track.path, trackIndex: trackIndex, seconds: elapsed)
         }
@@ -127,6 +151,7 @@ final class AudiobookPlayer {
         error = nil
         cancelSleepTimer()
         let resume = positions[session.key]?.resume(in: session.tracks) ?? (index: 0, seconds: 0)
+        positionsRevision += 1
         // A few seconds back: picking up mid-sentence is hard to follow.
         load(resume.index, at: max(0, resume.seconds - 3), autoplay: true)
         loadArtwork(session.cover)
@@ -155,8 +180,8 @@ final class AudiobookPlayer {
     }
 
     /// Ends the session: the place is kept for next time.
-    func stop() {
-        savePosition(force: true)
+    func stop(saving: Bool = true) {
+        if saving { savePosition(force: true) }
         player.pause()
         player.replaceCurrentItem(with: nil)
         loadTask?.cancel()
@@ -336,6 +361,7 @@ final class AudiobookPlayer {
             syncPlayingState()
             positions.set(nil, for: session.key)
             SharedConfiguration.saveAudiobookPositions(positions, to: keychain)
+            positionsRevision += 1
             trackIndex = 0
             elapsed = 0
             player.replaceCurrentItem(with: nil)

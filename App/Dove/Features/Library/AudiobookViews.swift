@@ -26,6 +26,10 @@ struct AudiobookPlaySection: View {
                 }
             }
             .disabled(isPreparing)
+            if saved != nil {
+                Button("Start over", systemImage: "backward.end.alt") { startOver() }
+                    .disabled(isPreparing)
+            }
         } footer: {
             if let message {
                 Text(message)
@@ -50,32 +54,45 @@ struct AudiobookPlaySection: View {
         isPreparing = true
         message = nil
         Task {
-            defer { isPreparing = false }
-            var refusal: AudiobookTracks.Refusal?
-            for shelfItem in book.items where shelfItem.item.status == .ready {
-                var item = shelfItem.item
-                if item.files.isEmpty, let backend = model.backend(item.backend) {
-                    do {
-                        item = try await backend.item(item.id)
-                    } catch {
-                        message = error.localizedDescription
-                        continue
-                    }
-                }
-                switch AudiobookTracks.tracks(in: item.files) {
-                case .success(let tracks):
-                    player.start(AudiobookPlayer.Session(
-                        key: book.guess.key, title: book.name, author: book.author,
-                        cover: book.book?.cover, item: item, tracks: tracks
-                    ))
-                    player.isPresented = true
-                    return
-                case .failure(let reason):
-                    refusal = reason
+            message = await model.playAudiobook(book)
+            isPreparing = false
+        }
+    }
+
+    private func startOver() {
+        player.clearPosition(for: book.guess.key)
+        start()
+    }
+}
+
+extension AppModel {
+    /// Plays a book from where it was left: the first ready release with playable audio (services that list items
+    /// without files are asked for them). Returns why it could not, or nil once the player has it.
+    func playAudiobook(_ book: BookTitle) async -> String? {
+        var refusal: String?
+        for shelfItem in book.items where shelfItem.item.status == .ready {
+            var item = shelfItem.item
+            if item.files.isEmpty, let backend = backend(item.backend) {
+                do {
+                    item = try await backend.item(item.id)
+                } catch {
+                    refusal = error.localizedDescription
+                    continue
                 }
             }
-            message = refusal?.message ?? message ?? "No release is ready on a service yet."
+            switch AudiobookTracks.tracks(in: item.files) {
+            case .success(let tracks):
+                audiobook.start(AudiobookPlayer.Session(
+                    key: book.guess.key, title: book.name, author: book.author,
+                    cover: book.book?.cover, item: item, tracks: tracks
+                ))
+                audiobook.isPresented = true
+                return nil
+            case .failure(let reason):
+                refusal = reason.message
+            }
         }
+        return refusal ?? "No release is ready on a service yet."
     }
 }
 

@@ -61,14 +61,29 @@ struct HomeView: View {
         library.items.filter { LibraryFilter.Status(of: $0.item.status) == .active }
     }
 
+    /// Audiobooks with a saved place that are still in the library, last played first.
+    private var listening: [(book: BookTitle, position: AudiobookPosition)] {
+        let books = library.books
+        return model.audiobook.listening().prefix(3).compactMap { entry in
+            books.first { $0.guess.key == entry.key }.map { (book: $0, position: entry.position) }
+        }
+    }
+
     @ViewBuilder
     private var activity: some View {
         let downloads = phoneDownloads
         let active = serviceActivity
-        if !downloads.isEmpty || !active.isEmpty {
+        let listening = listening
+        if !downloads.isEmpty || !active.isEmpty || !listening.isEmpty {
             VStack(alignment: .leading, spacing: 10) {
                 HomeHeading("In progress")
                 VStack(spacing: 0) {
+                    ForEach(listening, id: \.book.id) { entry in
+                        ListeningRow(book: entry.book, position: entry.position)
+                        if entry.book.id != listening.last?.book.id || !downloads.isEmpty || !active.isEmpty {
+                            Divider().padding(.leading, 52)
+                        }
+                    }
                     if !downloads.isEmpty {
                         Button { model.selectedTab = .downloads } label: {
                             PhoneDownloadsRow(records: downloads)
@@ -285,6 +300,81 @@ struct PosterCard: View {
         }
         .frame(width: width, alignment: .leading)
         .contentShape(Rectangle())
+    }
+}
+
+/// An audiobook with a saved place: a tap plays on from there; the context menu takes it off the list (Play then
+/// starts from the beginning).
+private struct ListeningRow: View {
+    @Environment(AppModel.self) private var model
+    let book: BookTitle
+    let position: AudiobookPosition
+    @State private var isStarting = false
+    @State private var failure: String?
+
+    private var isCurrent: Bool { model.audiobook.session?.key == book.guess.key }
+
+    var body: some View {
+        Button(action: play) {
+            HStack(spacing: 12) {
+                CachedImage(url: book.book?.cover) {
+                    Image(systemName: "headphones").foregroundStyle(.tint)
+                }
+                .frame(width: 28, height: 28)
+                .clipShape(RoundedRectangle(cornerRadius: 5))
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Listening: \(book.name)").font(.subheadline).lineLimit(1)
+                    Text(failure ?? detail)
+                        .font(.caption)
+                        .foregroundStyle(failure == nil ? AnyShapeStyle(.secondary) : AnyShapeStyle(.red))
+                        .lineLimit(2)
+                }
+                Spacer(minLength: 4)
+                if isStarting {
+                    ProgressView()
+                } else {
+                    Image(systemName: isCurrent && model.audiobook.isPlaying ? "waveform" : "play.circle.fill")
+                        .font(.title3)
+                        .foregroundStyle(.tint)
+                }
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 11)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .disabled(isStarting)
+        .contextMenu {
+            NavigationLink(value: BookRoute(id: book.id)) {
+                Label("Show book", systemImage: "book")
+            }
+            Button("Remove from Listening", systemImage: "xmark.circle", role: .destructive) {
+                model.audiobook.clearPosition(for: book.guess.key)
+            }
+        }
+    }
+
+    /// "03 - Chapter, 12:34 · 2 hours ago".
+    private var detail: String {
+        let name = ((position.trackPath as NSString).lastPathComponent as NSString).deletingPathExtension
+        let time = Duration.seconds(position.seconds)
+            .formatted(.time(pattern: position.seconds >= 3600 ? .hourMinuteSecond : .minuteSecond))
+        if isCurrent { return "\(name), \(time)" }
+        return "\(name), \(time) · \(position.updatedAt.formatted(.relative(presentation: .named)))"
+    }
+
+    private func play() {
+        if isCurrent {
+            if !model.audiobook.isPlaying { model.audiobook.play() }
+            model.audiobook.isPresented = true
+            return
+        }
+        isStarting = true
+        failure = nil
+        Task {
+            failure = await model.playAudiobook(book)
+            isStarting = false
+        }
     }
 }
 

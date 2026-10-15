@@ -64,12 +64,27 @@ public struct AudiobookPosition: Sendable, Hashable, Codable {
     public var trackIndex: Int
     public var seconds: Double
     public var updatedAt: Date
+    /// The user started over or finished the book. Kept (rather than removed) so the merge with another device's
+    /// older position does not bring it back.
+    public var isCleared: Bool
 
-    public init(trackPath: String, trackIndex: Int, seconds: Double, updatedAt: Date = .now) {
+    public init(trackPath: String, trackIndex: Int, seconds: Double, updatedAt: Date = .now, isCleared: Bool = false) {
         self.trackPath = trackPath
         self.trackIndex = trackIndex
         self.seconds = seconds
         self.updatedAt = updatedAt
+        self.isCleared = isCleared
+    }
+
+    enum CodingKeys: String, CodingKey { case trackPath, trackIndex, seconds, updatedAt, isCleared }
+
+    public init(from decoder: any Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        trackPath = try c.decode(String.self, forKey: .trackPath)
+        trackIndex = try c.decode(Int.self, forKey: .trackIndex)
+        seconds = try c.decode(Double.self, forKey: .seconds)
+        updatedAt = try c.decode(Date.self, forKey: .updatedAt)
+        isCleared = (try? c.decodeIfPresent(Bool.self, forKey: .isCleared)) ?? false
     }
 
     /// Where to continue in these tracks: the same file when it is there (another release of the book may number
@@ -92,12 +107,21 @@ public struct AudiobookPositions: Sendable, Codable, Equatable {
 
     public init() {}
 
+    /// Nil for books never played, finished or started over.
     public subscript(key: String) -> AudiobookPosition? {
-        entries[key]
+        entries[key].flatMap { $0.isCleared ? nil : $0 }
     }
 
+    /// Books being listened to, last played first.
+    public var listening: [(key: String, position: AudiobookPosition)] {
+        entries.filter { !$0.value.isCleared }
+            .sorted { $0.value.updatedAt > $1.value.updatedAt }
+            .map { (key: $0.key, position: $0.value) }
+    }
+
+    /// Nil clears the book (a tombstone dated now, so the clear wins the merge with older positions elsewhere).
     public mutating func set(_ position: AudiobookPosition?, for key: String) {
-        entries[key] = position
+        entries[key] = position ?? AudiobookPosition(trackPath: "", trackIndex: 0, seconds: 0, isCleared: true)
         if entries.count > Self.limit {
             let oldest = entries.sorted { $0.value.updatedAt < $1.value.updatedAt }.prefix(entries.count - Self.limit)
             for (key, _) in oldest { entries[key] = nil }

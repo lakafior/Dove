@@ -330,6 +330,28 @@ struct AudiobookTests {
         #expect(decoded == here)
     }
 
+    @Test func clearingSurvivesAMergeWithAnOlderPosition() {
+        var stored = AudiobookPositions()
+        stored.set(AudiobookPosition(trackPath: "a", trackIndex: 0, seconds: 50, updatedAt: .now.addingTimeInterval(-60)), for: "book")
+        stored.set(AudiobookPosition(trackPath: "b", trackIndex: 0, seconds: 5, updatedAt: .now.addingTimeInterval(-30)), for: "other")
+        var here = stored
+        here.set(nil, for: "book")
+        #expect(here["book"] == nil)
+        stored.merge(here)
+        #expect(stored["book"] == nil)
+        #expect(stored.listening.map(\.key) == ["other"])
+        // Playing again after the clear is newer and wins.
+        here.set(AudiobookPosition(trackPath: "a", trackIndex: 0, seconds: 1), for: "book")
+        stored.merge(here)
+        #expect(stored.listening.map(\.key) == ["book", "other"])
+    }
+
+    @Test func positionsFromBeforeClearingDecode() throws {
+        let json = #"{"entries":{"book":{"trackPath":"a","trackIndex":1,"seconds":2,"updatedAt":0}}}"#
+        let positions = try JSONDecoder().decode(AudiobookPositions.self, from: Data(json.utf8))
+        #expect(positions["book"]?.trackIndex == 1)
+    }
+
     @Test func dropsTheOldestOverTheLimit() {
         var positions = AudiobookPositions()
         for i in 0...AudiobookPositions.limit {

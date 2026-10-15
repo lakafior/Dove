@@ -113,6 +113,7 @@ struct SearchView: View {
             }
             .navigationDestination(for: MediaSummary.self) { MediaDetailView(item: $0) }
             .navigationDestination(for: TitleRoute.self) { LibraryTitleView(titleID: $0.id) }
+            .navigationDestination(for: BookRoute.self) { BookTitleView(bookID: $0.id) }
             .navigationDestination(for: ShelfItem.self) { LibraryItemView(item: $0.item) }
             // The field's clear button and Cancel empty the text: back to the home screen.
             .onChange(of: text) {
