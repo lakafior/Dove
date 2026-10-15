@@ -2,19 +2,43 @@ import DoveKit
 import SwiftUI
 
 /// Files downloaded to the device: progress, pause and resume, retry, share or open in another app.
-/// Finished files also show in Files under On My iPhone › Dove.
+/// Finished files also show in Files under On My iPhone › Dove. Above them, what the services are still fetching
+/// (torrents without cache, NZB jobs), from the library list; while that is not empty and the tab is open, the
+/// list is refreshed every `ServiceActivity.pollInterval`.
 struct DownloadsView: View {
     @Environment(AppModel.self) private var model
+    @Environment(\.scenePhase) private var scenePhase
     @State private var message: String?
     @State private var cancelling: DownloadJob?
 
     private var downloads: DownloadManager { model.downloads }
 
+    private var activity: ServiceActivity {
+        ServiceActivity(items: model.library.items, jobs: model.downloadJobs.jobs)
+    }
+
+    /// Polls only while there is something to wait for and someone to see it.
+    private var polls: Bool {
+        scenePhase == .active && model.selectedTab == .downloads && !activity.active.isEmpty
+    }
+
     var body: some View {
+        let activity = self.activity
         NavigationStack {
             List {
                 if let message {
                     Text(message).font(.footnote).foregroundStyle(.red)
+                }
+                if !activity.isEmpty {
+                    Section {
+                        ForEach(activity.active + activity.failed) { item in
+                            NavigationLink(value: item) { ServiceItemRow(item: item) }
+                        }
+                    } header: {
+                        Text("On services")
+                    } footer: {
+                        servicesFooter(polling: !activity.active.isEmpty)
+                    }
                 }
                 let pending = model.downloadJobs.jobs.filter { job in
                     if case .downloading = job.state { false } else { true }
@@ -46,7 +70,7 @@ struct DownloadsView: View {
                 }
             }
             .overlay {
-                if downloads.records.isEmpty && model.downloadJobs.jobs.isEmpty {
+                if downloads.records.isEmpty && model.downloadJobs.jobs.isEmpty && activity.isEmpty {
                     ContentUnavailableView(
                         "No downloads yet",
                         systemImage: "arrow.down.circle",
@@ -55,6 +79,12 @@ struct DownloadsView: View {
                 }
             }
             .navigationTitle("Downloads")
+            .navigationDestination(for: ShelfItem.self) { LibraryItemView(item: $0.item) }
+            .refreshable { await model.library.refresh(using: model) }
+            .task(id: polls) {
+                guard polls else { return }
+                await poll()
+            }
             .confirmationDialog(
                 "Stop this download-only job?",
                 isPresented: Binding(get: { cancelling != nil }, set: { if !$0 { cancelling = nil } }),
@@ -65,6 +95,27 @@ struct DownloadsView: View {
             } message: { job in
                 Text(job.name)
             }
+        }
+    }
+
+    @ViewBuilder
+    private func servicesFooter(polling: Bool) -> some View {
+        if model.library.isLoading {
+            Text("Updating…")
+        } else if let updatedAt = model.library.updatedAt {
+            let updated = "Updated \(updatedAt.formatted(.relative(presentation: .named)))."
+            Text(polling ? updated + " Checked again while this tab is open." : updated)
+        }
+    }
+
+    /// Lists the services again whenever the last list is older than the interval. Cancelled with the task.
+    private func poll() async {
+        while !Task.isCancelled {
+            let age = model.library.updatedAt.map { Date.now.timeIntervalSince($0) } ?? .infinity
+            if age >= ServiceActivity.pollInterval {
+                await model.library.refresh(using: model)
+            }
+            try? await Task.sleep(for: .seconds(ServiceActivity.pollInterval))
         }
     }
 
@@ -188,6 +239,41 @@ private struct DownloadRow: View {
     private var statusColor: Color {
         if case .failed = record.state { return .red }
         return .secondary
+    }
+}
+
+/// A torrent, link or NZB job a service is still fetching (or failed lately); opens the item screen.
+private struct ServiceItemRow: View {
+    let item: ShelfItem
+
+    private var progress: Double? {
+        if case .downloading(let progress) = item.item.status { return progress }
+        return nil
+    }
+
+    private var isFailed: Bool {
+        if case .failed = item.item.status { return true }
+        return false
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(item.item.name).font(.subheadline).lineLimit(2)
+            if let progress {
+                ProgressView(value: progress)
+            } else if item.item.status == .queued {
+                ProgressView().progressViewStyle(.linear)
+            }
+            HStack(spacing: 8) {
+                BackendBadge(backend: item.item.backend)
+                Text(item.item.status.label).lineLimit(2)
+                if let size = item.item.size, !isFailed {
+                    Text(size.formatted(.byteCount(style: .file)))
+                }
+            }
+            .font(.caption)
+            .foregroundStyle(isFailed ? .red : .secondary)
+        }
     }
 }
 
