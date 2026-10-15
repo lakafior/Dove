@@ -11,8 +11,6 @@ struct BookReadSection: View {
     let book: BookTitle
     @State private var working: Action?
     @State private var message: String?
-    @State private var sharedFile: SharedFile?
-    @State private var mail: KindleMail?
     @State private var isAsking = false
 
     enum Action: Hashable {
@@ -58,21 +56,6 @@ struct BookReadSection: View {
             }
             Button("Cancel", role: .cancel) {}
         }
-        .sheet(item: $sharedFile) { ShareSheet(url: $0.url).ignoresSafeArea() }
-        .sheet(item: $mail) { draft in
-            KindleMailView(mail: draft) { result in
-                mail = nil
-                switch result {
-                case .sent:
-                    message = "Sent to \(draft.recipient). Amazon delivers it in a few minutes."
-                case .failed:
-                    message = "Mail could not send it. Try again, or use Share file."
-                default:
-                    break
-                }
-            }
-            .ignoresSafeArea()
-        }
     }
 
     private func title(_ target: ReadingTarget) -> String {
@@ -114,7 +97,7 @@ struct BookReadSection: View {
                 if case .read(.kindle) = action {
                     sendToKindle(url, pick: pick)
                 } else {
-                    sharedFile = SharedFile(url: url)
+                    SheetPresenter.share(url)
                     if case .read(.appleBooks) = action { message = "Pick Books in the share sheet." }
                 }
             } catch {
@@ -157,66 +140,81 @@ struct BookReadSection: View {
         let name = (pick.file.name as NSString).lastPathComponent
         guard MFMailComposeViewController.canSendMail() else {
             UIPasteboard.general.string = model.kindleAddress
-            sharedFile = SharedFile(url: url)
+            SheetPresenter.share(url)
             message = "Mail has no account on this iPhone. The Kindle address is copied: share the file to your mail app and paste it as the recipient."
             return
         }
         do {
             let data = try Data(contentsOf: url)
-            mail = KindleMail(recipient: model.kindleAddress, subject: book.name, data: data,
-                              mimeType: BookFiles.mimeType(of: name), fileName: name)
+            let recipient = model.kindleAddress
+            SheetPresenter.mail(to: recipient, subject: book.name, data: data,
+                                mimeType: BookFiles.mimeType(of: name), fileName: name) { result in
+                switch result {
+                case .sent:
+                    message = "Sent to \(recipient). Amazon delivers it in a few minutes."
+                case .failed:
+                    message = "Mail could not send it. Try again, or use Share file."
+                default:
+                    break
+                }
+            }
         } catch {
             message = error.localizedDescription
         }
     }
 }
 
-struct SharedFile: Identifiable {
-    let url: URL
-    var id: URL { url }
-}
+/// Presents the share and Mail sheets from UIKit's top view controller. A SwiftUI `.sheet` inside the book screen's
+/// list was dismissed as soon as the list redrew (a library refresh during the first download).
+@MainActor
+enum SheetPresenter {
+    /// Mail keeps only a weak delegate.
+    private static var mailDelegate: MailDelegate?
 
-struct ShareSheet: UIViewControllerRepresentable {
-    let url: URL
-
-    func makeUIViewController(context: Context) -> UIActivityViewController {
-        UIActivityViewController(activityItems: [url], applicationActivities: nil)
+    static func share(_ url: URL) {
+        let controller = UIActivityViewController(activityItems: [url], applicationActivities: nil)
+        present(controller)
     }
 
-    func updateUIViewController(_ controller: UIActivityViewController, context: Context) {}
-}
-
-struct KindleMail: Identifiable {
-    let id = UUID()
-    let recipient: String
-    let subject: String
-    let data: Data
-    let mimeType: String
-    let fileName: String
-}
-
-/// Mail's compose sheet with the book attached; the user taps Send (iOS never sends mail for an app).
-struct KindleMailView: UIViewControllerRepresentable {
-    let mail: KindleMail
-    let onFinish: (MFMailComposeResult) -> Void
-
-    func makeCoordinator() -> Coordinator { Coordinator(onFinish: onFinish) }
-
-    func makeUIViewController(context: Context) -> MFMailComposeViewController {
+    /// Mail's compose sheet with the file attached; the user taps Send (iOS never sends mail for an app).
+    static func mail(
+        to recipient: String,
+        subject: String,
+        data: Data,
+        mimeType: String,
+        fileName: String,
+        onFinish: @escaping @MainActor (MFMailComposeResult) -> Void
+    ) {
         let controller = MFMailComposeViewController()
-        controller.mailComposeDelegate = context.coordinator
-        controller.setToRecipients([mail.recipient])
-        controller.setSubject(mail.subject)
-        controller.addAttachmentData(mail.data, mimeType: mail.mimeType, fileName: mail.fileName)
-        return controller
+        let delegate = MailDelegate { result in
+            mailDelegate = nil
+            onFinish(result)
+        }
+        mailDelegate = delegate
+        controller.mailComposeDelegate = delegate
+        controller.setToRecipients([recipient])
+        controller.setSubject(subject)
+        controller.addAttachmentData(data, mimeType: mimeType, fileName: fileName)
+        present(controller)
     }
 
-    func updateUIViewController(_ controller: MFMailComposeViewController, context: Context) {}
+    private static func present(_ controller: UIViewController) {
+        guard var top = UIApplication.shared.connectedScenes
+            .compactMap({ ($0 as? UIWindowScene)?.keyWindow })
+            .first?.rootViewController
+        else { return }
+        while let presented = top.presentedViewController, !presented.isBeingDismissed { top = presented }
+        // iPad: the share sheet is a popover and needs an anchor.
+        controller.popoverPresentationController?.sourceView = top.view
+        controller.popoverPresentationController?.sourceRect = CGRect(x: top.view.bounds.midX, y: top.view.bounds.midY, width: 0, height: 0)
+        controller.popoverPresentationController?.permittedArrowDirections = []
+        top.present(controller, animated: true)
+    }
 
-    final class Coordinator: NSObject, MFMailComposeViewControllerDelegate {
-        let onFinish: (MFMailComposeResult) -> Void
+    @MainActor private final class MailDelegate: NSObject, @preconcurrency MFMailComposeViewControllerDelegate {
+        let onFinish: @MainActor (MFMailComposeResult) -> Void
 
-        init(onFinish: @escaping (MFMailComposeResult) -> Void) {
+        init(onFinish: @escaping @MainActor (MFMailComposeResult) -> Void) {
             self.onFinish = onFinish
         }
 
@@ -225,6 +223,7 @@ struct KindleMailView: UIViewControllerRepresentable {
             didFinishWith result: MFMailComposeResult,
             error: (any Error)?
         ) {
+            controller.dismiss(animated: true)
             onFinish(result)
         }
     }
