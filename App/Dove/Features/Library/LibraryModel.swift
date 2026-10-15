@@ -43,8 +43,12 @@ final class LibraryModel {
     private static let kindsURL = SharedConfiguration.kindsURL
     /// Where learned kinds lived before the user could set them and Files needed them.
     private static let legacyKindsURL = URL.applicationSupportDirectory.appending(path: "Dove/library-kinds.json")
+    /// Release names and titles from the search, for items the services list under a random name.
+    private var hints: AddedHints
+    private static let hintsURL = URL.applicationSupportDirectory.appending(path: "Dove/library-hints.json")
 
     init() {
+        hints = AddedHints.load(from: Self.hintsURL) ?? AddedHints()
         if let current = KindOverrides.load(from: Self.kindsURL) {
             kinds = current
         } else {
@@ -55,7 +59,7 @@ final class LibraryModel {
             }
         }
         if let cache = LibraryCache.load(from: Self.cacheURL) {
-            allItems = cache.items.map(kinds.shelfItem)
+            allItems = cache.items.map(shelfItem)
             updatedAt = cache.savedAt
             hasLoaded = true
         }
@@ -77,7 +81,7 @@ final class LibraryModel {
     /// Re-classifies an item from the files its detail call returned, and remembers the answer.
     func learnKind(from detail: LibraryItem) {
         guard !detail.files.isEmpty else { return }
-        let learned = ShelfItem(item: detail)
+        let learned = ShelfItem(item: detail, hint: hints.hint(for: detail))
         guard kinds.learned[learned.id] != learned.kind else { return }
         kinds.learned[learned.id] = learned.kind
         saveKinds()
@@ -85,7 +89,7 @@ final class LibraryModel {
         guard kinds.manual[learned.id] == nil,
               let index = allItems.firstIndex(where: { $0.id == learned.id })
         else { return }
-        allItems[index] = ShelfItem(item: allItems[index].item, kind: learned.kind)
+        allItems[index] = ShelfItem(item: allItems[index].item, kind: learned.kind, hint: allItems[index].hint)
     }
 
     /// "Change type": the user's kind for these items; nil goes back to automatic (files, then the name).
@@ -94,7 +98,7 @@ final class LibraryModel {
         let ids = Set(changed.map(\.id))
         for id in ids { kinds.manual[id] = kind }
         saveKinds()
-        allItems = allItems.map { ids.contains($0.id) ? kinds.shelfItem($0.item) : $0 }
+        allItems = allItems.map { ids.contains($0.id) ? shelfItem($0.item) : $0 }
         FilesLocation.libraryChanged()
         await matchMissing(using: app.addonSet)
         await matchMissingBooks()
@@ -105,13 +109,25 @@ final class LibraryModel {
         let id = ShelfItem.id(backend: backend, itemID: itemID)
         kinds.manual[id] = kind
         saveKinds()
-        allItems = allItems.map { $0.id == id ? kinds.shelfItem($0.item) : $0 }
+        allItems = allItems.map { $0.id == id ? shelfItem($0.item) : $0 }
         FilesLocation.libraryChanged()
     }
 
     /// The kind the user set for an item, if any (for the menu's checkmark).
     func manualKind(of item: ShelfItem) -> ContentKind? {
         kinds.manual[item.id]
+    }
+
+    private func shelfItem(_ item: LibraryItem) -> ShelfItem {
+        kinds.shelfItem(item, hint: hints.hint(for: item))
+    }
+
+    /// Remembers what the search knew about a release Dove just added: its name, and the title it was found for.
+    func recordAdded(_ hint: AddedHint, backend: BackendID, itemIDs: [LibraryItem.ID], infoHash: String?) {
+        hints.record(hint, backend: backend, itemIDs: itemIDs, infoHash: infoHash)
+        try? hints.save(to: Self.hintsURL)
+        let ids = Set(itemIDs.map { ShelfItem.id(backend: backend, itemID: $0) })
+        allItems = allItems.map { ids.contains($0.id) ? shelfItem($0.item) : $0 }
     }
 
     private func saveKinds() {
@@ -162,7 +178,7 @@ final class LibraryModel {
             failed: result.failed,
             configured: Set(app.backends.map(\.id))
         )
-        allItems = merged.map(kinds.shelfItem)
+        allItems = merged.map(shelfItem)
         failures = result.failures
         app.services.record(configured: app.backends.map(\.id), failed: result.failed, failures: result.failures)
         if result.failed.count < app.backends.count { updatedAt = .now }
@@ -187,6 +203,8 @@ final class LibraryModel {
 
     /// Looks up posters for titles without one, through TMDB or the search addon. Rows update as answers arrive.
     private func matchMissing(using addons: AddonSet, everything: Bool = false) async {
+        // Items added from a title's screen need no search.
+        for (key, media) in await LibraryMatcher.applyHints(items, store: store) { matches[key] = media }
         guard addons.canSearch else { return }
         var guesses: [String: MediaGuess] = [:]
         for item in items where item.kind == .video && guesses[item.guess.key] == nil { guesses[item.guess.key] = item.guess }

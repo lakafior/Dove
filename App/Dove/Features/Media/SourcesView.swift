@@ -16,6 +16,8 @@ struct SourcesView: View {
     var airedSeasons: [Int]?
     /// The plain title, for indexers that cannot search by IMDb ID.
     var searchTitle: String?
+    /// The movie or series these sources are for: what its library items get matched to (`AddedHint`).
+    var media: MediaSummary?
 
     @State private var groups: [StreamGroup]?
     @State private var failures: [String] = []
@@ -292,6 +294,7 @@ struct SourcesView: View {
                 } else {
                     itemID = try await backend.add(source, category: AddCategory(mediaType: type))
                     usenetJobs[group.id] = UsenetJob(backend: backend.id, itemID: itemID)
+                    remember(group, backend: backend.id, itemIDs: [itemID])
                 }
                 let prepared = try await UsenetPlayback.prepare(source, itemID: itemID, on: backend)
                 status = nil
@@ -342,6 +345,14 @@ struct SourcesView: View {
         }
     }
 
+    /// Services sometimes list a release under a random name: keep the search's name and the title for the library.
+    private func remember(_ group: StreamGroup, backend: BackendID, itemIDs: [LibraryItem.ID]) {
+        model.library.recordAdded(
+            AddedHint(releaseName: group.releaseName, media: media),
+            backend: backend, itemIDs: itemIDs, infoHash: group.infoHash
+        )
+    }
+
     /// Automatic: services that have it cached first, then the user's priority. Or one service only.
     private func add(_ source: Source, of group: StreamGroup, only backend: BackendID?) {
         busy.insert(group.id)
@@ -353,12 +364,14 @@ struct SourcesView: View {
                 let source = try await IndexerTorrent.prepare(source)
                 let added: BackendID
                 let itemID: LibraryItem.ID
+                var itemIDs: [LibraryItem.ID] = []
                 var skipped: [String] = []
                 // NZBs land in nzbdav's `movies` or `tv` folder.
                 let category = AddCategory(mediaType: type)
                 if let backend, let service = model.backend(backend) {
                     // An indexer said private: the magnet cannot tell, so the service checks (and TorBox seeds it).
                     itemID = try await service.add(source, category: category, privateTracker: group.isPrivate == true)
+                    itemIDs = [itemID]
                     added = backend
                 } else {
                     let result = try await model.router(preferring: group.cachedBackends())
@@ -366,8 +379,10 @@ struct SourcesView: View {
                         .add(source, category: category)
                     added = result.backend
                     itemID = result.itemID
+                    itemIDs = result.itemIDs
                     skipped = result.skipped.map { "\($0.backend.displayName): \($0.error.localizedDescription)" }
                 }
+                remember(group, backend: added, itemIDs: itemIDs)
                 let message = model.downloadOnly
                     ? await model.startDownloadOnly(itemID, on: added, name: group.folderName ?? group.title, pick: pick)
                     : "Added to \(added.displayName)."

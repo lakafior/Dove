@@ -13,11 +13,11 @@ public struct EpisodeFile: Identifiable, Sendable, Hashable {
     }
 
     public var id: String { "\(item.id)#\(file?.id ?? "")" }
-    public var name: String { file?.name ?? item.item.name }
+    public var name: String { file?.name ?? item.name }
     public var size: Int64? { file?.size ?? item.item.size }
     public var isReady: Bool { item.item.status == .ready }
     /// "2160p", "1080p"… from the file name, else the release name.
-    public var resolution: String? { ReleaseParser.parse(name).resolution ?? ReleaseParser.parse(item.item.name).resolution }
+    public var resolution: String? { ReleaseParser.parse(name).resolution ?? ReleaseParser.parse(item.name).resolution }
 }
 
 /// One episode with what the library holds of it; `files` is empty for an aired episode the library lacks.

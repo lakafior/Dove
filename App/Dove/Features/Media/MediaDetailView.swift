@@ -24,7 +24,7 @@ struct MediaDetailView: View {
             if item.type == .movie {
                 Section {
                     NavigationLink("Sources") {
-                        SourcesView(title: summary.name, type: .movie, id: summary.id, searchTitle: summary.name)
+                        SourcesView(title: summary.name, type: .movie, id: summary.id, searchTitle: summary.name, media: summary)
                     }
                     // TMDB search results carry TMDB IDs; the detail brings the IMDb ID stream addons want.
                     .disabled(!model.addonSet.hasStreams || (detail == nil && error == nil && item.id.hasPrefix("tmdb:")))
@@ -95,7 +95,8 @@ struct MediaDetailView: View {
                             id: firstEpisode.id,
                             scope: .season(currentSeason),
                             airedEpisodes: PackCompleteness.airedEpisodes(in: detail, season: currentSeason).count,
-                            searchTitle: summary.name
+                            searchTitle: summary.name,
+                            media: summary
                         )
                     } label: {
                         Label("Whole season \(currentSeason)", systemImage: "square.stack")
@@ -108,7 +109,8 @@ struct MediaDetailView: View {
                             title: "\(summary.name) S\(episode.season.twoDigits)E\(episode.number.twoDigits)",
                             type: .series,
                             id: episode.id,
-                            searchTitle: summary.name
+                            searchTitle: summary.name,
+                            media: summary
                         )
                     } label: {
                         EpisodeRow(episode: episode)
@@ -128,7 +130,8 @@ struct MediaDetailView: View {
                             id: pilot.id,
                             scope: .series,
                             airedSeasons: PackCompleteness.airedSeasons(in: detail),
-                            searchTitle: summary.name
+                            searchTitle: summary.name,
+                            media: summary
                         )
                     } label: {
                         Label("Whole series", systemImage: "square.stack.3d.up")

@@ -101,7 +101,7 @@ struct NewznabTests {
         #expect(found[0].nzbURL?.absoluteString == "https://indexer.example/api?t=get&id=aaa&apikey=KEY")
         #expect(found[0].label == "Geek")
         #expect(found[0].service == nil, "an indexer finds NZBs; the service is set when routed")
-        #expect(found[0].librarySource == .nzbURL(found[0].nzbURL!))
+        #expect(found[0].librarySource == .nzbURL(found[0].nzbURL!, name: found[0].title), "named after the indexer's title")
 
         let search = try #require(await transport.requests.last)
         #expect(query(search)["imdbid"] == "15398776")

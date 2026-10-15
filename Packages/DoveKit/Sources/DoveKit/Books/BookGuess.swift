@@ -109,6 +109,6 @@ public struct BookGuess: Sendable, Hashable, Codable {
 extension ShelfItem {
     /// Author and title for books and audiobooks; nil for every other kind.
     public var bookGuess: BookGuess? {
-        BookFormat(kind: kind).map { BookGuess(releaseName: item.name, format: $0) }
+        BookFormat(kind: kind).map { BookGuess(releaseName: name, format: $0) }
     }
 }

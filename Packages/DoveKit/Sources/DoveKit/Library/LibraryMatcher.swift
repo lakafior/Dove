@@ -89,6 +89,26 @@ public enum LibraryMatcher {
         return sameTitle.first ?? candidates.first
     }
 
+    /// Items Dove added from a title's screen are that title: their hint's media becomes the match for their
+    /// guess, without a search. The user's own choices stay; a different automatic match is replaced.
+    /// Returns the matches it set, by guess key.
+    @discardableResult
+    public static func applyHints(_ items: [ShelfItem], store: MatchStore) async -> [String: MediaSummary] {
+        var applied: [String: MediaSummary] = [:]
+        for item in items where item.kind == .video {
+            guard let media = item.hint?.media, media.type == item.guess.type, applied[item.guess.key] == nil else { continue }
+            let key = item.guess.key
+            switch await store.entry(for: key) {
+            case .manual: continue
+            case .matched(let current) where current.id == media.id: continue
+            default:
+                await store.set(.matched(media), for: key)
+                applied[key] = media
+            }
+        }
+        return applied
+    }
+
     /// Looks up every key the store has no fresh answer for, a few at a time, and records the results.
     /// `search` is TMDB or the search addon (`AddonSet.search(_:type:)`). Returns how many keys were looked up.
     /// `everything` re-matches automatic matches too (e.g. after adding a TMDB key); the user's own choices stay,

@@ -83,7 +83,7 @@ public struct TorBoxBackend: LibraryBackend {
             if let id = result?.queuedId { return TorBoxItemRef.queued(id).id }
             throw BackendError.invalidResponse
 
-        case .nzbURL(let url):
+        case .nzbURL(let url, _):
             guard usenet else { throw BackendError.unsupportedSource(.nzb) }
             var form = MultipartFormData()
             form.addField("link", url.absoluteString)

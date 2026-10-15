@@ -32,7 +32,7 @@ struct TorznabTests {
         #expect(found[1].infoHash == String(repeating: "b", count: 40), "hash read from a magnet link")
         #expect(found[1].category == 3040)
         #expect(found[1].torrentURL == nil)
-        #expect(found[1].librarySource == .magnet("magnet:?xt=urn:btih:" + String(repeating: "b", count: 40)))
+        #expect(found[1].librarySource == .magnet(infoHash: String(repeating: "b", count: 40), name: found[1].title))
 
         let program = found[2]
         #expect(movie.provider == "Jackett" && movie.tracker == "Public Tracker" && movie.isPrivate == false)

@@ -336,7 +336,7 @@ private struct ServiceActivityRow: View {
                 .foregroundStyle(.secondary)
                 .frame(width: 28)
             VStack(alignment: .leading, spacing: 5) {
-                Text(item.item.name).font(.subheadline).lineLimit(1)
+                Text(item.name).font(.subheadline).lineLimit(1)
                 HStack(spacing: 6) {
                     BackendBadge(backend: item.item.backend)
                     Text(item.item.status.label).font(.caption).foregroundStyle(.secondary)

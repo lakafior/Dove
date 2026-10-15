@@ -3,18 +3,34 @@ import Foundation
 /// One library item with what Dove guessed from its name (and files, when the service lists them).
 public struct ShelfItem: Identifiable, Sendable, Hashable {
     public let item: LibraryItem
+    /// The service's name, or a readable one when the service lists a random string (`LibraryNaming`).
+    public let name: String
     public let guess: MediaGuess
     public let kind: ContentKind
+    /// What Dove knew when it added the item, if it did.
+    public let hint: AddedHint?
     public var id: String { Self.id(backend: item.backend, itemID: item.id) }
+    /// The service lists it under another (random) name than the one shown.
+    public var isRenamed: Bool { name != item.name }
 
     /// Stable across launches and shared with the Files extension (`KindOverrides` keys).
     public static func id(backend: BackendID, itemID: LibraryItem.ID) -> String { "\(backend.rawValue)/\(itemID)" }
 
-    /// - Parameter kind: what an earlier look at the item's files established; classified from the item otherwise.
-    public init(item: LibraryItem, kind: ContentKind? = nil) {
+    /// - Parameters:
+    ///   - kind: what an earlier look at the item's files established; classified from the item otherwise.
+    ///   - hint: what Dove knew when it added the item: a readable name for an obfuscated one, and the title
+    ///     it was found for (which makes it video even when neither name says so).
+    public init(item: LibraryItem, kind: ContentKind? = nil, hint: AddedHint? = nil) {
         self.item = item
-        guess = ReleaseParser.guess(item.name)
-        self.kind = kind ?? ContentClassifier.classify(name: item.name, files: item.files)
+        self.hint = hint
+        name = LibraryNaming.readableName(of: item, hint: hint)
+        var guess = ReleaseParser.guess(name)
+        if let media = hint?.media, LibraryNaming.looksObfuscated(name) {
+            guess = MediaGuess(title: media.name, year: media.releaseInfo.flatMap { Int($0.prefix(4)) }, type: media.type)
+        }
+        self.guess = guess
+        let classified = ContentClassifier.classify(name: name, files: item.files)
+        self.kind = kind ?? (hint?.media != nil && classified == .other ? .video : classified)
     }
 }
 
@@ -49,7 +65,7 @@ public struct LibraryTitle: Identifiable, Sendable, Hashable {
         return grouped.keys
             .sorted { ($0 ?? .min) < ($1 ?? .min) }
             .map { season in
-                (season, grouped[season]!.sorted { ($0.guess.episode ?? -1, $0.item.name) < ($1.guess.episode ?? -1, $1.item.name) })
+                (season, grouped[season]!.sorted { ($0.guess.episode ?? -1, $0.name) < ($1.guess.episode ?? -1, $1.name) })
             }
     }
 }
@@ -234,7 +250,7 @@ public struct LibraryFilter: Equatable, Sendable {
         if !backends.isEmpty && !backends.contains(item.item.backend) { return false }
         if let category, !category.contains(item) { return false }
         if let status, Status(of: item.item.status) != status { return false }
-        return matchesQuery(item.item.name) || title.map(matchesQuery) == true
+        return matchesQuery(item.name) || matchesQuery(item.item.name) || title.map(matchesQuery) == true
     }
 
     /// Keeps titles with at least one matching item, trimmed to those items.
@@ -271,7 +287,7 @@ public struct LibraryFilter: Equatable, Sendable {
     private func keeps(_ item: ShelfItem, names: [String]) -> Bool {
         if !backends.isEmpty && !backends.contains(item.item.backend) { return false }
         if let status, Status(of: item.item.status) != status { return false }
-        return matchesQuery(item.item.name) || names.contains(where: matchesQuery)
+        return matchesQuery(item.name) || matchesQuery(item.item.name) || names.contains(where: matchesQuery)
     }
 
     public func apply(to items: [ShelfItem]) -> [ShelfItem] {

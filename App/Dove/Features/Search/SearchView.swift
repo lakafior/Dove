@@ -396,6 +396,10 @@ extension SearchView {
                 // NZBs are filed by the indexer's category (audio, software, books, xxx…).
                 let category = group.category.flatMap(AddCategory.init(newznabCategory:))
                 let result = try await router.add(try await IndexerTorrent.prepare(source), category: category)
+                model.library.recordAdded(
+                    AddedHint(releaseName: group.releaseName),
+                    backend: result.backend, itemIDs: result.itemIDs, infoHash: group.infoHash
+                )
                 // The indexer knows better than the name: adult releases are often unmarked, audiobooks are
                 // often bare "Author - Title" folders of mp3s.
                 if let kind = group.category.map(ContentKind.init(newznabCategory:)), kind == .adult || kind == .audiobooks {

@@ -61,7 +61,7 @@ public struct PremiumizeBackend: LibraryBackend {
         case .hosterURL(let url, let password):
             form = [("src", url.absoluteString)]
             if let password, !password.isEmpty { form.append(("password", password)) }
-        case .nzbURL(let url):
+        case .nzbURL(let url, _):
             guard usenet else { throw BackendError.unsupportedSource(.nzb) }
             form = [("src", url.absoluteString)]
         case .torrentFile(let data, let filename):

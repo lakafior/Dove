@@ -146,6 +146,18 @@ struct NzbdavBackendTests {
         #expect(query(try #require(await transport.requests.last))["cat"] == "tv")
     }
 
+    /// Indexers often serve obfuscated NZBs: the job is named after the indexer's title instead.
+    @Test func addURLNamesTheJobAfterTheRelease() async throws {
+        let (backend, transport) = makeBackend()
+        await transport.stub("/api", queryContains: "mode=addurl", json: #"{"status":true,"nzo_ids":["55555555-5555-5555-5555-555555555555"]}"#)
+
+        _ = try await backend.add(.nzbURL(URL(string: "https://indexer.example/get/1")!, name: "Dune.2021.2160p.WEB-DL"))
+        #expect(query(try #require(await transport.requests.last))["nzbname"] == "Dune.2021.2160p.WEB-DL")
+
+        _ = try await backend.add(.nzbURL(URL(string: "https://indexer.example/get/2")!))
+        #expect(query(try #require(await transport.requests.last))["nzbname"] == nil)
+    }
+
     @Test func routerPassesTheCategoryToNzbdav() async throws {
         let (backend, transport) = makeBackend()
         await transport.stub("/api", queryContains: "mode=addurl", json: #"{"status":true,"nzo_ids":["55555555-5555-5555-5555-555555555555"]}"#)

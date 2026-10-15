@@ -92,9 +92,11 @@ public struct NzbdavBackend: LibraryBackend {
     public func add(_ source: Source, category: AddCategory?) async throws -> LibraryItem.ID {
         let created: NzbdavAdded
         switch source {
-        case .nzbURL(let url):
+        case .nzbURL(let url, let name):
             let cat = category.map { [("cat", $0.rawValue)] } ?? []
-            created = try await call("addurl", [("name", url.absoluteString)] + cat, as: NzbdavAdded.self)
+            // `nzbname` names the job (and its folder) after the indexer's title, not the NZB's file name.
+            let jobName = name.map { [("nzbname", $0)] } ?? []
+            created = try await call("addurl", [("name", url.absoluteString)] + jobName + cat, as: NzbdavAdded.self)
         case .nzbFile(let data, let filename):
             var form = MultipartFormData()
             form.addField("apikey", apiKey)

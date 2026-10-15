@@ -558,7 +558,11 @@ struct ShelfItemRow: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text(item.item.name).font(.subheadline).lineLimit(2)
+            Text(item.name).font(.subheadline).lineLimit(2)
+            if item.isRenamed {
+                // The service's own (random) name, so the item can still be found there.
+                Text(item.item.name).font(.caption2).foregroundStyle(.tertiary).lineLimit(1)
+            }
             HStack(spacing: 8) {
                 if showsBackend { BackendBadge(backend: item.item.backend) }
                 if item.kind != .video {
@@ -606,7 +610,13 @@ struct LibraryItemView: View {
 
     /// Seasons when the files are episodes, else folders: multi-season packs are unreadable as one list.
     private var fileGroups: [FileGroup] {
-        FileGroups.groups(current.files, release: ReleaseParser.guess(item.name))
+        FileGroups.groups(current.files, release: ReleaseParser.guess(displayName))
+    }
+
+    /// The library's readable name when the service lists a random one (`AddedHint`, file names).
+    private var displayName: String {
+        model.library.items.first { $0.item.backend == item.backend && $0.item.id == item.id }?.name
+            ?? LibraryNaming.readableName(of: current, hint: nil)
     }
 
     /// Sections the user opened or closed; with three or more, all start closed.
@@ -785,7 +795,7 @@ struct LibraryItemView: View {
                 }
             }
         }
-        .navigationTitle(item.name)
+        .navigationTitle(displayName)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .primaryAction) { actionsMenu }

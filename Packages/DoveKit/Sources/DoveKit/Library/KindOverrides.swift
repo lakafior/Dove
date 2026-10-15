@@ -23,8 +23,9 @@ public struct KindOverrides: Codable, Sendable, Equatable {
             ?? ContentClassifier.classify(name: item.name, files: item.files)
     }
 
-    public func shelfItem(_ item: LibraryItem) -> ShelfItem {
-        ShelfItem(item: item, kind: kind(of: item))
+    /// The user's or learned kind beats the classifier, which reads the hint's name for obfuscated items.
+    public func shelfItem(_ item: LibraryItem, hint: AddedHint? = nil) -> ShelfItem {
+        ShelfItem(item: item, kind: kind(for: ShelfItem.id(backend: item.backend, itemID: item.id)), hint: hint)
     }
 
     enum CodingKeys: String, CodingKey { case learned, manual }

@@ -200,7 +200,7 @@ struct AIOStreamsSearchTests {
         // `fileIdx: -1` means unknown.
         #expect(candidates[3].fileIndex == nil)
         #expect(candidates[1].traits?.resolution == "1080p")
-        #expect(candidates[1].librarySource == .magnet("magnet:?xt=urn:btih:3133f1ac4b86226ca105e69b1c1374ef552380b5"))
+        #expect(candidates[1].librarySource == .magnet(infoHash: "3133f1ac4b86226ca105e69b1c1374ef552380b5", name: candidates[1].releaseName))
         #expect(candidates[0].librarySource == nil)
         #expect(results.sourceErrors.contains { $0.contains("NOAUTH") })
 
@@ -252,7 +252,7 @@ struct TorrentioStreamTests {
         #expect(first.fileIndex == 0)
         #expect(first.size == 20_320_000_000)
         #expect(first.title == "Dune.2021.2160p.HMAX.WEB-DL.DDP5.1.Atmos.HDR.HEVC-EVO.mkv")
-        #expect(first.librarySource == .magnet("magnet:?xt=urn:btih:799dbc6af33a8f32bf1406dc2ec68bbb6864affb"))
+        #expect(first.librarySource == .magnet(infoHash: "799dbc6af33a8f32bf1406dc2ec68bbb6864affb", name: first.title))
         let group = StreamGroup.group([first])[0]
         #expect(group.traits.resolution == "2160p")
         #expect(group.traits.quality == "WEB-DL")

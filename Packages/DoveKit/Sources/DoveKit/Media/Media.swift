@@ -211,11 +211,16 @@ public struct StreamCandidate: Identifiable, Sendable, Hashable {
     /// An indexer's `.torrent` beats a bare magnet: it names the trackers and tells private torrents apart.
     public var librarySource: Source? {
         if let torrentURL { return .torrentURL(torrentURL) }
-        if let infoHash, !infoHash.isEmpty {
-            return .magnet("magnet:?xt=urn:btih:\(infoHash.lowercased())")
-        }
-        if let nzbURL { return .nzbURL(nzbURL) }
+        if let infoHash, !infoHash.isEmpty { return .magnet(infoHash: infoHash, name: releaseName) }
+        if let nzbURL { return .nzbURL(nzbURL, name: releaseName) }
         return nil
+    }
+
+    /// The release's name as the search showed it: the torrent folder, else the file or indexer title.
+    /// Nil when the addon gave neither ("Stream").
+    public var releaseName: String? {
+        let name = (folderName ?? title).trimmingCharacters(in: .whitespacesAndNewlines)
+        return name.isEmpty || name == "Stream" ? nil : name
     }
 
     /// The torrent folder is much bigger than this file: a season or a collection pack.

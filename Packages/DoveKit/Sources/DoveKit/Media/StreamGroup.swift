@@ -66,6 +66,9 @@ public struct StreamGroup: Identifiable, Sendable, Hashable {
         candidates.first { $0.cached == true && $0.url != nil }?.url ?? candidates.lazy.compactMap(\.url).first
     }
 
+    /// The release name to remember for the library item it becomes (`AddedHint`).
+    public var releaseName: String? { candidates.lazy.compactMap(\.releaseName).first }
+
     /// An indexer's `.torrent` first (see `StreamCandidate.librarySource`), then whatever the first candidate has.
     public var librarySource: Source? {
         candidates.lazy.compactMap { $0.torrentURL.map(Source.torrentURL) }.first

@@ -258,7 +258,7 @@ private struct ServiceItemRow: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text(item.item.name).font(.subheadline).lineLimit(2)
+            Text(item.name).font(.subheadline).lineLimit(2)
             if let progress {
                 ProgressView(value: progress)
             } else if item.item.status == .queued {

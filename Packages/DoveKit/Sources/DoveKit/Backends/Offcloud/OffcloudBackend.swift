@@ -67,7 +67,7 @@ public struct OffcloudBackend: LibraryBackend {
             request = jsonRequest("cloud", body: ["url": url.absoluteString])
         case .torrentFile(let data, let filename):
             request = fileRequest(data, filename: filename, mimeType: "application/x-bittorrent")
-        case .nzbURL(let url):
+        case .nzbURL(let url, _):
             guard usenet else { throw BackendError.unsupportedSource(.nzb) }
             request = jsonRequest("cloud", body: ["url": url.absoluteString])
         case .nzbFile(let data, let filename):
