@@ -95,6 +95,12 @@ struct SettingsView: View {
                         SettingsRow("Playback", symbol: "play.fill", color: .pink, value: model.playback.player.displayName)
                     }
                     NavigationLink {
+                        BookSettingsView()
+                    } label: {
+                        SettingsRow("Books", symbol: "book.fill", color: .orange,
+                                    value: model.readIn?.displayName ?? "Ask")
+                    }
+                    NavigationLink {
                         FilesLocationView()
                     } label: {
                         SettingsRow("Files app", symbol: "folder.fill", color: .blue)

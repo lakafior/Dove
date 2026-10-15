@@ -219,3 +219,68 @@ struct BookShelfTests {
         #expect(await LibraryMatcher.matchMissing([guess.key: guess], store: store) { _ in book } == 0)
     }
 }
+
+struct BookFilesTests {
+    private func item(_ id: String, _ files: [(String, Int64?)]) -> LibraryItem {
+        LibraryItem(id: id, backend: .torBox, name: id, status: .ready,
+                    files: files.enumerated().map { LibraryFile(id: "\($0.offset)", name: $0.element.0, size: $0.element.1) })
+    }
+
+    private let mixed = [
+        ("Andy Weir - Project Hail Mary/cover.jpg", 200_000),
+        ("Andy Weir - Project Hail Mary/Project Hail Mary.mobi", 3_000_000),
+        ("Andy Weir - Project Hail Mary/Project Hail Mary.pdf", 9_000_000),
+        ("Andy Weir - Project Hail Mary/Project Hail Mary.epub", 2_000_000),
+        ("Andy Weir - Project Hail Mary/info.nfo", 1_000),
+    ] as [(String, Int64?)]
+
+    @Test func prefersEpubForBothTargets() throws {
+        for target in ReadingTarget.allCases {
+            let pick = try BookFiles.pick(from: [item("a", mixed)], for: target).get()
+            #expect(pick.file.name.hasSuffix(".epub"))
+        }
+    }
+
+    @Test func bestFormatWinsAcrossReleasesThenTheEarlierRelease() throws {
+        let pdfOnly = item("pdf", [("Book.pdf", 1_000)])
+        let epub = item("epub", [("Book.epub", 1_000)])
+        let other = item("epub2", [("Book.epub", 1_000)])
+        #expect(try BookFiles.pick(from: [pdfOnly, epub, other], for: .appleBooks).get().item.id == "epub")
+    }
+
+    @Test func refusesMobiAndAzw3WithTheirNames() {
+        let kindleOnly = item("a", [("Book.azw3", 1_000), ("Book.mobi", 1_000), ("cover.jpg", 1)])
+        #expect(BookFiles.pick(from: [kindleOnly], for: .kindle) == .failure(.unsupported(formats: ["AZW3", "MOBI"])))
+        #expect(BookFiles.pickAny(from: [kindleOnly])?.file.name == "Book.azw3")
+    }
+
+    @Test func kindleSkipsFilesOverTheMailLimit() throws {
+        let big = item("a", [("Book.pdf", 80_000_000), ("Book.docx", 1_000_000)])
+        #expect(try BookFiles.pick(from: [big], for: .kindle).get().file.name == "Book.docx")
+        #expect(try BookFiles.pick(from: [big], for: .appleBooks).get().file.name == "Book.pdf")
+        let onlyBig = item("b", [("Book.pdf", 80_000_000)])
+        #expect(BookFiles.pick(from: [onlyBig], for: .kindle) == .failure(.tooLarge(size: 80_000_000)))
+    }
+
+    @Test func nothingToReadWithoutFiles() {
+        #expect(BookFiles.pick(from: [item("a", [])], for: .appleBooks) == .failure(.noBookFile))
+        #expect(BookFiles.pick(from: [item("a", [("sample.epub", 1)])], for: .appleBooks) == .failure(.noBookFile))
+    }
+
+    @Test(arguments: [
+        ("me@kindle.com", true), (" me@kindle.com ", true), ("me@kindle", false), ("me kindle.com", false),
+        ("@kindle.com", false), ("me@@kindle.com", false), ("me@kindle..com", false),
+    ])
+    func validatesAddresses(address: String, valid: Bool) {
+        #expect(BookFiles.isValidAddress(address) == valid)
+    }
+
+    @Test func cachePathsAreSafeAndKeepTheFileName() {
+        let cache = BookFileCache(directory: URL(filePath: "/tmp/books"))
+        let pick = BookFiles.Pick(item: LibraryItem(id: "link:https://x.y/a?b", backend: .allDebrid, name: "x", status: .ready),
+                                  file: LibraryFile(id: "1", name: "Folder/Project Hail Mary.epub"))
+        let url = cache.url(for: pick)
+        #expect(url.lastPathComponent == "Project Hail Mary.epub")
+        #expect(url.deletingLastPathComponent().lastPathComponent == "link_https___x.y_a_b")
+    }
+}

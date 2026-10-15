@@ -120,6 +120,21 @@ final class AppModel {
         didSet { savePreferences() }
     }
 
+    /// Where "Read" sends ebooks (Settings › Books); nil asks every time.
+    var readIn: ReadingTarget? = nil {
+        didSet { savePreferences() }
+    }
+
+    /// Send to Kindle address; empty hides Kindle.
+    var kindleAddress = "" {
+        didSet { savePreferences() }
+    }
+
+    /// Kindle is offered only with an address to send to.
+    var readingTargets: [ReadingTarget] {
+        kindleAddress.isEmpty ? [.appleBooks] : ReadingTarget.allCases
+    }
+
     /// Filters, variant and "download only" travel with the keys through iCloud Keychain.
     private func savePreferences() {
         var preferences = SyncedPreferences()
@@ -128,6 +143,8 @@ final class AppModel {
         preferences.aioStreamsVariant = aioStreamsVariant
         preferences.showAdult = showAdult
         preferences.sourceSelection = sourceSelection
+        preferences.readIn = readIn
+        preferences.kindleAddress = kindleAddress
         SharedConfiguration.savePreferences(preferences, to: keychain)
     }
     static let debrids = SharedConfiguration.debrids
@@ -171,6 +188,8 @@ final class AppModel {
             aioStreamsVariant = preferences.aioStreamsVariant
             showAdult = preferences.showAdult
             sourceSelection = preferences.sourceSelection
+            readIn = preferences.readIn
+            kindleAddress = preferences.kindleAddress
         } else {
             // First launch of this build: bring the old UserDefaults values along, then save them synced.
             // A fresh install has none: it saves nothing, so it cannot overwrite preferences that iCloud

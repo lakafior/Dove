@@ -12,10 +12,16 @@ public struct SyncedPreferences: Codable, Sendable, Equatable {
     public var showAdult = false
     /// Which sources each search category asks.
     public var sourceSelection = SourceSelection()
+    /// Where "Read" sends ebooks; nil asks every time.
+    public var readIn: ReadingTarget?
+    /// The user's Send to Kindle address (`name@kindle.com`); empty hides Kindle.
+    public var kindleAddress = ""
 
     public init() {}
 
-    enum CodingKeys: String, CodingKey { case downloadOnly, sourceFilter, aioStreamsVariant, showAdult, sourceSelection }
+    enum CodingKeys: String, CodingKey {
+        case downloadOnly, sourceFilter, aioStreamsVariant, showAdult, sourceSelection, readIn, kindleAddress
+    }
 
     public init(from decoder: any Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -24,6 +30,8 @@ public struct SyncedPreferences: Codable, Sendable, Equatable {
         aioStreamsVariant = (try? c.decodeIfPresent(String.self, forKey: .aioStreamsVariant)) ?? ""
         showAdult = (try? c.decodeIfPresent(Bool.self, forKey: .showAdult)) ?? false
         sourceSelection = (try? c.decodeIfPresent(SourceSelection.self, forKey: .sourceSelection)) ?? SourceSelection()
+        readIn = try? c.decodeIfPresent(ReadingTarget.self, forKey: .readIn)
+        kindleAddress = (try? c.decodeIfPresent(String.self, forKey: .kindleAddress)) ?? ""
     }
 }
 

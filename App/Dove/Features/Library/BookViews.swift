@@ -121,6 +121,9 @@ struct BookTitleView: View {
                     Button("Wrong book?", systemImage: "arrow.triangle.2.circlepath") { isFixingMatch = true }
                         .font(.footnote)
                 }
+                if book.format == .ebook {
+                    BookReadSection(book: book)
+                }
                 Section("Releases") {
                     ForEach(book.items) { item in
                         NavigationLink(value: item) { ShelfItemRow(item: item) }

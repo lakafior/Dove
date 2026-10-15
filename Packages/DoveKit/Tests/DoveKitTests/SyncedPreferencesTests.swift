@@ -9,6 +9,8 @@ struct SyncedPreferencesTests {
         preferences.aioStreamsVariant = "dove"
         preferences.showAdult = true
         preferences.sourceFilter.toggle("2160p", in: .resolution)
+        preferences.readIn = .kindle
+        preferences.kindleAddress = "me@kindle.com"
         let data = try JSONEncoder().encode(preferences)
         #expect(try JSONDecoder().decode(SyncedPreferences.self, from: data) == preferences)
 
@@ -17,5 +19,7 @@ struct SyncedPreferencesTests {
         #expect(partial.aioStreamsVariant.isEmpty)
         #expect(!partial.showAdult)
         #expect(partial.sourceFilter == SourceFilter())
+        #expect(partial.readIn == nil)
+        #expect(partial.kindleAddress.isEmpty)
     }
 }
