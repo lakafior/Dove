@@ -2,9 +2,10 @@ import DoveKit
 import SwiftUI
 
 /// The smart field: a magnet, info hash, .torrent/.nzb URL or hoster link opens the add sheet;
-/// anything else searches titles through the user's Stremio addons, or, in Other, names through Dove's
-/// own Newznab indexers in the picked category (software, music, books…). Movie and series searches never
-/// see those results: indexers are asked for Movies/TV only there.
+/// anything else searches in the category picked from the chips under the field: Movies & TV searches titles
+/// (TMDB or the metadata addon), every other category searches release names through Dove's own
+/// Newznab/Torznab indexers. Sources (toolbar) picks which indexers, and for Movies & TV whether the addons,
+/// each category asks.
 struct SearchView: View {
     @Environment(AppModel.self) private var model
     @State private var text = ""
@@ -13,8 +14,7 @@ struct SearchView: View {
     @State private var results: [MediaSummary] = []
     @State private var isSearching = false
     @State private var typeFilter: MediaType?
-    @AppStorage("searchScope") private var scope: SearchScope = .media
-    @AppStorage("otherCategory") private var category: NewznabCategory = .all
+    @AppStorage("searchCategory") private var category: SearchCategory = .media
     @State private var otherResults: [StreamGroup] = []
     @State private var busy: Set<StreamGroup.ID> = []
     /// Search › Other's own filter (type, private, who found it), for this session only.
@@ -37,6 +37,26 @@ struct SearchView: View {
 
     @State private var home = HomeModel()
 
+    /// Categories other than Movies & TV need an indexer; Adult shows only when adult content does.
+    private var categories: [SearchCategory] {
+        guard !model.newznab.isEmpty else { return [.media] }
+        return SearchCategory.allCases.filter { $0 != .adult || model.showAdult }
+    }
+
+    /// The picked category, or Movies & TV when it is no longer offered (indexers removed, adult hidden).
+    private var activeCategory: SearchCategory {
+        categories.contains(category) ? category : .media
+    }
+
+    private var prompt: String {
+        switch activeCategory {
+        case .media: "Title, magnet or link"
+        case .books, .audiobooks: "Author or title, magnet or link"
+        case .music: "Artist or album, magnet or link"
+        case .software, .adult, .all: "Name, magnet or link"
+        }
+    }
+
     /// Results (or a search on its way, or why there are none) replace the home screen; clearing the field
     /// brings it back.
     private var showsResults: Bool {
@@ -51,6 +71,7 @@ struct SearchView: View {
                 } else {
                     ScrollView {
                         VStack(alignment: .leading, spacing: 16) {
+                            categoryBar
                             if pasteboardHasContent, pasteboardChange != answeredChange {
                                 clipboardBanner.padding(.horizontal)
                             }
@@ -60,10 +81,16 @@ struct SearchView: View {
                                     .foregroundStyle(.secondary)
                                     .padding(.horizontal)
                             }
+                            if categories.count == 1 {
+                                Text("Add a Newznab or Torznab indexer in Settings › Search › Indexers to search books, music, software and more.")
+                                    .font(.footnote)
+                                    .foregroundStyle(.secondary)
+                                    .padding(.horizontal)
+                            }
                             HomeView(home: home) { search in
                                 text = search.text
-                                // A scope change searches by itself (`onChange(of: scope)`).
-                                if scope == search.scope { handleSubmit() } else { scope = search.scope }
+                                // A category change searches by itself (`onChange(of: category)`).
+                                if category == search.category { handleSubmit() } else { category = search.category }
                             }
                         }
                     }
@@ -74,17 +101,14 @@ struct SearchView: View {
             .searchable(
                 text: $text,
                 placement: .navigationBarDrawer(displayMode: .always),
-                prompt: scope == .media ? "Title, magnet or link" : "Name, magnet or link"
+                prompt: prompt
             )
-            .searchScopes($scope) {
-                ForEach(SearchScope.allCases, id: \.self) { Text($0.label).tag($0) }
-            }
             .textInputAutocapitalization(.never)
             .autocorrectionDisabled()
             .onSubmit(of: .search, handleSubmit)
             .toolbar {
-                if scope == .other {
-                    ToolbarItem(placement: .topBarTrailing) { categoryMenu }
+                if !model.newznab.isEmpty {
+                    ToolbarItem(placement: .topBarTrailing) { SourcesMenu(category: activeCategory, refresh: isSearching) }
                 }
             }
             .navigationDestination(for: MediaSummary.self) { MediaDetailView(item: $0) }
@@ -94,14 +118,14 @@ struct SearchView: View {
             .onChange(of: text) {
                 if text.isEmpty { clearResults() }
             }
-            // Same words, other scope or category: search again rather than leave stale results.
-            .onChange(of: scope) {
+            // Same words, other category: search again rather than leave stale results.
+            .onChange(of: activeCategory) {
                 clearResults()
                 if !text.isEmpty { handleSubmit() }
             }
-            .onChange(of: category) {
-                otherResults = []
-                if scope == .other, !text.isEmpty { handleSubmit() }
+            // Sources switched for a name search: ask again. Title searches use none of them (the source list does).
+            .onChange(of: model.sourceSelection) {
+                if !activeCategory.usesAddons, !text.isEmpty, !otherResults.isEmpty || message != nil { handleSubmit() }
             }
             .onAppear(perform: checkPasteboard)
             .onChange(of: scenePhase) { if scenePhase == .active { checkPasteboard() } }
@@ -119,6 +143,11 @@ struct SearchView: View {
 
     private var resultsList: some View {
         List {
+            if categories.count > 1 {
+                categoryBar
+                    .listRowInsets(EdgeInsets())
+                    .listRowBackground(Color.clear)
+            }
             if isSearching {
                 HStack { Spacer(); ProgressView(); Spacer() }
                     .listRowBackground(Color.clear)
@@ -126,10 +155,10 @@ struct SearchView: View {
             if let message {
                 Section { Text(message).font(.footnote).foregroundStyle(.secondary) }
             }
-            if scope == .other, !otherResults.isEmpty {
+            if !activeCategory.usesAddons, !otherResults.isEmpty {
                 otherResultsSection
             }
-            if scope == .media, !results.isEmpty {
+            if activeCategory == .media, !results.isEmpty {
                 Section {
                     ForEach(visibleResults) { item in
                         NavigationLink(value: item) { MediaRow(item: item) }
@@ -148,17 +177,34 @@ struct SearchView: View {
         }
     }
 
-    /// Search › Other: which Newznab category to search (adult only when shown).
-    private var categoryMenu: some View {
-        Menu {
-            Picker("Category", selection: $category) {
-                ForEach(NewznabCategory.allCases.filter { $0 != .adult || model.showAdult }, id: \.self) {
-                    Text($0.displayName).tag($0)
+    /// At the top of the home screen and of the results, so the category is picked before typing. Part of the
+    /// scrolling content, not a `safeAreaInset`: an inset around the home/results swap left the navigation bar
+    /// expanded with empty space after a search. Without indexers only Movies & TV exists and the bar is hidden;
+    /// the home screen says how to get the rest.
+    @ViewBuilder
+    private var categoryBar: some View {
+        if categories.count > 1 {
+            ScrollView(.horizontal) {
+                HStack(spacing: 8) {
+                    ForEach(categories, id: \.self) { item in
+                        let selected = item == activeCategory
+                        Button {
+                            category = item
+                        } label: {
+                            Label(item.displayName, systemImage: item.symbolName)
+                                .font(.subheadline.weight(selected ? .semibold : .regular))
+                        }
+                        .buttonStyle(.bordered)
+                        .buttonBorderShape(.capsule)
+                        .controlSize(.small)
+                        .tint(selected ? Color.accentColor : .secondary)
+                        .accessibilityAddTraits(selected ? .isSelected : [])
+                    }
                 }
+                .padding(.horizontal)
+                .padding(.vertical, 4)
             }
-        } label: {
-            Label(category.displayName, systemImage: "line.3.horizontal.decrease.circle")
-                .labelStyle(.titleAndIcon)
+            .scrollIndicators(.hidden)
         }
     }
 
@@ -225,8 +271,9 @@ struct SearchView: View {
         }
         let query = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !query.isEmpty else { return }
-        home.remember(query, scope: scope)
-        if scope == .other { return searchOther(query) }
+        let category = activeCategory
+        home.remember(query, category: category)
+        if let newznabCategory = category.newznabCategory { return searchOther(query, in: newznabCategory) }
         guard model.addonSet.canSearch else {
             message = "Add a TMDB key or a Stremio addon that can search (for example AIOMetadata or Cinemeta) in Settings."
             return
@@ -293,23 +340,28 @@ extension SearchView {
         .presentationDetents([.medium, .large])
     }
 
-    /// Words in the picked category, through Dove's own indexers. Same release from several indexers: one row.
-    /// Rows show at once; then TorBox/Offcloud say which torrents they have cached, and those move up.
-    func searchOther(_ query: String) {
+    /// Words in the picked category, through the indexers picked in Sources. Same release from several
+    /// indexers: one row. Rows show at once; then TorBox/Offcloud say which torrents they have cached, and those
+    /// move up.
+    func searchOther(_ query: String, in category: NewznabCategory) {
         guard !model.newznab.isEmpty else {
             message = "Add a Newznab or Torznab indexer in Settings › Search › Indexers to search beyond movies and series."
+            return
+        }
+        let indexers = model.indexerIDs(for: activeCategory)
+        guard !indexers.isEmpty else {
+            otherResults = []
+            message = "Every source is off for \(activeCategory.displayName). Turn one on in Sources."
             return
         }
         isSearching = true
         otherResults = []
         let search = model.newznab
-        // A remembered Adult category does not survive hiding adult content.
-        let category = category == .adult && !model.showAdult ? NewznabCategory.all : category
         let showAdult = model.showAdult
         let usenet = model.usenetBackend
         let checkers = model.cacheCheckers
         Task {
-            let found = await search.search(.text(query, category: category)).routed(to: usenet)
+            let found = await search.search(.text(query, category: category), only: indexers).routed(to: usenet)
             // Adult results stay out unless shown: indexer category 6000, or a marker in the name.
             let candidates = showAdult ? found.candidates : found.candidates.filter { candidate in
                 candidate.category.map(ContentKind.init(newznabCategory:)) != .adult && !ContentClassifier.isAdult(name: candidate.title)

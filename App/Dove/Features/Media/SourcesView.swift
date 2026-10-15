@@ -95,7 +95,7 @@ struct SourcesView: View {
                     }
                 }
             } else {
-                HStack { Spacer(); ProgressView("Asking your addons…"); Spacer() }
+                HStack { Spacer(); ProgressView("Asking your sources…"); Spacer() }
             }
         }
         .navigationTitle(title)
@@ -103,13 +103,17 @@ struct SourcesView: View {
         .toolbar {
             ToolbarItem(placement: .primaryAction) { downloadOnlyButton }
             ToolbarItem(placement: .primaryAction) { filterButton }
+            if !model.newznab.isEmpty {
+                ToolbarItem(placement: .primaryAction) { SourcesMenu(category: .media, refresh: groups == nil) }
+            }
             if isCheckingCache {
                 ToolbarItem(placement: .status) {
                     Label("Checking cache…", systemImage: "bolt").font(.caption).labelStyle(.titleAndIcon)
                 }
             }
         }
-        .task { await load() }
+        // Sources switched here (or on the search screen) ask again.
+        .task(id: model.sourceSelection) { await load() }
         .refreshable { await load() }
         .sheet(isPresented: $showFilters) {
             @Bindable var model = model
@@ -127,7 +131,10 @@ struct SourcesView: View {
     }
 
     private var emptyHint: String {
-        scope == nil ? "" : "Your addons found single episodes only. Add them one by one, or try again later."
+        if model.sourceSelection.count(in: .media, indexers: model.newznabIndexers).on == 0 {
+            return "Every source is off. Turn one on in Sources."
+        }
+        return scope == nil ? "" : "Your addons found single episodes only. Add them one by one, or try again later."
     }
 
     private var filterButton: some View {
@@ -195,18 +202,20 @@ struct SourcesView: View {
     }
 
     /// Shows the addons' answer at once, then fills in cache status from TorBox/Offcloud by info hash.
-    /// Addons and Dove's own Usenet indexers in parallel; addon results first, then the indexers'.
+    /// Addons and Dove's own indexers in parallel, only those picked in Sources for Movies & TV; addon results
+    /// first, then the indexers'.
     private func load() async {
         let newznab = model.newznab
-        let query = NewznabQuery(type: type, id: id, title: searchTitle, wholeSeason: scope != nil)
-        async let addonResult = model.addonSet.streams(type: type, id: id)
-        async let usenetResult = Self.search(newznab, query)
+        let indexers = model.indexerIDs(for: .media)
+        let query = indexers.isEmpty ? nil : NewznabQuery(type: type, id: id, title: searchTitle, wholeSeason: scope != nil)
+        async let addonResult = Self.streams(model.sourceSelection.asksAddons(in: .media) ? model.addonSet : nil, type: type, id: id)
+        async let usenetResult = Self.search(newznab, query, only: indexers)
         let result = await addonResult
         let usenet = await usenetResult?.routed(to: model.usenetBackend)
-        let all = StreamGroup.group(result.candidates + (usenet?.candidates ?? []))
+        let all = StreamGroup.group((result?.candidates ?? []) + (usenet?.candidates ?? []))
         let shown = scope.map { scope in all.filter(scope.matches) } ?? all
         groups = shown
-        failures = result.failures + (usenet?.failures ?? [])
+        failures = (result?.failures ?? []) + (usenet?.failures ?? [])
         let checkers = model.cacheCheckers
         guard !checkers.isEmpty, shown.contains(where: { $0.infoHash != nil }) else { return }
         isCheckingCache = true
@@ -214,9 +223,13 @@ struct SourcesView: View {
         isCheckingCache = false
     }
 
-    private static func search(_ newznab: NewznabSearch, _ query: NewznabQuery?) async -> NewznabSearch.Results? {
+    private static func search(_ newznab: NewznabSearch, _ query: NewznabQuery?, only: Set<String>) async -> NewznabSearch.Results? {
         guard let query else { return nil }
-        return await newznab.search(query)
+        return await newznab.search(query, only: only)
+    }
+
+    private static func streams(_ addons: AddonSet?, type: MediaType, id: String) async -> AddonSet.Streams? {
+        await addons?.streams(type: type, id: id)
     }
 
     /// NZBs play through Dove's own nzbdav job when nzbdav is set up: addon play links make players wait

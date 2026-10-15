@@ -189,12 +189,12 @@ struct HomeView: View {
                         HStack(spacing: 12) {
                             Button { onSearch(search) } label: {
                                 HStack(spacing: 12) {
-                                    Image(systemName: search.scope == .media ? "clock.arrow.circlepath" : "shippingbox")
+                                    Image(systemName: search.category == .media ? "clock.arrow.circlepath" : search.category.symbolName)
                                         .foregroundStyle(.secondary)
                                         .frame(width: 24)
                                     Text(search.text).foregroundStyle(.primary).lineLimit(1)
-                                    if search.scope == .other {
-                                        Text("Other").font(.caption).foregroundStyle(.secondary)
+                                    if search.category != .media {
+                                        Text(search.category.displayName).font(.caption).foregroundStyle(.secondary)
                                     }
                                     Spacer()
                                 }

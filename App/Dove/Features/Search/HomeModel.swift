@@ -10,8 +10,14 @@ final class HomeModel {
 
     struct RecentSearch: Codable, Hashable, Identifiable {
         var text: String
-        var scope: SearchScope
-        var id: String { "\(scope.rawValue):\(text.lowercased())" }
+        var category: SearchCategory
+        var id: String { "\(category.rawValue):\(text.lowercased())" }
+
+        /// Saved before categories as `scope` (`media`/`other`); `SearchCategory` reads `other` as All.
+        enum CodingKeys: String, CodingKey {
+            case text
+            case category = "scope"
+        }
     }
 
     private static let recentKey = "recentSearches.v1"
@@ -24,9 +30,9 @@ final class HomeModel {
         }
     }
 
-    /// Newest first; the same words in the same scope move to the top instead of repeating.
-    func remember(_ text: String, scope: SearchScope) {
-        let entry = RecentSearch(text: text.trimmingCharacters(in: .whitespacesAndNewlines), scope: scope)
+    /// Newest first; the same words in the same category move to the top instead of repeating.
+    func remember(_ text: String, category: SearchCategory) {
+        let entry = RecentSearch(text: text.trimmingCharacters(in: .whitespacesAndNewlines), category: category)
         guard !entry.text.isEmpty else { return }
         recentSearches.removeAll { $0.id == entry.id }
         recentSearches.insert(entry, at: 0)

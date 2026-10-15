@@ -115,6 +115,11 @@ final class AppModel {
         }
     }
 
+    /// Which sources each search category asks (Search › Sources, and the same button on a source list).
+    var sourceSelection = SourceSelection() {
+        didSet { savePreferences() }
+    }
+
     /// Filters, variant and "download only" travel with the keys through iCloud Keychain.
     private func savePreferences() {
         var preferences = SyncedPreferences()
@@ -122,6 +127,7 @@ final class AppModel {
         preferences.sourceFilter = sourceFilter
         preferences.aioStreamsVariant = aioStreamsVariant
         preferences.showAdult = showAdult
+        preferences.sourceSelection = sourceSelection
         SharedConfiguration.savePreferences(preferences, to: keychain)
     }
     static let debrids = SharedConfiguration.debrids
@@ -164,6 +170,7 @@ final class AppModel {
             sourceFilter = preferences.sourceFilter
             aioStreamsVariant = preferences.aioStreamsVariant
             showAdult = preferences.showAdult
+            sourceSelection = preferences.sourceSelection
         } else {
             // First launch of this build: bring the old UserDefaults values along, then save them synced.
             // A fresh install has none: it saves nothing, so it cannot overwrite preferences that iCloud
@@ -233,6 +240,11 @@ final class AppModel {
     func reloadNewznab() {
         newznabIndexers = SharedConfiguration.newznabIndexers(from: keychain)
         newznab = NewznabSearch(indexers: newznabIndexers, stateURL: Self.newznabStateURL)
+    }
+
+    /// The indexers a search in this category asks (enabled in Settings and picked in Sources).
+    func indexerIDs(for category: SearchCategory) -> Set<String> {
+        sourceSelection.indexerIDs(in: category, from: newznabIndexers)
     }
 
     func saveNewznabIndexers(_ indexers: [NewznabIndexer]) throws {

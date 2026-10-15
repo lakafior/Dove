@@ -136,6 +136,22 @@ struct NewznabTests {
         #expect(await search.usage(of: indexer()).hits == 3)
     }
 
+    @Test func searchAsksOnlyThePickedIndexers() async throws {
+        let transport = MockTransport()
+        try await stubIndexer(transport)
+        let search = NewznabSearch(indexers: [indexer("Geek"), indexer("Slug")], stateURL: nil, transport: transport)
+        let movie = NewznabQuery.movie(imdbID: "tt1", title: nil)
+
+        let none = await search.search(movie, only: [])
+        #expect(none.candidates.isEmpty)
+        #expect(await transport.requests.isEmpty, "no source picked: no hits spent")
+
+        _ = await search.search(movie, only: ["Slug"])
+        let usages = await search.usages()
+        #expect(usages["Geek"]?.hits == 0)
+        #expect(usages["Slug"]?.hits == 2)
+    }
+
     @Test func dailyLimitAndLimitErrorsSkipTheIndexer() async throws {
         let transport = MockTransport()
         try await stubIndexer(transport)

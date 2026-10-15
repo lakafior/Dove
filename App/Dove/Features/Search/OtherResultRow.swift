@@ -1,19 +1,6 @@
 import DoveKit
 import SwiftUI
 
-/// Search › Other: how Dove's results outside movies and series are searched and shown.
-enum SearchScope: String, CaseIterable, Codable {
-    case media
-    case other
-
-    var label: String {
-        switch self {
-        case .media: "Movies & series"
-        case .other: "Other"
-        }
-    }
-}
-
 /// One release from Dove's own indexers, found by name: software, music, books or anything else.
 /// Torrents show which debrid services already have them (⚡), like the source list.
 struct OtherResultRow: View {

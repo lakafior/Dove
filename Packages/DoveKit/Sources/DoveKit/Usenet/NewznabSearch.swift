@@ -78,8 +78,9 @@ public actor NewznabSearch {
 
     public nonisolated var isEmpty: Bool { !indexers.contains(where: \.enabled) }
 
-    public func search(_ query: NewznabQuery) async -> Results {
-        let active = indexers.filter(\.enabled)
+    /// - Parameter only: the indexer IDs to ask (the search category's sources); nil asks every enabled one.
+    public func search(_ query: NewznabQuery, only: Set<String>? = nil) async -> Results {
+        let active = indexers.filter { $0.enabled && only?.contains($0.id) != false }
         var candidates: [StreamCandidate] = []
         var failures: [String] = []
         await withTaskGroup(of: (String, Result<[StreamCandidate], any Error>?).self) { group in
@@ -137,6 +138,11 @@ public actor NewznabSearch {
         let today = day(now())
         guard let usage = state.usage[indexer.id], usage.day == today else { return Usage(day: today, hits: 0, blocked: false) }
         return usage
+    }
+
+    /// Today's usage of every indexer, by ID.
+    public func usages() -> [String: Usage] {
+        Dictionary(uniqueKeysWithValues: indexers.map { ($0.id, usage(of: $0)) })
     }
 
     // MARK: - Internals
