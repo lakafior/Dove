@@ -51,6 +51,18 @@ final class AppModel {
         case downloads
     }
 
+    /// A link to a title's page (IMDb, Apple TV, Letterboxd…): its screen with sources, or a search for its name
+    /// when nothing resolves it.
+    func openTitle(_ link: TitleLink) async {
+        // Opened from the share sheet at launch: the addons (and TMDB) may not be loaded yet.
+        if !addonSet.canSearch { await loadAddons() }
+        if let media = await addonSet.resolve(link) {
+            show(.media(media))
+        } else {
+            show(.search(link.searchText))
+        }
+    }
+
     func show(_ destination: Destination) {
         switch destination {
         case .downloads:

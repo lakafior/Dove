@@ -107,6 +107,13 @@ public struct TMDBMetadata: Sendable {
         return formatter.date(from: text) ?? parseDay(String(text.prefix(10)))
     }
 
+    /// The movie or series with this IMDb ID (`/find`), nil when TMDB does not know it.
+    public func find(imdbID: String) async throws -> MediaSummary? {
+        let found = try await get(TMDBFind.self, "find/\(imdbID)", ["external_source": "imdb_id"])
+        if let movie = found.movieResults.first?.summary(as: .movie) { return movie }
+        return found.tvResults.first?.summary(as: .series)
+    }
+
     private func tmdbID(of item: MediaSummary) async throws -> Int {
         if item.id.hasPrefix("tmdb:"), let id = Int(item.id.dropFirst(5).split(separator: ":").first ?? "") {
             return id

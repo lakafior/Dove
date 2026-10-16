@@ -38,6 +38,10 @@ struct LibraryTitleView: View {
         }
         .listSectionSpacing(.compact)
         .navigationTitle(title?.name ?? "")
+        // Opening a title tells Spotlight it matters (ranking), linked to its indexed item.
+        .userActivity(SpotlightIndex.viewActivity, isActive: title != nil) { activity in
+            SpotlightIndex.describe(activity, id: "title:\(titleID)", title: title?.name ?? "")
+        }
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             if let media = title?.media {

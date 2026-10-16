@@ -52,48 +52,113 @@ enum SiriSuggestions {
 @MainActor
 enum SpotlightIndex {
     private static var signature: Int?
+    /// Viewing a title or book donates this activity, linked to its Spotlight item: what the user opens ranks higher.
+    static let viewActivity = "net.smigi.dove.view"
+
+    /// What one Spotlight item says. Kept apart from `CSSearchableItem` so a change can be detected cheaply.
+    private struct Entry: Hashable {
+        var id: String
+        var domain: String
+        var title: String
+        var description: String
+        var isMovie: Bool
+        var poster: URL?
+        var date: Date?
+        /// 0…100: library first, then books, then the watchlist (Spotlight compares Dove's items with each other).
+        var rank: Int
+        var isOwned: Bool
+    }
 
     static func update(using app: AppModel) {
-        var items: [CSSearchableItem] = []
+        var entries: [Entry] = []
         let titles = app.library.titles
         for title in titles {
-            let attributes = CSSearchableItemAttributeSet(contentType: title.type == .movie ? .movie : .content)
-            attributes.title = title.name
-            attributes.contentDescription = [title.type == .movie ? "Movie" : "Series", title.year, title.coverage]
-                .compactMap { $0 }.joined(separator: " · ")
-            attributes.keywords = ["Dove", title.type == .movie ? "movie" : "series"]
-            items.append(CSSearchableItem(uniqueIdentifier: "title:\(title.id)", domainIdentifier: "library", attributeSet: attributes))
+            entries.append(Entry(
+                id: "title:\(title.id)", domain: "library", title: title.name,
+                description: [title.type == .movie ? "Movie" : "Series", title.year, title.coverage].compactMap { $0 }.joined(separator: " · "),
+                isMovie: title.type == .movie, poster: title.media?.poster, date: title.latestAdded, rank: 80, isOwned: true
+            ))
         }
         for book in app.library.books {
-            let attributes = CSSearchableItemAttributeSet(contentType: .content)
-            attributes.title = book.name
-            attributes.contentDescription = [book.format == .audiobook ? "Audiobook" : "Book", book.author].compactMap { $0 }.joined(separator: " · ")
-            attributes.keywords = ["Dove", book.format == .audiobook ? "audiobook" : "book"]
-            items.append(CSSearchableItem(uniqueIdentifier: "book:\(book.id)", domainIdentifier: "library", attributeSet: attributes))
+            entries.append(Entry(
+                id: "book:\(book.id)", domain: "library", title: book.name,
+                description: [book.format == .audiobook ? "Audiobook" : "Book", book.author].compactMap { $0 }.joined(separator: " · "),
+                isMovie: false, poster: book.book?.cover, date: book.latestAdded, rank: 70, isOwned: true
+            ))
         }
         for entry in app.watchlist.list.entries where Watchlist.title(for: entry, in: titles) == nil {
-            let attributes = CSSearchableItemAttributeSet(contentType: .content)
-            attributes.title = entry.media.name
-            attributes.contentDescription = ["Watchlist", entry.media.type == .movie ? "Movie" : "Series", entry.media.releaseInfo]
-                .compactMap { $0 }.joined(separator: " · ")
-            attributes.keywords = ["Dove", "watchlist"]
-            items.append(CSSearchableItem(uniqueIdentifier: "watch:\(entry.id)", domainIdentifier: "watchlist", attributeSet: attributes))
+            entries.append(Entry(
+                id: "watch:\(entry.id)", domain: "watchlist", title: entry.media.name,
+                description: ["Watchlist", entry.media.type == .movie ? "Movie" : "Series", entry.media.releaseInfo].compactMap { $0 }.joined(separator: " · "),
+                isMovie: entry.media.type == .movie, poster: entry.media.poster, date: entry.addedAt, rank: 60, isOwned: false
+            ))
         }
 
-        var hasher = Hasher()
-        for item in items {
-            hasher.combine(item.uniqueIdentifier)
-            hasher.combine(item.attributeSet.title)
-            hasher.combine(item.attributeSet.contentDescription)
-        }
-        let current = hasher.finalize()
+        let current = entries.hashValue
         guard current != signature else { return }
         signature = current
         Task {
+            var items: [CSSearchableItem] = []
+            for entry in entries {
+                let attributes = CSSearchableItemAttributeSet(contentType: entry.isMovie ? .movie : .content)
+                attributes.title = entry.title
+                attributes.displayName = entry.title
+                attributes.contentDescription = entry.description
+                attributes.keywords = ["Dove"]
+                // Ranking signals: owned (library) or chosen (watchlist), how important within Dove, how recent.
+                attributes.rankingHint = NSNumber(value: entry.rank)
+                if entry.isOwned { attributes.userOwned = true } else { attributes.userCurated = true }
+                attributes.lastUsedDate = entry.date
+                attributes.contentCreationDate = entry.date
+                // Artwork the image cache already holds; Spotlight is no reason to download posters.
+                if let poster = entry.poster, await ImageCache.shared.contains(poster) {
+                    attributes.thumbnailData = try? await ImageCache.shared.data(for: poster)
+                }
+                items.append(CSSearchableItem(uniqueIdentifier: entry.id, domainIdentifier: entry.domain, attributeSet: attributes))
+            }
             let index = CSSearchableIndex.default()
             try? await index.deleteAllSearchableItems()
             try? await index.indexSearchableItems(items)
         }
+    }
+
+    /// The activity a title or book screen advertises while it is open (`.userActivity`), linked to its indexed item.
+    static func describe(_ activity: NSUserActivity, id: String, title: String) {
+        activity.title = title
+        activity.isEligibleForSearch = true
+        activity.isEligibleForPrediction = true
+        activity.userInfo = ["id": id]
+        let attributes = CSSearchableItemAttributeSet(contentType: .content)
+        attributes.relatedUniqueIdentifier = id
+        attributes.title = title
+        activity.contentAttributeSet = attributes
+    }
+
+    /// A searched title's screen (not in the library): Spotlight keeps it as history, so titles looked at but not
+    /// added come back from the system search. No linked item: iOS decides how long it stays.
+    static func describe(_ activity: NSUserActivity, media: MediaSummary) {
+        activity.title = media.name
+        activity.isEligibleForSearch = true
+        activity.isEligibleForPrediction = true
+        activity.userInfo = ["id": "media:\(media.id)", "media": (try? JSONEncoder().encode(media)) ?? Data()]
+        activity.requiredUserInfoKeys = ["id", "media"]
+        activity.keywords = [media.name]
+        let attributes = CSSearchableItemAttributeSet(contentType: media.type == .movie ? .movie : .content)
+        attributes.title = media.name
+        attributes.contentDescription = [media.type == .movie ? "Movie" : "Series", media.releaseInfo].compactMap { $0 }.joined(separator: " · ")
+        activity.contentAttributeSet = attributes
+    }
+
+    /// A Spotlight result for a screen's activity: an indexed item's ID, or a searched title carried whole.
+    static func open(_ activity: NSUserActivity, using app: AppModel) {
+        guard let id = activity.userInfo?["id"] as? String else { return }
+        if id.hasPrefix("media:") {
+            if let data = activity.userInfo?["media"] as? Data, let media = try? JSONDecoder().decode(MediaSummary.self, from: data) {
+                app.show(.media(media))
+            }
+            return
+        }
+        open(id, using: app)
     }
 
     /// A tapped Spotlight result.

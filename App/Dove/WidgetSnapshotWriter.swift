@@ -123,6 +123,8 @@ enum DeepLink {
         case "settings": app.selectedTab = .settings
         case "listening":
             if app.audiobook.session != nil { app.audiobook.isPresented = true } else { Task { _ = await app.continueAudiobook() } }
+        case "media":
+            if let link = TitleLink(deepLink: url) { Task { await app.openTitle(link) } }
         case "title":
             let id = String(url.path().dropFirst()).removingPercentEncoding ?? ""
             if !id.isEmpty { app.show(.title(id: id)) }

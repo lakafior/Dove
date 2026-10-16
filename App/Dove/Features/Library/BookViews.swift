@@ -141,6 +141,9 @@ struct BookTitleView: View {
             }
         }
         .navigationTitle(book?.name ?? "")
+        .userActivity(SpotlightIndex.viewActivity, isActive: book != nil) { activity in
+            SpotlightIndex.describe(activity, id: "book:\(bookID)", title: book?.name ?? "")
+        }
         .navigationBarTitleDisplayMode(.inline)
         .sheet(isPresented: $isFixingMatch) {
             if let book { BookPickerSheet(book: book) }

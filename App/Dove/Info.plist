@@ -64,6 +64,8 @@
 	</array>
 	<key>CFBundleVersion</key>
 	<string>1</string>
+	<key>CoreSpotlightContinuation</key>
+	<true/>
 	<key>DoveAppGroup</key>
 	<string>group.net.smigi.dove</string>
 	<key>DoveKeychainGroup</key>
@@ -88,6 +90,10 @@
 	<string>Dove talks to servers you add on your home network, such as Jackett, Prowlarr or nzbdav.</string>
 	<key>NSSupportsLiveActivities</key>
 	<true/>
+	<key>NSUserActivityTypes</key>
+	<array>
+		<string>net.smigi.dove.view</string>
+	</array>
 	<key>UIApplicationShortcutItems</key>
 	<array>
 		<dict>

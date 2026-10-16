@@ -63,6 +63,10 @@ targets:
         # Audiobooks keep playing with the screen locked (AudiobookPlayer); fetch: BackgroundRefresh.
         UIBackgroundModes: [audio, fetch]
         BGTaskSchedulerPermittedIdentifiers: [net.smigi.dove.refresh]
+        # Title and book screens advertise themselves to Spotlight (SpotlightIndex.viewActivity).
+        NSUserActivityTypes: [net.smigi.dove.view]
+        # "Search in Dove" under Spotlight's Search in Apps, for any text (RootView, CSQueryContinuationActionType).
+        CoreSpotlightContinuation: true
         # Phone downloads on the Lock Screen and in the Dynamic Island (DownloadAlerts, DoveWidgets).
         NSSupportsLiveActivities: true
         # The app icon's menu (QuickActions); "Continue Listening" is added at runtime.

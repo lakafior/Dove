@@ -8,7 +8,7 @@ import UniformTypeIdentifiers
 final class ShareViewController: UIViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
-        let model = ShareModel { [weak self] in self?.finish() }
+        let model = ShareModel(close: { [weak self] in self?.finish() }, open: { [weak self] url in self?.openInApp(url) })
         let host = UIHostingController(rootView: ShareView(model: model))
         addChild(host)
         host.view.frame = view.bounds
@@ -23,6 +23,19 @@ final class ShareViewController: UIViewController {
     private func finish() {
         extensionContext?.completeRequest(returningItems: nil)
     }
+
+    /// Share extensions have no `UIApplication.shared`; the application is still in the responder chain.
+    fileprivate func openInApp(_ url: URL) {
+        var responder: UIResponder? = self
+        while let current = responder {
+            if let application = current as? UIApplication {
+                application.open(url)
+                break
+            }
+            responder = current.next
+        }
+        finish()
+    }
 }
 
 @MainActor
@@ -31,6 +44,8 @@ final class ShareModel {
     enum State {
         case reading
         case ready([Source])
+        /// A movie's or series' page: Dove opens it.
+        case title(TitleLink)
         case nothing
         case added(String)
     }
@@ -39,8 +54,10 @@ final class ShareModel {
     private(set) var router: BackendRouter
     @ObservationIgnored private let hostCatalog = HostCatalog(fileURL: HostCatalog.defaultURL)
     let close: () -> Void
+    let open: (URL) -> Void
 
-    init(close: @escaping () -> Void) {
+    init(close: @escaping () -> Void, open: @escaping (URL) -> Void) {
+        self.open = open
         let keychain = SharedConfiguration.keychain()
         router = BackendRouter(
             backends: SharedConfiguration.backends(from: keychain),
@@ -55,6 +72,12 @@ final class ShareModel {
     func read(_ items: [NSExtensionItem]) async {
         let providers = items.flatMap { $0.attachments ?? [] }
         let sources = await Self.sources(from: providers)
+        if sources.isEmpty, let link = await Self.titleLink(from: providers) {
+            // Straight to the title's screen in Dove: nothing to choose here.
+            state = .title(link)
+            open(link.deepLink)
+            return
+        }
         if sources.contains(where: { $0.kind == .hoster }) {
             router.hostLists = await hostCatalog.refresh(router.backends)
         }
@@ -95,6 +118,18 @@ final class ShareModel {
         return found.filter { seen.insert($0.id).inserted }
     }
 
+    /// A movie's or series' page among the shared links or text (IMDb, Apple TV, Letterboxd…).
+    private static func titleLink(from providers: [NSItemProvider]) async -> TitleLink? {
+        for provider in providers where provider.hasItemConformingToTypeIdentifier(UTType.url.identifier) {
+            if let url = try? await url(from: provider), let link = TitleLink(url: url) { return link }
+        }
+        for provider in providers where provider.hasItemConformingToTypeIdentifier(UTType.plainText.identifier) {
+            if let text = try? await provider.loadItem(forTypeIdentifier: UTType.plainText.identifier) as? String,
+               let link = TitleLink.first(in: text) { return link }
+        }
+        return nil
+    }
+
     private static func url(from provider: NSItemProvider) async throws -> URL? {
         let item = try await provider.loadItem(forTypeIdentifier: UTType.url.identifier)
         if let url = item as? URL { return url }
@@ -124,11 +159,13 @@ struct ShareView: View {
                 AddSourceView(sources: sources, router: model.router) { message in
                     if let message { model.added(message) } else { model.close() }
                 }
+            case .title:
+                ProgressView("Opening in Dove…").navigationTitle("Dove")
             case .nothing:
                 ContentUnavailableView(
                     "Nothing to add",
                     systemImage: "questionmark.circle",
-                    description: Text("Share a magnet, a link, or a .torrent or .nzb file.")
+                    description: Text("Share a magnet, a link, a .torrent or .nzb file, or a movie's page (IMDb, Apple TV, Letterboxd…).")
                 )
                 .toolbar { Button("Close") { model.close() } }
             case .added(let message):

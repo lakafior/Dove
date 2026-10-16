@@ -26,6 +26,8 @@ public enum SourceDetector {
         if path.hasSuffix(".nzb") || isNewznabGet(url) {
             return .nzbURL(url)
         }
+        // A movie's page (IMDb, Apple TV, Letterboxd…) is a title to open, not a file to unlock.
+        if TitleLink(url: url) != nil { return nil }
         return .hosterURL(url)
     }
 

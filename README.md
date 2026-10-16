@@ -28,6 +28,7 @@ An iOS client for debrid services and Usenet. Find a movie, a season, a book or 
 - **Ranking.** "Recommended" puts what plays well on Apple TV first, then what is ready (cached or Usenet), then quality. Filters cover resolution, source, codec, HDR, audio, language, cached on, private or public, tracker, and "found by"; sorting by size, seeders or age is also there.
 - **Other categories.** Books, audiobooks, music, software and adult content, searched by name through your indexers (adult is hidden unless you turn it on).
 - **Smart field and share sheet.** Paste or share one link, a magnet or several at once, or a text with magnets in it. `.torrent` and `.nzb` files open in Dove too.
+- **Title links.** Share or paste a movie's or series' page from IMDb, TMDB, Apple TV (including Spotlight's movie cards), Letterboxd, Trakt, Rotten Tomatoes or JustWatch: Dove opens that title with its sources.
 
 ## Library
 
@@ -79,7 +80,7 @@ Save movies and series with the bookmark on a title screen, or from a search res
   - Open Watchlist and Open Downloads.
   
   Siri suggests listening and searches you do often.
-- **Spotlight.** Library titles, books and watchlist entries open straight in Dove.
+- **Spotlight.** Library titles, books, watchlist entries and titles you looked at in Dove show up (with posters) and open straight in Dove; "Search in Dove" searches any text.
 - **Quick Actions** on the app icon: Add from Clipboard, Search, Watchlist, Downloads and Continue Listening.
 - **Background refresh.** When iOS allows it, Dove updates premium days, episode lists, watchlist dates and widgets. iOS decides when that happens, and there are no push notifications.
 

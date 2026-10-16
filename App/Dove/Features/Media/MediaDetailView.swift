@@ -39,6 +39,10 @@ struct MediaDetailView: View {
         }
         .navigationTitle(summary.name)
         .navigationBarTitleDisplayMode(.inline)
+        // Titles looked at but not added come back in Spotlight.
+        .userActivity(SpotlightIndex.viewActivity) { activity in
+            SpotlightIndex.describe(activity, media: summary)
+        }
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 // The search result's summary (TMDB ID) plus the detail's IMDb ID, so either finds it again.

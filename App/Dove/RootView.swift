@@ -35,6 +35,13 @@ struct RootView: View {
         .onContinueUserActivity(CSSearchableItemActionType) { activity in
             if let id = activity.userInfo?[CSSearchableItemActivityIdentifier] as? String { SpotlightIndex.open(id, using: model) }
         }
+        .onContinueUserActivity(SpotlightIndex.viewActivity) { activity in
+            SpotlightIndex.open(activity, using: model)
+        }
+        // "Search in Dove" in Spotlight: search for whatever was typed there.
+        .onContinueUserActivity(CSQueryContinuationActionType) { activity in
+            model.show(.search(activity.userInfo?[CSSearchQueryString] as? String))
+        }
         #if DEBUG
         .task { AudiobookDemo.startIfRequested(on: model) }
         #endif

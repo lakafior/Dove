@@ -273,6 +273,11 @@ struct SearchView: View {
 
     private func handleSubmit() {
         message = nil
+        // A movie's or series' page (IMDb, Apple TV, Letterboxd…): open that title.
+        if SourceDetector.sources(in: text).isEmpty, let link = TitleLink.first(in: text) {
+            Task { await model.openTitle(link) }
+            return
+        }
         let sources = SourceDetector.sources(in: text)
         if !sources.isEmpty {
             results = []
