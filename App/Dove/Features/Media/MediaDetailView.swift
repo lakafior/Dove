@@ -39,6 +39,12 @@ struct MediaDetailView: View {
         }
         .navigationTitle(summary.name)
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                // The search result's summary (TMDB ID) plus the detail's IMDb ID, so either finds it again.
+                WatchlistButton(media: item, otherIDs: detail.map { [$0.summary.id] } ?? [])
+            }
+        }
         .task {
             do {
                 let loaded = try await model.addonSet.detail(of: item)

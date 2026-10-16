@@ -31,7 +31,9 @@ final class LibraryReviewModel {
         schedules = await store.all()
         recompute(app.library.titles)
 
-        let series = app.library.titles.compactMap { $0.type == .series ? $0.media : nil }
+        // Watchlist series too, held or not: their new episodes show on the watchlist.
+        var series = app.library.titles.compactMap { $0.type == .series ? $0.media : nil }
+        series += app.watchlist.series.filter { media in !series.contains { $0.id == media.id } }
         await store.prune(keeping: Set(series.map(\.id)))
         var stale: [MediaSummary] = []
         for media in series where await store.needsRefresh(media.id) { stale.append(media) }

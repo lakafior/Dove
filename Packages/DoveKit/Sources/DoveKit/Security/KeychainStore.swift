@@ -45,6 +45,8 @@ public enum CredentialKey: String, Sendable, CaseIterable {
     case preferences
     /// JSON of `AudiobookPositions`: where each audiobook was left, so another device continues there.
     case audiobookPositions
+    /// JSON of `Watchlist`: movies and series saved for later. Not a secret; synced like `preferences`.
+    case watchlist
 }
 
 public enum KeychainError: Error, Sendable {

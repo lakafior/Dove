@@ -70,6 +70,11 @@ struct LibraryView: View {
                 }
                 ToolbarItem(placement: .primaryAction) { filterMenu }
                 ToolbarItem(placement: .secondaryAction) {
+                    NavigationLink(value: WatchlistRoute()) {
+                        Label("Watchlist", systemImage: "bookmark")
+                    }
+                }
+                ToolbarItem(placement: .secondaryAction) {
                     // Same as pulling the list down: every service's list, statuses included, one call each.
                     Button(library.isLoading ? "Refreshing…" : "Refresh all statuses", systemImage: "arrow.clockwise") {
                         Task { await library.refresh(using: model) }
@@ -142,6 +147,8 @@ struct LibraryView: View {
             .navigationDestination(for: TitleRoute.self) { LibraryTitleView(titleID: $0.id) }
             .navigationDestination(for: BookRoute.self) { BookTitleView(bookID: $0.id) }
             .navigationDestination(for: ShelfItem.self) { LibraryItemView(item: $0.item) }
+            .navigationDestination(for: WatchlistRoute.self) { _ in WatchlistView() }
+            .navigationDestination(for: MediaSummary.self) { MediaDetailView(item: $0) }
             .refreshable { await library.refresh(using: model) }
             .task { await library.start(using: model) }
         }
@@ -205,6 +212,7 @@ struct LibraryView: View {
                         .buttonStyle(.plain)
                         .contextMenu {
                             kindMenu(title.items)
+                            if let media = title.media { WatchlistMenuItem(media: media) }
                             Button("Wrong title?", systemImage: "magnifyingglass") { fixingTitle = title }
                             batchActions(title.items)
                             Button("Delete", systemImage: "trash", role: .destructive) { pending = .delete(title.items) }

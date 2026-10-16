@@ -12,6 +12,8 @@ final class AppModel {
     let library = LibraryModel()
     /// New and missing episodes, and releases worth replacing.
     let review = LibraryReviewModel()
+    /// Movies and series saved for later.
+    let watchlist = WatchlistModel(keychain: SharedConfiguration.keychain())
     /// Online/offline from library refreshes, and premium days left.
     let services = ServiceStatusModel()
     /// The player links go to (Infuse, VLC, Kodi…).
@@ -297,6 +299,7 @@ final class AppModel {
         library.showAdult = showAdult
         playback.reloadKodi()
         audiobook.reloadPositions()
+        watchlist.reload()
         reloadBackends()
         reloadNewznab()
         addonEntries = storedAddonURLs().map { AddonEntry(url: $0) }

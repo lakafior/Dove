@@ -1,7 +1,6 @@
 import ActivityKit
 import DoveKit
 import Foundation
-import UserNotifications
 
 /// Tells the user about phone downloads: a local notification when a file or a download-only job ends
 /// (`DownloadNotices`), and one Live Activity while files are downloading.
@@ -14,13 +13,12 @@ final class DownloadAlerts {
     private let downloads: DownloadManager
     private let jobs: DownloadJobs
     private let activity = DownloadActivityController()
-    private var askedForPermission = false
 
     init(downloads: DownloadManager, jobs: DownloadJobs) {
         self.downloads = downloads
         self.jobs = jobs
         downloads.onSettled { [weak self] record in self?.settled(record) }
-        jobs.onEnded = { [weak self] job, outcome in self?.post(DownloadNotices.notice(for: job, outcome: outcome)) }
+        jobs.onEnded = { [weak self] job, outcome in self?.post(DownloadNotices.notice(for: job, outcome: outcome), kind: .downloadOnly) }
         observe()
     }
 
@@ -35,34 +33,19 @@ final class DownloadAlerts {
     }
 
     private func recordsChanged(_ records: [DownloadRecord]) {
-        if records.contains(where: { $0.state == .downloading }) { askForPermission() }
-        activity.update(records)
+        if records.contains(where: { $0.state == .downloading }) { LocalNotifications.askIfNeeded(for: .downloads) }
+        activity.update(NotificationKind.liveActivity.isOn ? records : [])
     }
 
     private func settled(_ record: DownloadRecord) {
         // The job is looked up before `DownloadJobs` advances: a finished file still belongs to it here.
-        if let notice = DownloadNotices.notice(for: record, job: jobs.job(for: record)) { post(notice) }
+        let job = jobs.job(for: record)
+        if let notice = DownloadNotices.notice(for: record, job: job) { post(notice, kind: job == nil ? .downloads : .downloadOnly) }
     }
 
-    /// Asked once, at the first download: that is when a notification is worth something.
-    private func askForPermission() {
-        guard !askedForPermission else { return }
-        askedForPermission = true
-        Task {
-            let center = UNUserNotificationCenter.current()
-            guard await center.notificationSettings().authorizationStatus == .notDetermined else { return }
-            _ = try? await center.requestAuthorization(options: [.alert, .sound])
-        }
-    }
-
-    private func post(_ notice: DownloadNotice) {
-        let content = UNMutableNotificationContent()
-        content.title = notice.title
-        content.body = notice.body
-        content.threadIdentifier = notice.thread
-        content.sound = .default
-        let request = UNNotificationRequest(identifier: notice.id, content: content, trigger: nil)
-        UNUserNotificationCenter.current().add(request)
+    /// Each kind can be turned off in Settings › Notifications.
+    private func post(_ notice: DownloadNotice, kind: NotificationKind) {
+        LocalNotifications.post(kind, id: notice.id, title: notice.title, body: notice.body, thread: notice.thread)
     }
 }
 

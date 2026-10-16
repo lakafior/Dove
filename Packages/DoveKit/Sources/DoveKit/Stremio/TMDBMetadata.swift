@@ -81,6 +81,32 @@ public struct TMDBMetadata: Sendable {
         )
     }
 
+    // MARK: - Release dates
+
+    /// A movie's theatrical, digital and physical dates (`movie/{id}/release_dates`): the US when it has them,
+    /// else the earliest of each kind anywhere.
+    public func releaseDates(of movie: MediaSummary, now: Date = .now) async throws -> MovieRelease {
+        let id = try await tmdbID(of: movie)
+        let response = try await get(TMDBReleaseDates.self, "movie/\(id)/release_dates")
+        func earliest(_ types: Set<Int>) -> Date? {
+            let dates = { (countries: [TMDBReleaseDates.Country]) in
+                countries.flatMap(\.releaseDates).filter { types.contains($0.type) }.compactMap { Self.parseTimestamp($0.releaseDate) }
+            }
+            return dates(response.results.filter { $0.country == "US" }).min() ?? dates(response.results).min()
+        }
+        // TMDB types: 1 premiere, 2 limited theatrical, 3 theatrical, 4 digital, 5 physical, 6 TV.
+        return MovieRelease(theatrical: earliest([2, 3]), digital: earliest([4]), physical: earliest([5]), fetchedAt: now)
+    }
+
+    /// `2024-03-01T00:00:00.000Z`.
+    static func parseTimestamp(_ text: String) -> Date? {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        if let date = formatter.date(from: text) { return date }
+        formatter.formatOptions = [.withInternetDateTime]
+        return formatter.date(from: text) ?? parseDay(String(text.prefix(10)))
+    }
+
     private func tmdbID(of item: MediaSummary) async throws -> Int {
         if item.id.hasPrefix("tmdb:"), let id = Int(item.id.dropFirst(5).split(separator: ":").first ?? "") {
             return id
@@ -163,6 +189,30 @@ extension MediaType {
 // MARK: - Wire types
 
 private struct TMDBStatus: Decodable {}
+
+private struct TMDBReleaseDates: Decodable {
+    struct Country: Decodable {
+        let country: String
+        let releaseDates: [Release]
+
+        enum CodingKeys: String, CodingKey {
+            case country = "iso_3166_1"
+            case releaseDates = "release_dates"
+        }
+    }
+
+    struct Release: Decodable {
+        let type: Int
+        let releaseDate: String
+
+        enum CodingKeys: String, CodingKey {
+            case type
+            case releaseDate = "release_date"
+        }
+    }
+
+    let results: [Country]
+}
 
 private struct TMDBPage: Decodable {
     let results: [TMDBResult]

@@ -112,6 +112,7 @@ struct SearchView: View {
                 }
             }
             .navigationDestination(for: MediaSummary.self) { MediaDetailView(item: $0) }
+            .navigationDestination(for: WatchlistRoute.self) { _ in WatchlistView() }
             .navigationDestination(for: TitleRoute.self) { LibraryTitleView(titleID: $0.id) }
             .navigationDestination(for: BookRoute.self) { BookTitleView(bookID: $0.id) }
             .navigationDestination(for: ShelfItem.self) { LibraryItemView(item: $0.item) }
@@ -163,6 +164,7 @@ struct SearchView: View {
                 Section {
                     ForEach(visibleResults) { item in
                         NavigationLink(value: item) { MediaRow(item: item) }
+                            .contextMenu { WatchlistMenuItem(media: item) }
                     }
                 } header: {
                     Picker("Type", selection: $typeFilter) {

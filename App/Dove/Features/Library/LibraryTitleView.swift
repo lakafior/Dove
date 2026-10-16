@@ -40,6 +40,11 @@ struct LibraryTitleView: View {
         .navigationTitle(title?.name ?? "")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
+            if let media = title?.media {
+                ToolbarItem(placement: .primaryAction) {
+                    WatchlistButton(media: media, otherIDs: series.detail.map { [$0.summary.id] } ?? [])
+                }
+            }
             if title != nil {
                 ToolbarItem(placement: .primaryAction) {
                     Menu("More", systemImage: "ellipsis.circle") {

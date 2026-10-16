@@ -20,7 +20,7 @@ extension CredentialKey {
         case .newznabIndexers, .kodi:
             .mixed
         case .nzbdavURL, .debridOrder, .usenetOrder, .torBoxUsenet, .torBoxPlan, .privateTrackers, .offcloudUsenet,
-             .premiumizeUsenet, .preferences, .audiobookPositions:
+             .premiumizeUsenet, .preferences, .audiobookPositions, .watchlist:
             .setting
         }
     }

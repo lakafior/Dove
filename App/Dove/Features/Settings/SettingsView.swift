@@ -90,6 +90,11 @@ struct SettingsView: View {
 
                 Section("This iPhone") {
                     NavigationLink {
+                        NotificationSettingsView()
+                    } label: {
+                        SettingsRow("Notifications", symbol: "bell.badge.fill", color: .red)
+                    }
+                    NavigationLink {
                         PlaybackSettingsView()
                     } label: {
                         SettingsRow("Playback", symbol: "play.fill", color: .pink, value: model.playback.player.displayName)

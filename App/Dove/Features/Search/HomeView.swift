@@ -18,6 +18,7 @@ struct HomeView: View {
             servicesStrip
             activity
             episodes
+            watchlist
             betterVersions
             recentlyAdded
             shelves
@@ -129,6 +130,43 @@ struct HomeView: View {
                             Button("Hide", systemImage: "eye.slash") {
                                 model.review.dismissEpisodes(of: entry.title, entry.review.new + entry.review.missing)
                             }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /// The watchlist, newest first, each with what it is up to; a held title opens from the library.
+    @ViewBuilder
+    private var watchlist: some View {
+        let entries = Array(model.watchlist.list.entries.prefix(15))
+        if !entries.isEmpty {
+            let titles = library.titles
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(alignment: .firstTextBaseline) {
+                    Text("Watchlist").font(.title3.bold())
+                    Spacer()
+                    NavigationLink("See all", value: WatchlistRoute()).font(.subheadline)
+                }
+                .padding(.horizontal)
+                PosterShelf {
+                    ForEach(entries) { entry in
+                        let card = PosterCard(
+                            url: entry.media.poster,
+                            title: entry.media.name,
+                            subtitle: model.watchlist.status(of: entry, using: model)?.label() ?? entry.media.releaseInfo
+                        )
+                        Group {
+                            if let held = Watchlist.title(for: entry, in: titles) {
+                                NavigationLink(value: TitleRoute(id: held.id)) { card }
+                            } else {
+                                NavigationLink(value: entry.media) { card }
+                            }
+                        }
+                        .buttonStyle(.plain)
+                        .contextMenu {
+                            Button("Remove from Watchlist", systemImage: "bookmark.slash") { model.watchlist.remove(entry) }
                         }
                     }
                 }
