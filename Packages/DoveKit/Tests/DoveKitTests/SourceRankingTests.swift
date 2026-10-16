@@ -82,3 +82,24 @@ struct SourceRankingTests {
         #expect(try JSONDecoder().decode(SourceFilter.self, from: saved).sort == .sizeDescending)
     }
 }
+
+struct SourceLadderTests {
+    private let hash = { (c: Character) in String(repeating: c, count: 40) }
+
+    @Test func readyByQualityThenPublicThenPrivate() {
+        let groups = StreamGroup.group([
+            StreamCandidate(id: "priv", kind: .p2p, title: "Movie.2024.2160p.BluRay.REMUX.DV.HEVC-A", infoHash: hash("a"), isPrivate: true),
+            StreamCandidate(id: "pub", kind: .p2p, title: "Movie.2024.2160p.BluRay.REMUX.HEVC-B", infoHash: hash("b"), isPrivate: false),
+            StreamCandidate(id: "newznab:geek:1", kind: .usenet, title: "Movie.2024.2160p.WEB-DL.DV.HEVC-C", nzbURL: URL(string: "https://i.example/1")!),
+            StreamCandidate(id: "cached", kind: .p2p, title: "Movie.2024.1080p.WEB-DL.x264-D", infoHash: hash("d"), service: "torbox", cached: true, isPrivate: true),
+        ])
+        let ranking = SourceRanking(debrids: [.torBox, .nzbdav])
+        #expect(ranking.sorted(groups).map(\.title) == [
+            "Movie.2024.2160p.WEB-DL.DV.HEVC-C",
+            "Movie.2024.1080p.WEB-DL.x264-D",
+            "Movie.2024.2160p.BluRay.REMUX.HEVC-B",
+            "Movie.2024.2160p.BluRay.REMUX.DV.HEVC-A",
+        ])
+        #expect(groups.map(ranking.tier(for:)) == [.uncachedPrivate, .uncachedPublic, .ready, .ready])
+    }
+}

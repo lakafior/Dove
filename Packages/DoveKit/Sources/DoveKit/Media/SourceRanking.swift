@@ -3,7 +3,8 @@ import Foundation
 /// "Recommended" order for a source list. Criteria, most important first:
 /// 1. usable at all: a name Real-Debrid refuses is useless when Real-Debrid is the only debrid;
 /// 2. plays well through Infuse on Apple TV (no AV1, no TrueHD-only Atmos);
-/// 3. cached on one of the user's services, so it is ready at once;
+/// 3. the ladder (`Tier`): ready (cached on one of the user's services, or Usenet), then uncached public
+///    torrents, then uncached private ones (only a seeding service takes them, and they cost ratio);
 /// 4. not refused by Real-Debrid (with other debrids "Automatic" falls through, but loses a try);
 /// 5. quality: resolution, DV/HDR, source, audio; then size.
 public struct SourceRanking: Sendable {
@@ -39,13 +40,27 @@ public struct SourceRanking: Sendable {
         return [
             refused && onlyRealDebrid ? 0 : 1,
             group.appleTVWarnings.isEmpty ? 1 : 0,
-            cachedOnUserService(group) ? 1 : 0,
+            tier(for: group).rawValue,
             refused ? 0 : 1,
             Self.resolutionRank[traits.resolution ?? ""] ?? 0,
             Self.hdrRank(traits.visualTags),
             Self.sourceRank[traits.quality ?? ""] ?? 0,
             Self.audioRank(traits.audioTags),
         ]
+    }
+
+    /// How ready a release is, best last. Quality sorts within a rung.
+    public enum Tier: Int, Sendable, Comparable {
+        case uncachedPrivate, uncachedPublic, ready
+
+        public static func < (lhs: Tier, rhs: Tier) -> Bool { lhs.rawValue < rhs.rawValue }
+    }
+
+    /// Usenet counts as ready on any service (nzbdav marks it ⚡, TorBox/Offcloud do not): it downloads at line speed,
+    /// so a 2160p DV NZB should not sink below a cached 1080p torrent.
+    public func tier(for group: StreamGroup) -> Tier {
+        if group.sourceType == .usenet || cachedOnUserService(group) { return .ready }
+        return group.isPrivate == true ? .uncachedPrivate : .uncachedPublic
     }
 
     private var onlyRealDebrid: Bool {

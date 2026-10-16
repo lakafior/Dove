@@ -73,6 +73,13 @@ public struct BackendRouter: Sendable {
         return router
     }
 
+    /// This router limited to the given services, keeping its order.
+    public func only(_ ids: [BackendID]) -> BackendRouter {
+        var router = self
+        router.backends = backends.filter { ids.contains($0.id) }
+        return router
+    }
+
     public struct Failure: Sendable {
         public let backend: BackendID
         public let error: any Error

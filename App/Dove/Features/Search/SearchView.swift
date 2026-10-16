@@ -387,16 +387,16 @@ extension SearchView {
     /// Adds through the priority order (NZBs: the Usenet priority; torrents: services that have it
     /// cached first, then the debrid order); "Download only" fetches every file.
     func addOther(_ group: StreamGroup) {
-        guard let source = group.librarySource else { return }
+        guard let route = group.route(through: model.router(preferring: group.cachedBackends())) else { return }
         busy.insert(group.id)
         Task {
             defer { busy.remove(group.id) }
             do {
-                // A Torznab result's .torrent link carries the indexer's key: fetch it here, never hand it over.
-                let router = model.router(preferring: group.cachedBackends()).forPrivateTracker(group.isPrivate == true)
                 // NZBs are filed by the indexer's category (audio, software, books, xxx…).
                 let category = group.category.flatMap(AddCategory.init(newznabCategory:))
-                let result = try await router.add(try await IndexerTorrent.prepare(source), category: category)
+                // A Torznab result's .torrent link carries the indexer's key: fetch it here, never hand it over.
+                // A private release a service has cached goes there as a magnet (`AddRoute`).
+                let result = try await route.router.add(try await IndexerTorrent.prepare(route.source), category: category)
                 model.library.recordAdded(
                     AddedHint(releaseName: group.releaseName),
                     backend: result.backend, itemIDs: result.itemIDs, infoHash: group.infoHash

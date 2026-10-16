@@ -105,7 +105,7 @@ struct SourcesView: View {
                         warning: [ranking.realDebridWarning(for: group), completenessWarning(for: group)]
                             .compactMap { $0 }.joined(separator: " · ").nilIfEmpty,
                         onPlay: playAction(for: group),
-                        onAdd: group.librarySource.map { source in { add(source, of: group, only: nil) } }
+                        onAdd: group.librarySource.map { _ in { add(group, only: nil) } }
                     )
                     .contextMenu { menu(for: group) }
                 }
@@ -210,11 +210,11 @@ struct SourcesView: View {
         if let url = group.playURL {
             Button("Copy link", systemImage: "link") { UIPasteboard.general.url = url }
         }
-        if let source = group.librarySource {
+        if group.librarySource != nil {
             Section(model.downloadOnly ? "Download only, through" : "Add only to") {
-                ForEach(model.router.forPrivateTracker(group.isPrivate == true).candidates(for: source).map(\.id), id: \.self) { backend in
+                ForEach(group.addTargets(through: model.router), id: \.self) { backend in
                     let cached = group.cachedBackends().contains(backend)
-                    Button(backend.displayName + (cached ? " ⚡" : "")) { add(source, of: group, only: backend) }
+                    Button(backend.displayName + (cached ? " ⚡" : "")) { add(group, only: backend) }
                 }
             }
         }
@@ -354,14 +354,17 @@ struct SourcesView: View {
     }
 
     /// Automatic: services that have it cached first, then the user's priority. Or one service only.
-    private func add(_ source: Source, of group: StreamGroup, only backend: BackendID?) {
+    /// A private tracker's release that a service has cached goes there as a magnet (`AddRoute`).
+    private func add(_ group: StreamGroup, only backend: BackendID?) {
+        let router = model.router(preferring: group.cachedBackends())
+        guard let route = backend.map({ group.route(to: $0, through: router) }) ?? group.route(through: router) else { return }
         busy.insert(group.id)
         status = nil
         Task {
             defer { busy.remove(group.id) }
             do {
                 // A Torznab result's .torrent link carries the indexer's key: fetch it here, never hand it over.
-                let source = try await IndexerTorrent.prepare(source)
+                let source = try await IndexerTorrent.prepare(route.source)
                 let added: BackendID
                 let itemID: LibraryItem.ID
                 var itemIDs: [LibraryItem.ID] = []
@@ -370,13 +373,11 @@ struct SourcesView: View {
                 let category = AddCategory(mediaType: type)
                 if let backend, let service = model.backend(backend) {
                     // An indexer said private: the magnet cannot tell, so the service checks (and TorBox seeds it).
-                    itemID = try await service.add(source, category: category, privateTracker: group.isPrivate == true)
+                    itemID = try await service.add(source, category: category, privateTracker: route.privateTracker)
                     itemIDs = [itemID]
                     added = backend
                 } else {
-                    let result = try await model.router(preferring: group.cachedBackends())
-                        .forPrivateTracker(group.isPrivate == true)
-                        .add(source, category: category)
+                    let result = try await route.router.add(source, category: category)
                     added = result.backend
                     itemID = result.itemID
                     itemIDs = result.itemIDs

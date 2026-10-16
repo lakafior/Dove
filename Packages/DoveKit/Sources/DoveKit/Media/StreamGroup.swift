@@ -100,6 +100,11 @@ public struct StreamGroup: Identifiable, Sendable, Hashable {
         return traits.seasonPack ? traits.seasons : []
     }
 
+    /// Torrent services that already have it cached, in the order given.
+    public var cachedTorrentBackends: [BackendID] {
+        sourceType == .torrent ? cachedBackends().filter { !$0.isUsenet } : []
+    }
+
     public func isSeasonPack(_ season: Int) -> Bool {
         packSeasons == [season]
     }
@@ -123,14 +128,16 @@ public struct StreamGroup: Identifiable, Sendable, Hashable {
 
     // MARK: - Grouping
 
-    /// Merges candidates with the same info hash, keeping the addons' order. NZBs from Dove's own indexers
-    /// have no hash: the same release name from several indexers becomes one row listing each indexer.
+    /// Merges candidates with the same info hash, keeping the addons' order. NZBs (and Torznab torrents without
+    /// a hash) from Dove's own indexers merge by release name, one row listing each indexer. NZBs and torrents never
+    /// share a row: a private tracker's copy would otherwise turn a Usenet row "private" and send it to a seedbox.
     public static func group(_ candidates: [StreamCandidate]) -> [StreamGroup] {
         var groups: [StreamGroup] = []
         var indexByKey: [String: Int] = [:]
         for candidate in candidates {
+            let byName = (candidate.sourceType == .usenet ? "nzb:" : "torrent:") + MediaGuess.normalize(candidate.title)
             let key = candidate.infoHash?.lowercased()
-                ?? (candidate.id.hasPrefix("newznab:") ? "nzb:" + MediaGuess.normalize(candidate.title) : candidate.id)
+                ?? (candidate.id.hasPrefix("newznab:") ? byName : candidate.id)
             if let index = indexByKey[key] {
                 groups[index].add(candidate)
             } else {
