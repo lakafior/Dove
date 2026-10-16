@@ -29,6 +29,11 @@ final class PlaybackModel {
         self.keychain = keychain
         player = UserDefaults.standard.string(forKey: Self.playerKey).flatMap(ExternalPlayer.init) ?? .infuse
         customTemplate = UserDefaults.standard.string(forKey: Self.templateKey) ?? ""
+        reloadKodi()
+    }
+
+    /// Reads Kodi from the Keychain again (after a settings import).
+    func reloadKodi() {
         kodi = (try? keychain.get(.kodi))
             .flatMap { try? JSONDecoder().decode(KodiServer.self, from: Data($0.utf8)) }
     }

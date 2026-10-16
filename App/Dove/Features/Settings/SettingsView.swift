@@ -113,6 +113,16 @@ struct SettingsView: View {
                 }
 
                 Section {
+                    NavigationLink {
+                        SettingsTransferView()
+                    } label: {
+                        SettingsRow("Export & import", symbol: "arrow.up.arrow.down", color: .teal)
+                    }
+                } footer: {
+                    Text("Settings as a file, for a device iCloud Keychain does not reach.")
+                }
+
+                Section {
                     LabeledContent("Version", value: Self.version)
                 }
             }

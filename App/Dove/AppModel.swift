@@ -264,6 +264,47 @@ final class AppModel {
         try downloads.start(request, backend: item.backend, itemID: item.id, file: file)
     }
 
+    // MARK: - Settings file
+
+    /// Every Keychain value as a settings file (`SettingsBackup`), with or without keys and passwords.
+    func exportSettings(includeSecrets: Bool) -> SettingsBackup {
+        SettingsBackup.export(includeSecrets: includeSecrets) { try? keychain.get($0) }
+    }
+
+    /// Writes a settings file into the Keychain (merging: what the file lacks stays) and loads it everywhere.
+    func importSettings(_ backup: SettingsBackup) async throws -> SettingsBackup.ImportSummary {
+        let keychain = keychain
+        let summary = try backup.apply(read: { try? keychain.get($0) }) { try keychain.set($0, for: $1) }
+        await reloadFromKeychain()
+        return summary
+    }
+
+    /// Reads every setting kept in the Keychain again, as a launch would.
+    private func reloadFromKeychain() async {
+        debridOrder = SharedConfiguration.debridOrder(from: keychain)
+        usenetOrder = SharedConfiguration.usenetOrder(from: keychain)
+        torBoxPlan = SharedConfiguration.torBoxPlan(from: keychain)
+        privateTrackers = SharedConfiguration.privateTrackers(from: keychain)
+        if let preferences = SharedConfiguration.preferences(from: keychain) {
+            downloadOnly = preferences.downloadOnly
+            sourceFilter = preferences.sourceFilter
+            aioStreamsVariant = preferences.aioStreamsVariant
+            showAdult = preferences.showAdult
+            sourceSelection = preferences.sourceSelection
+            readIn = preferences.readIn
+            kindleAddress = preferences.kindleAddress
+        }
+        library.showAdult = showAdult
+        playback.reloadKodi()
+        audiobook.reloadPositions()
+        reloadBackends()
+        reloadNewznab()
+        addonEntries = storedAddonURLs().map { AddonEntry(url: $0) }
+        await loadAddons()
+        await refreshAccounts(force: true)
+        await library.refresh(using: self, afterChange: true)
+    }
+
     /// Rebuilds backends from the Keychain. Call after credentials change.
     func reloadBackends() {
         backends = SharedConfiguration.backends(from: keychain)
