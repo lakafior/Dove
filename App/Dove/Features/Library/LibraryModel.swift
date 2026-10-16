@@ -189,6 +189,8 @@ final class LibraryModel {
         async let titles: Void = matchMissing(using: app.addonSet)
         async let books: Void = matchMissingBooks()
         _ = await (titles, books)
+        // After matching: only matched series have an episode list.
+        await app.review.run(using: app)
     }
 
     /// Looks every title up again (e.g. after adding a TMDB key). The user's own choices stay, and a title

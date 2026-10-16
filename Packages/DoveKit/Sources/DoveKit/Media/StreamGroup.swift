@@ -118,12 +118,7 @@ public struct StreamGroup: Identifiable, Sendable, Hashable {
 
     /// Things that play badly through Infuse on Apple TV.
     public var appleTVWarnings: [String] {
-        var warnings: [String] = []
-        if traits.encode == "AV1" { warnings.append("AV1: no hardware decoding on Apple TV") }
-        if traits.audioTags.contains("TrueHD"), traits.audioTags.contains("Atmos"), !traits.audioTags.contains("DD+") {
-            warnings.append("TrueHD Atmos: Apple TV drops the Atmos layer")
-        }
-        return warnings
+        ReleaseQuality.appleTVWarnings(traits)
     }
 
     // MARK: - Grouping

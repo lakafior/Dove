@@ -5,8 +5,9 @@ import Foundation
 /// 2. plays well through Infuse on Apple TV (no AV1, no TrueHD-only Atmos);
 /// 3. the ladder (`Tier`): ready (cached on one of the user's services, or Usenet), then uncached public
 ///    torrents, then uncached private ones (only a seeding service takes them, and they cost ratio);
-/// 4. not refused by Real-Debrid (with other debrids "Automatic" falls through, but loses a try);
-/// 5. quality: resolution, DV/HDR, source, audio; then size.
+/// 4. quality: resolution, DV/HDR, source, audio;
+/// 5. not refused by Real-Debrid: with other debrids "Automatic" falls through after one quick failed try, so it
+///    only breaks ties between equal releases; then size.
 public struct SourceRanking: Sendable {
     /// The user's configured debrids, in priority order.
     public var debrids: [BackendID]
@@ -41,11 +42,11 @@ public struct SourceRanking: Sendable {
             refused && onlyRealDebrid ? 0 : 1,
             group.appleTVWarnings.isEmpty ? 1 : 0,
             tier(for: group).rawValue,
-            refused ? 0 : 1,
             Self.resolutionRank[traits.resolution ?? ""] ?? 0,
             Self.hdrRank(traits.visualTags),
             Self.sourceRank[traits.quality ?? ""] ?? 0,
             Self.audioRank(traits.audioTags),
+            refused ? 0 : 1,
         ]
     }
 
@@ -83,12 +84,12 @@ public struct SourceRanking: Sendable {
         return cached.contains { debrids.contains($0) }
     }
 
-    private static let resolutionRank = ["2160p": 4, "1440p": 3, "1080p": 2, "720p": 1]
-    private static let sourceRank = [
+    static let resolutionRank = ["2160p": 4, "1440p": 3, "1080p": 2, "720p": 1]
+    static let sourceRank = [
         "BluRay REMUX": 6, "BluRay": 5, "WEB-DL": 4, "WEBRip": 3, "WEB": 3, "HDTV": 2, "DVD": 1, "CAM": -1,
     ]
 
-    private static func hdrRank(_ tags: [String]) -> Int {
+    static func hdrRank(_ tags: [String]) -> Int {
         if tags.contains("DV") { return 3 }
         if tags.contains("HDR10+") { return 2 }
         return tags.contains("HDR") ? 1 : 0

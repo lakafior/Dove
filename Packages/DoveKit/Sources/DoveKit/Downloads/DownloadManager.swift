@@ -17,8 +17,9 @@ public final class DownloadManager: NSObject {
 
     /// Builds a fresh request for a record (the backend's `downloadRequest`). Set by the app.
     @ObservationIgnored public var requestProvider: (@MainActor (DownloadRecord) async throws -> URLRequest)?
-    /// Called when a download finishes or fails (`DownloadJobs` deletes items after their downloads).
-    @ObservationIgnored public var onSettled: (@MainActor (DownloadRecord) -> Void)?
+    /// Called when a download finishes or fails, in the order added (`DownloadJobs` deletes items after their
+    /// downloads; the app notifies). Pausing and removing do not settle.
+    @ObservationIgnored private var settledHandlers: [@MainActor (DownloadRecord) -> Void] = []
     /// Handed over by the app delegate when iOS relaunches the app for this session; called once events are delivered.
     @ObservationIgnored public var backgroundEventsCompletion: (() -> Void)?
 
@@ -50,6 +51,10 @@ public final class DownloadManager: NSObject {
         session = URLSession(configuration: configuration, delegate: self, delegateQueue: .main)
         records = store.load()
         Task { await reconnect() }
+    }
+
+    public func onSettled(_ handler: @escaping @MainActor (DownloadRecord) -> Void) {
+        settledHandlers.append(handler)
     }
 
     // MARK: - Actions
@@ -207,7 +212,8 @@ public final class DownloadManager: NSObject {
 
     private func settled(_ id: DownloadRecord.ID) {
         save()
-        if let record = self[id] { onSettled?(record) }
+        guard let record = self[id] else { return }
+        for handler in settledHandlers { handler(record) }
     }
 
     private func complete(_ id: DownloadRecord.ID, error: (any Error)?) {

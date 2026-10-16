@@ -60,13 +60,16 @@ struct SourceRankingTests {
         #expect(SourceRanking(debrids: [.realDebrid]).realDebridWarning(for: webdl) == "Real-Debrid refuses this release name")
     }
 
-    @Test func refusedNameCostsLittleWhenAnotherDebridCanTakeIt() {
+    @Test func refusedNameOnlyBreaksTiesWhenAnotherDebridCanTakeIt() {
         let webdl = group("webdl", "Movie.2024.2160p.WEB-DL.HEVC-GRP")
         let bluray = group("bluray", "Movie.2024.720p.BluRay.x265-GRP")
         let ranking = SourceRanking(debrids: [.realDebrid, .torBox])
-        // Same tier otherwise: the refused one goes below, before quality is compared.
-        #expect(ranking.sorted([webdl, bluray]).map(\.id) == ["bluray", "webdl"])
+        // Another debrid takes it after one failed try: quality still decides.
+        #expect(ranking.sorted([bluray, webdl]).map(\.id) == ["webdl", "bluray"])
         #expect(ranking.realDebridWarning(for: webdl) == "Real-Debrid refuses this name; another service takes it")
+        // Equal quality: the release Real-Debrid takes goes first.
+        let accepted = group("accepted", "Movie.2024.2160p.WEBDL.HEVC-GRP")
+        #expect(ranking.sorted([webdl, accepted]).map(\.id) == ["accepted", "webdl"])
     }
 
     @Test func refusedNameDoesNotMatterWhenAnotherServiceHasItCached() {

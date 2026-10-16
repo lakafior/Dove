@@ -18,6 +18,8 @@ struct SourcesView: View {
     var searchTitle: String?
     /// The movie or series these sources are for: what its library items get matched to (`AddedHint`).
     var media: MediaSummary?
+    /// "Find a better version": only releases clearly better than what the library holds are listed.
+    var upgradeOver: ReleaseQuality?
 
     @State private var groups: [StreamGroup]?
     @State private var failures: [String] = []
@@ -55,7 +57,13 @@ struct SourcesView: View {
     }
 
     private var visible: [StreamGroup] {
-        model.sourceFilter.apply(to: groups ?? [], ranking: ranking)
+        model.sourceFilter.apply(to: upgrades, ranking: ranking)
+    }
+
+    /// Every group, or only the better ones when looking for an upgrade.
+    private var upgrades: [StreamGroup] {
+        guard let upgradeOver else { return groups ?? [] }
+        return (groups ?? []).filter { ReleaseQuality(traits: $0.traits).isUpgrade(over: upgradeOver) }
     }
 
     var body: some View {
@@ -70,6 +78,11 @@ struct SourcesView: View {
                     }
                     .disabled(busy.contains(fallback.group))
                 }
+            }
+            if let upgradeOver, let label = upgradeOver.label {
+                Label("Better than yours (\(label))\(groups.map { " · \(upgrades.count) of \($0.count)" } ?? "")", systemImage: "arrow.up.circle")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
             }
             if let groups {
                 if !groups.isEmpty, !groups.contains(where: { $0.librarySource != nil }),
@@ -91,9 +104,9 @@ struct SourcesView: View {
                 }
                 if visible.isEmpty {
                     ContentUnavailableView(
-                        groups.isEmpty ? emptyTitle : "Nothing matches the filters",
+                        groups.isEmpty ? emptyTitle : upgrades.isEmpty ? "Nothing better yet" : "Nothing matches the filters",
                         systemImage: "tray",
-                        description: Text(groups.isEmpty ? emptyHint : "")
+                        description: Text(groups.isEmpty ? emptyHint : upgrades.isEmpty ? "None of the \(groups.count) source\(groups.count == 1 ? "" : "s") beats what you have." : "")
                     )
                 }
                 ForEach(visible) { group in

@@ -21,6 +21,12 @@ public struct DownloadJob: Codable, Sendable, Identifiable, Hashable {
         case failed(reason: String)
     }
 
+    /// How a job ended, for the notification.
+    public enum Outcome: Sendable, Hashable {
+        case finished(files: Int)
+        case failed(reason: String)
+    }
+
     public let id: String
     public let backend: BackendID
     public let itemID: LibraryItem.ID

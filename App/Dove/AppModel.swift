@@ -10,6 +10,8 @@ final class AppModel {
     /// Shared with the share extension through the `keychain-access-groups` entitlement.
     let keychain = SharedConfiguration.keychain()
     let library = LibraryModel()
+    /// New and missing episodes, and releases worth replacing.
+    let review = LibraryReviewModel()
     /// Online/offline from library refreshes, and premium days left.
     let services = ServiceStatusModel()
     /// The player links go to (Infuse, VLC, Kodi…).
@@ -47,6 +49,8 @@ final class AppModel {
     )
     /// "Download only" adds: wait for the service, download, delete from the service. Set up in `init`.
     private(set) var downloadJobs: DownloadJobs!
+    /// Notifications and the Live Activity for phone downloads. Set up in `init`.
+    @ObservationIgnored private var downloadAlerts: DownloadAlerts?
 
     /// Adds from search and the add sheet go through `downloadJobs` instead of staying in the library.
     var downloadOnly = false {
@@ -238,6 +242,7 @@ final class AppModel {
             store: DownloadJobStore(fileURL: .applicationSupportDirectory.appending(path: "Dove/Downloads/jobs.json")),
             downloads: downloads
         ) { [weak self] id in self?.backend(id) }
+        downloadAlerts = DownloadAlerts(downloads: downloads, jobs: downloadJobs)
     }
 
     /// After an add in "download only" mode: hand the item to `downloadJobs`. Returns the message to show.

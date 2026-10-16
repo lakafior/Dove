@@ -124,14 +124,25 @@ public actor NewznabSearch {
         return Results(candidates: candidates, failures: failures.sorted())
     }
 
-    /// Checks the URL and key: `caps`, then a one-result search (many indexers serve caps without a key).
-    public func test(_ indexer: NewznabIndexer) async throws {
+    /// What a test search found: how many results, and which trackers answered (Jackett's and Prowlarr's
+    /// per-result indexer), so a feed pasted under the wrong name shows at once.
+    public struct TestResult: Sendable, Equatable {
+        public var results: Int
+        public var trackers: [String]
+    }
+
+    /// Checks the URL and key: `caps`, then a search (many indexers serve caps without a key).
+    @discardableResult
+    public func test(_ indexer: NewznabIndexer) async throws -> TestResult {
         let client = NewznabClient(indexer: indexer, transport: transport)
         spend(indexer, hits: 2)
         defer { save() }
         let caps = try await client.caps()
         remember(caps: caps, for: indexer)
-        _ = try await client.search(.movie(imdbID: "tt0111161", title: "The Shawshank Redemption"), caps: caps)
+        let found = try await client.search(.movie(imdbID: "tt0111161", title: "The Shawshank Redemption"), caps: caps) ?? []
+        var seen = Set<String>()
+        let trackers = found.compactMap(\.tracker).filter { seen.insert($0.lowercased()).inserted }
+        return TestResult(results: found.count, trackers: trackers)
     }
 
     public func usage(of indexer: NewznabIndexer) -> Usage {

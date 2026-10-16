@@ -66,6 +66,19 @@ public struct NewznabIndexer: Codable, Sendable, Identifiable, Hashable {
         dailyLimit = try container.decodeIfPresent(Int.self, forKey: .dailyLimit)
     }
 
+    /// The feed it asks, without scheme or case: two indexers with the same feed return the same results
+    /// (a Jackett feed pasted twice under different names).
+    public var feed: String {
+        let address = url.absoluteString.lowercased()
+        let bare = address.split(separator: "://", maxSplits: 1).last.map(String.init) ?? address
+        return (bare.hasSuffix("/") ? String(bare.dropLast()) : bare) + apiPath.lowercased()
+    }
+
+    /// Another indexer in `list` that asks the same feed.
+    public func sameFeed(in list: [NewznabIndexer]) -> NewznabIndexer? {
+        list.first { $0.id != id && $0.feed == feed }
+    }
+
     /// Accepts what users paste: a site root, or a full `…/api` URL.
     public static func normalized(url text: String) -> (url: URL, apiPath: String)? {
         var trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)

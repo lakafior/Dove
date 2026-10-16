@@ -123,11 +123,14 @@ struct DownloadJobsTests {
         let backend = JobBackend(item: Self.episodePack(status: .ready))
         await backend.setLink(link("e02.mkv"), for: "2")
         let (jobs, downloads) = try make(backend)
+        var ended: [DownloadJob.Outcome] = []
+        jobs.onEnded = { _, outcome in ended.append(outcome) }
 
         await jobs.add(backend: .torBox, itemID: "torrent:9", name: "Show.S01", pick: .episode(season: 1, episode: 2))
 
         try await waitUntil { await backend.deleted == ["torrent:9"] }
         #expect(jobs.jobs.isEmpty)
+        #expect(ended == [.finished(files: 1)])
         #expect(downloads.records.map(\.fileID) == ["2"])
         #expect(downloads.records.first?.state == .finished)
     }
@@ -186,10 +189,13 @@ struct DownloadJobsTests {
     @Test func serviceFailureFailsTheJob() async throws {
         let backend = JobBackend(item: Self.episodePack(status: .failed(reason: "dead torrent")))
         let (jobs, _) = try make(backend)
+        var ended: [DownloadJob.Outcome] = []
+        jobs.onEnded = { _, outcome in ended.append(outcome) }
 
         await jobs.add(backend: .torBox, itemID: "torrent:9", name: "Show.S01", pick: .allVideos)
 
         #expect(jobs.jobs.first?.state == .failed(reason: "TorBox: dead torrent"))
+        #expect(ended == [.failed(reason: "TorBox: dead torrent")])
     }
 
     @Test func deleteErrorIsReportedAndRetryFinishesTheJob() async throws {

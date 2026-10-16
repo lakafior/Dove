@@ -1,5 +1,7 @@
+import DoveKit
 import SwiftUI
 import UIKit
+import UserNotifications
 
 @main
 struct DoveApp: App {
@@ -25,10 +27,12 @@ struct DoveApp: App {
 }
 
 /// Owns the model so a relaunch for background downloads finds the session already recreated.
-final class AppDelegate: NSObject, UIApplicationDelegate {
+final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDelegate {
     let model = AppModel()
 
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
+        // Download notices show as banners while Dove is open too (`DownloadAlerts`).
+        UNUserNotificationCenter.current().delegate = self
         // Artwork has its own disk cache (`ImageCache`); this one serves the rest of URLSession.shared.
         URLCache.shared = URLCache(memoryCapacity: 50 * 1024 * 1024, diskCapacity: 50 * 1024 * 1024)
         return true
@@ -41,5 +45,25 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
     ) {
         guard identifier == AppModel.downloadSessionID else { return completionHandler() }
         model.downloads.backgroundEventsCompletion = completionHandler
+    }
+}
+
+extension AppDelegate {
+    nonisolated func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        willPresent notification: UNNotification
+    ) async -> UNNotificationPresentationOptions {
+        [.banner, .list, .sound]
+    }
+
+    /// A tap on a download notice opens the Downloads tab.
+    nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse) async {
+        guard response.notification.request.content.threadIdentifier == DownloadNotices.thread else { return }
+        await showDownloads()
+    }
+
+    @MainActor
+    private func showDownloads() {
+        model.selectedTab = .downloads
     }
 }

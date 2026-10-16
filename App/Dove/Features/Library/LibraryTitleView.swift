@@ -29,6 +29,7 @@ struct LibraryTitleView: View {
                 if title.type == .series {
                     seriesSections(title)
                 } else {
+                    BetterVersionSection(title: title, review: model.review.review(of: title), media: series.detail?.summary)
                     releasesSection(title, header: "Releases")
                 }
             } else {
@@ -46,6 +47,9 @@ struct LibraryTitleView: View {
                         Button("Refresh status", systemImage: "arrow.triangle.2.circlepath") {
                             Task { await model.library.refresh(using: model) }
                         }
+                        if let title, model.review.hasDismissed(title) {
+                            Button("Show hidden suggestions", systemImage: "eye") { model.review.restore(title) }
+                        }
                     }
                 }
             }
@@ -61,6 +65,7 @@ struct LibraryTitleView: View {
         .task(id: title?.media?.id) {
             guard let media = title?.media else { return }
             await series.loadDetail(of: media, using: model)
+            if let detail = series.detail, media.type == .series { await model.review.record(detail, for: media.id) }
         }
         .task(id: titleID) {
             guard let title, title.type == .series else { return }
@@ -105,6 +110,11 @@ struct LibraryTitleView: View {
                 }
             }
         }
+        let review = model.review.review(of: title, files: series.packFiles)
+        if let media = series.detail?.summary ?? title.media {
+            MissingEpisodesSection(title: title, review: review, media: media)
+        }
+        BetterVersionSection(title: title, review: review, media: series.detail?.summary ?? title.media)
         releasesSection(title, header: "Releases", footer: unplacedNote(layout))
     }
 

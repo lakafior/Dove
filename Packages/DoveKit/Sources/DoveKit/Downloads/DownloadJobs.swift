@@ -19,6 +19,8 @@ public final class DownloadJobs {
     @ObservationIgnored private var pollTask: Task<Void, Never>?
     /// Jobs being advanced right now, so overlapping refreshes do not start or delete twice.
     @ObservationIgnored private var inFlight: Set<DownloadJob.ID> = []
+    /// Called once a job is done (every file on the device, the item deleted) or stops on an error.
+    @ObservationIgnored public var onEnded: (@MainActor (DownloadJob, DownloadJob.Outcome) -> Void)?
 
     public init(
         store: DownloadJobStore,
@@ -31,7 +33,7 @@ public final class DownloadJobs {
         self.pollInterval = pollInterval
         self.backend = backend
         jobs = store.load()
-        downloads.onSettled = { [weak self] _ in
+        downloads.onSettled { [weak self] _ in
             Task { await self?.refresh() }
         }
     }
@@ -160,6 +162,7 @@ public final class DownloadJobs {
             }
             try await service.delete(job.itemID)
             remove(job.id)
+            onEnded?(job, .finished(files: ids.count))
         } catch {
             fail(job.id, "Downloaded, but not removed from \(job.backend.displayName): \(error.localizedDescription)")
         }
@@ -168,6 +171,7 @@ public final class DownloadJobs {
     private func fail(_ id: DownloadJob.ID, _ reason: String) {
         update(id) { $0.state = .failed(reason: reason) }
         save()
+        if let job = self[id] { onEnded?(job, .failed(reason: reason)) }
     }
 
     private func remove(_ id: DownloadJob.ID) {

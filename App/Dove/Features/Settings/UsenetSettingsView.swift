@@ -181,6 +181,11 @@ struct NewznabIndexersView: View {
                 if !indexer.enabled { Text("off").font(.caption).foregroundStyle(.secondary) }
             }
             Text(usageText(indexer)).font(.caption).foregroundStyle(.secondary)
+            if let twin = indexer.sameFeed(in: model.newznabIndexers) {
+                Label("Same feed as \(twin.name)", systemImage: "exclamationmark.triangle.fill")
+                    .font(.caption)
+                    .foregroundStyle(.orange)
+            }
         }
     }
 
@@ -265,6 +270,12 @@ private struct NewznabIndexerEditor: View {
                 }
                 .disabled(isTesting || draft == nil)
                 if let status { Text(status).font(.footnote) }
+                if let draft, let twin = draft.sameFeed(in: model.newznabIndexers) {
+                    Label("\(twin.name) already asks this feed: both would return the same results under two names.",
+                          systemImage: "exclamationmark.triangle.fill")
+                        .font(.footnote)
+                        .foregroundStyle(.orange)
+                }
             } footer: {
                 Text("A test uses two API hits.")
             }
@@ -310,6 +321,14 @@ private struct NewznabIndexerEditor: View {
         return result
     }
 
+    /// Names the trackers behind the answer: a Jackett or Prowlarr feed pasted under the wrong name shows here.
+    static func describe(_ result: NewznabSearch.TestResult) -> String {
+        guard result.results > 0 else { return "✅ The indexer answered (no results for the test search)." }
+        let count = "\(result.results) result\(result.results == 1 ? "" : "s")"
+        guard !result.trackers.isEmpty else { return "✅ The indexer answered a search: \(count)." }
+        return "✅ \(count) from \(result.trackers.joined(separator: ", "))."
+    }
+
     private func test() {
         guard let draft else { return }
         isTesting = true
@@ -317,8 +336,8 @@ private struct NewznabIndexerEditor: View {
         Task {
             defer { isTesting = false }
             do {
-                try await model.newznab.test(draft)
-                status = "✅ The indexer answered a search."
+                let result = try await model.newznab.test(draft)
+                status = Self.describe(result)
             } catch {
                 status = "❌ \(error.localizedDescription)"
             }

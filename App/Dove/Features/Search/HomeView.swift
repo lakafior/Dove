@@ -17,6 +17,8 @@ struct HomeView: View {
             if needsSetup { setupCard }
             servicesStrip
             activity
+            episodes
+            betterVersions
             recentlyAdded
             shelves
             recentSearches
@@ -103,6 +105,58 @@ struct HomeView: View {
                     Button("\(active.count - 4) more in the Library") { model.selectedTab = .library }
                         .font(.footnote)
                         .padding(.horizontal)
+                }
+            }
+        }
+    }
+
+    // MARK: - Review
+
+    /// Series with new or missing episodes (`LibraryReviewModel`, refreshed after the library loads).
+    @ViewBuilder
+    private var episodes: some View {
+        let entries = model.review.episodeTitles(in: library.titles)
+        if !entries.isEmpty {
+            VStack(alignment: .leading, spacing: 10) {
+                HomeHeading(entries.contains { !$0.review.new.isEmpty } ? "New episodes" : "Missing episodes")
+                PosterShelf {
+                    ForEach(entries, id: \.title.id) { entry in
+                        NavigationLink(value: TitleRoute(id: entry.title.id)) {
+                            PosterCard(url: entry.title.media?.poster, title: entry.title.name, subtitle: entry.review.episodeSummary)
+                        }
+                        .buttonStyle(.plain)
+                        .contextMenu {
+                            Button("Hide", systemImage: "eye.slash") {
+                                model.review.dismissEpisodes(of: entry.title, entry.review.new + entry.review.missing)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /// Titles held in a weak quality (720p, HDTV, AV1…): a tap opens the title, where sources beat it.
+    @ViewBuilder
+    private var betterVersions: some View {
+        let entries = model.review.weakTitles(in: library.titles)
+        if !entries.isEmpty {
+            VStack(alignment: .leading, spacing: 10) {
+                HomeHeading("Could be better")
+                PosterShelf {
+                    ForEach(entries, id: \.title.id) { entry in
+                        NavigationLink(value: TitleRoute(id: entry.title.id)) {
+                            PosterCard(url: entry.title.media?.poster, title: entry.title.name, subtitle: entry.review.qualitySummary, width: 90)
+                        }
+                        .buttonStyle(.plain)
+                        .contextMenu {
+                            ForEach(entry.review.weak, id: \.self) { spot in
+                                Button("Keep \(spot.season.map { "S\($0) " } ?? "")\(spot.quality.label ?? "")", systemImage: "checkmark") {
+                                    model.review.dismissQuality(of: entry.title, spot.quality)
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }

@@ -25,10 +25,12 @@ targets:
     sources:
       - App/Dove
       - App/Shared
+      - App/Activity
     dependencies:
       - package: DoveKit
       - target: DoveShare
       - target: DoveFiles
+      - target: DoveWidgets
     info:
       path: App/Dove/Info.plist
       properties:
@@ -57,6 +59,8 @@ targets:
         LSApplicationQueriesSchemes: [infuse, vlc-x-callback, outplayer, senplayer, nplayer-https, open-vidhub]
         # Audiobooks keep playing with the screen locked (AudiobookPlayer).
         UIBackgroundModes: [audio]
+        # Phone downloads on the Lock Screen and in the Dynamic Island (DownloadAlerts, DoveWidgets).
+        NSSupportsLiveActivities: true
         # Downloaded files (Documents) show in Files under On My iPhone › Dove.
         UIFileSharingEnabled: true
         LSSupportsOpeningDocumentsInPlace: true
@@ -161,6 +165,31 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: net.smigi.dove.files
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_CFBundleDisplayName: Dove
+        TARGETED_DEVICE_FAMILY: "1"
+        SKIP_INSTALL: YES
+        ENABLE_USER_SCRIPT_SANDBOXING: YES
+        SWIFT_STRICT_CONCURRENCY: complete
+
+  # The Live Activity for phone downloads (drawn here, started and updated by the app).
+  DoveWidgets:
+    type: app-extension
+    platform: iOS
+    sources:
+      - App/DoveWidgets
+      - App/Activity
+    dependencies:
+      - package: DoveKit
+    info:
+      path: App/DoveWidgets/Info.plist
+      properties:
+        CFBundleDisplayName: Dove
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: net.smigi.dove.widgets
         GENERATE_INFOPLIST_FILE: YES
         INFOPLIST_KEY_CFBundleDisplayName: Dove
         TARGETED_DEVICE_FAMILY: "1"

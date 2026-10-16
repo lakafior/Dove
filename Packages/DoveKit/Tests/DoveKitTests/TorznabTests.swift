@@ -46,6 +46,30 @@ struct TorznabTests {
         #expect(program.librarySource == .torrentURL(program.torrentURL!))
     }
 
+    @Test func aTestSearchNamesTheTrackersThatAnswered() async throws {
+        let transport = MockTransport()
+        let caps = #"<caps><limits max="100"/><searching><movie-search available="yes" supportedParams="q,imdbid"/></searching></caps>"#
+        await transport.stub("/torznab/api", queryContains: "t=caps", body: Data(caps.utf8), contentType: "application/xml")
+        await transport.stub("/torznab/api", queryContains: "t=movie", body: try Fixture.data("torznab_search", extension: "xml"), contentType: "application/rss+xml")
+        let search = NewznabSearch(indexers: [jackett], stateURL: nil, transport: transport)
+        let result = try await search.test(jackett)
+        #expect(result.results == 1, "movie searches keep movies only")
+        #expect(result.trackers == ["Public Tracker"])
+    }
+
+    @Test func twoIndexersWithTheSameFeedAreSpotted() {
+        let seedpool = NewznabIndexer(id: "a", kind: .torznab, name: "Seedpool",
+                                      url: URL(string: "https://jackett.example/api/v2.0/indexers/seedpool/results/torznab/")!, apiKey: "K")
+        var polish = seedpool
+        polish.id = "b"
+        polish.name = "Polish tracker"
+        polish.url = URL(string: "http://Jackett.example/api/v2.0/indexers/seedpool/results/torznab")!
+        #expect(polish.sameFeed(in: [seedpool, polish])?.name == "Seedpool")
+        polish.url = URL(string: "https://jackett.example/api/v2.0/indexers/polishtracker/results/torznab")!
+        #expect(polish.sameFeed(in: [seedpool, polish]) == nil)
+        #expect(seedpool.sameFeed(in: [seedpool]) == nil, "an indexer is not its own duplicate")
+    }
+
     @Test func movieSearchesKeepMoviesOnly() async throws {
         let found = try await search(.movie(imdbID: "tt1", title: "Some Movie"))
         #expect(found.map(\.title) == ["Some.Movie.2023.1080p.BluRay.x264-GRP"])
