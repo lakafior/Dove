@@ -283,6 +283,7 @@ struct SearchView: View {
         guard !query.isEmpty else { return }
         let category = activeCategory
         home.remember(query, category: category)
+        SiriSuggestions.searched(query)
         if let newznabCategory = category.newznabCategory { return searchOther(query, in: newznabCategory) }
         guard model.addonSet.canSearch else {
             message = "Add a TMDB key or a Stremio addon that can search (for example AIOMetadata or Cinemeta) in Settings."

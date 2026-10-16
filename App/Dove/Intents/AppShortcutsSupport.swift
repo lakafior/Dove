@@ -1,3 +1,4 @@
+import AppIntents
 import CoreSpotlight
 import DoveKit
 import SwiftUI
@@ -24,6 +25,23 @@ extension AppModel {
         }
         if let refusal = await playAudiobook(book) { return .failed(refusal) }
         return .playing(book.name)
+    }
+}
+
+// MARK: - Siri suggestions
+
+/// Tells iOS what the user does in Dove (intent donations), so Siri can suggest it on the Lock Screen, in Spotlight
+/// and in Shortcuts at the usual time: "Continue Audiobook" after listening starts, "Search in Dove" after searches.
+/// Donations stay on the device.
+enum SiriSuggestions {
+    static func listened() {
+        Task { _ = try? await IntentDonationManager.shared.donate(intent: ContinueAudiobookIntent()) }
+    }
+
+    static func searched(_ query: String) {
+        var intent = SearchInDoveIntent()
+        intent.query = query
+        Task { _ = try? await IntentDonationManager.shared.donate(intent: intent) }
     }
 }
 

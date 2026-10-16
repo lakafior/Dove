@@ -140,6 +140,12 @@ struct DoveShortcuts: AppShortcutsProvider {
             systemImageName: "headphones"
         )
         AppShortcut(
+            intent: AddFromClipboardIntent(),
+            phrases: ["Add the clipboard to \(.applicationName)"],
+            shortTitle: "Add from Clipboard",
+            systemImageName: "doc.on.clipboard"
+        )
+        AppShortcut(
             intent: SearchInDoveIntent(),
             phrases: ["Search \(.applicationName)", "Search in \(.applicationName)"],
             shortTitle: "Search",

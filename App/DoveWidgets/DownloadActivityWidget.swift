@@ -11,6 +11,10 @@ struct DoveWidgets: WidgetBundle {
         WatchlistWidget()
         ListeningWidget()
         DownloadActivityWidget()
+        if #available(iOS 18.0, *) {
+            ContinueListeningControl()
+            AddFromClipboardControl()
+        }
     }
 }
 

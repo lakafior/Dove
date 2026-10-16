@@ -87,6 +87,7 @@ extension AppModel {
                     cover: book.book?.cover, item: item, tracks: tracks
                 ))
                 audiobook.isPresented = true
+                SiriSuggestions.listened()
                 return nil
             case .failure(let reason):
                 refusal = reason.message
