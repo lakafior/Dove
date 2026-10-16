@@ -215,7 +215,8 @@ struct SeasonRow: View {
 }
 
 /// A season's episodes, each matched to a file: tap to play, long-press for "play from here", versions,
-/// link and download.
+/// link and download. Missing episodes open their sources, and a season the library lacks (in full or in part)
+/// offers its season packs.
 struct LibrarySeasonView: View {
     @Environment(AppModel.self) private var model
     let series: SeriesModel
@@ -223,35 +224,64 @@ struct LibrarySeasonView: View {
     let number: Int
 
     private var title: LibraryTitle? { model.library.title(id: titleID) }
+    /// The detail's summary carries IMDb IDs, which the source search needs.
+    private var media: MediaSummary? { series.detail?.summary ?? title?.media }
 
     var body: some View {
         List {
             if let title, let layout = Optional(series.layout(of: title)),
                let season = layout.seasons.first(where: { $0.number == number }) {
                 Section {
-                    Button {
-                        play(season.available, of: title)
-                    } label: {
-                        Label("Play \(season.title)", systemImage: "play.fill")
-                            .labelStyle(.titleAndIcon)
-                            .font(.headline)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 6)
+                    if !season.available.isEmpty {
+                        Button {
+                            play(season.available, of: title)
+                        } label: {
+                            Label("Play \(season.title)", systemImage: "play.fill")
+                                .labelStyle(.titleAndIcon)
+                                .font(.headline)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 6)
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .buttonBorderShape(.roundedRectangle(radius: 12))
+                        .listRowInsets(EdgeInsets())
+                        .listRowBackground(Color.clear)
                     }
-                    .buttonStyle(.borderedProminent)
-                    .buttonBorderShape(.roundedRectangle(radius: 12))
-                    .disabled(season.available.isEmpty)
-                    .listRowInsets(EdgeInsets())
-                    .listRowBackground(Color.clear)
+                    if let media, let first = season.episodes.first?.info, number > 0,
+                       season.available.count < season.episodes.count {
+                        NavigationLink {
+                            SourcesView(
+                                title: "\(media.name) S\(number.twoDigits)",
+                                type: .series,
+                                id: first.id,
+                                scope: .season(number),
+                                airedEpisodes: season.episodes.count,
+                                searchTitle: media.name,
+                                media: media
+                            )
+                        } label: {
+                            Label("Find \(season.title)", systemImage: "magnifyingglass")
+                        }
+                        .disabled(!model.addonSet.hasStreams)
+                    }
                 } footer: {
                     Text(series.message ?? season.summary)
                 }
                 Section {
                     ForEach(season.episodes) { episode in
-                        EpisodeRow(episode: episode, chosen: series.file(for: episode)) {
-                            play([episode], of: title)
+                        if !episode.isAvailable, let media, let info = episode.info {
+                            NavigationLink {
+                                EpisodeSourcesView(media: media, episode: info)
+                            } label: {
+                                EpisodeRowLabel(episode: episode, chosen: nil)
+                            }
+                            .disabled(!model.addonSet.hasStreams)
+                        } else {
+                            EpisodeRow(episode: episode, chosen: series.file(for: episode)) {
+                                play([episode], of: title)
+                            }
+                            .contextMenu { menu(for: episode, in: layout, of: title) }
                         }
-                        .contextMenu { menu(for: episode, in: layout, of: title) }
                     }
                 }
             } else {
@@ -301,23 +331,34 @@ private struct EpisodeRow: View {
 
     var body: some View {
         Button(action: play) {
-            HStack(alignment: .top, spacing: 12) {
-                still
-                VStack(alignment: .leading, spacing: 3) {
-                    Text("\(episode.number). \(episode.info?.title ?? episode.code)")
-                        .font(.subheadline.weight(.medium))
-                        .lineLimit(2)
-                    Text(details).font(.caption).foregroundStyle(.secondary).lineLimit(1)
-                    if let overview = episode.info?.overview, !overview.isEmpty {
-                        Text(overview).font(.caption).foregroundStyle(.secondary).lineLimit(2)
-                    }
-                }
-                Spacer(minLength: 0)
-            }
-            .contentShape(Rectangle())
+            EpisodeRowLabel(episode: episode, chosen: chosen)
         }
         .tint(.primary)
         .disabled(!episode.isAvailable)
+        .opacity(episode.isAvailable ? 1 : 0.55)
+    }
+}
+
+/// An episode's still, title, facts and overview; missing ones are dimmed, with a search mark.
+private struct EpisodeRowLabel: View {
+    let episode: LibraryEpisode
+    let chosen: EpisodeFile?
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            still
+            VStack(alignment: .leading, spacing: 3) {
+                Text("\(episode.number). \(episode.info?.title ?? episode.code)")
+                    .font(.subheadline.weight(.medium))
+                    .lineLimit(2)
+                Text(details).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                if let overview = episode.info?.overview, !overview.isEmpty {
+                    Text(overview).font(.caption).foregroundStyle(.secondary).lineLimit(2)
+                }
+            }
+            Spacer(minLength: 0)
+        }
+        .contentShape(Rectangle())
         .opacity(episode.isAvailable ? 1 : 0.55)
     }
 
@@ -332,12 +373,10 @@ private struct EpisodeRow: View {
         .frame(width: 112, height: 63)
         .clipShape(RoundedRectangle(cornerRadius: 8))
         .overlay {
-            if episode.isAvailable {
-                Image(systemName: "play.circle.fill")
-                    .font(.title2)
-                    .symbolRenderingMode(.palette)
-                    .foregroundStyle(.white, .black.opacity(0.35))
-            }
+            Image(systemName: episode.isAvailable ? "play.circle.fill" : "magnifyingglass.circle.fill")
+                .font(.title2)
+                .symbolRenderingMode(.palette)
+                .foregroundStyle(.white, .black.opacity(0.35))
         }
     }
 
