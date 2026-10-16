@@ -78,6 +78,7 @@ final class AppModel {
     /// Handles `onOpenURL`. Copies iOS made into Documents/Inbox are removed once read,
     /// so they do not pile up next to downloads in Files.
     func open(_ url: URL) {
+        if DeepLink.open(url, using: self) { return }
         openedSource = SourceDetector.source(opening: url).map { SourceBatch([$0]) }
         if url.isFileURL, url.deletingLastPathComponent().lastPathComponent == "Inbox",
            url.resolvingSymlinksInPath().path.hasPrefix(URL.documentsDirectory.resolvingSymlinksInPath().path) {
@@ -440,6 +441,7 @@ final class AppModel {
         if let account = services.accounts[.torBox], let plan = TorBoxPlan(account: account) {
             torBoxPlan.detected = plan
         }
+        WidgetSnapshotWriter.update(using: self)
     }
 
     /// TorBox has a key and a plan that keeps seeding.

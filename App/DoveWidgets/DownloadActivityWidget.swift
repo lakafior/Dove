@@ -6,6 +6,10 @@ import WidgetKit
 @main
 struct DoveWidgets: WidgetBundle {
     var body: some Widget {
+        ServicesWidget()
+        LibraryWidget()
+        WatchlistWidget()
+        ListeningWidget()
         DownloadActivityWidget()
     }
 }

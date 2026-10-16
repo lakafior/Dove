@@ -43,6 +43,9 @@ targets:
         CFBundleURLTypes:
           - CFBundleURLName: net.smigi.dove.magnet
             CFBundleURLSchemes: [magnet]
+          # Widgets' links (DeepLink): dove://watchlist, dove://title/<id>…
+          - CFBundleURLName: net.smigi.dove.app
+            CFBundleURLSchemes: [dove]
         CFBundleDocumentTypes:
           - CFBundleTypeName: BitTorrent file
             LSHandlerRank: Alternate
@@ -57,8 +60,9 @@ targets:
           NSAllowsLocalNetworking: true
         # Players Dove hands links to (ExternalPlayer.scheme): canOpenURL tells which are installed.
         LSApplicationQueriesSchemes: [infuse, vlc-x-callback, outplayer, senplayer, nplayer-https, open-vidhub]
-        # Audiobooks keep playing with the screen locked (AudiobookPlayer).
-        UIBackgroundModes: [audio]
+        # Audiobooks keep playing with the screen locked (AudiobookPlayer); fetch: BackgroundRefresh.
+        UIBackgroundModes: [audio, fetch]
+        BGTaskSchedulerPermittedIdentifiers: [net.smigi.dove.refresh]
         # Phone downloads on the Lock Screen and in the Dynamic Island (DownloadAlerts, DoveWidgets).
         NSSupportsLiveActivities: true
         # The app icon's menu (QuickActions); "Continue Listening" is added at runtime.
@@ -193,16 +197,25 @@ targets:
     sources:
       - App/DoveWidgets
       - App/Activity
+      - App/Shared/BackendBadge.swift
     dependencies:
       - package: DoveKit
     info:
       path: App/DoveWidgets/Info.plist
       properties:
         CFBundleDisplayName: Dove
+        # Read by SharedConfiguration.appGroupContainer: the widgets draw the app's WidgetSnapshot.
+        DoveAppGroup: group.net.smigi.dove
         NSExtension:
           NSExtensionPointIdentifier: com.apple.widgetkit-extension
+    entitlements:
+      path: App/DoveWidgets/DoveWidgets.entitlements
+      properties:
+        com.apple.security.application-groups: [group.net.smigi.dove]
     settings:
       base:
+        # ContinueAudiobookIntent's widget copy does not reach AppModel.
+        SWIFT_ACTIVE_COMPILATION_CONDITIONS: $(inherited) WIDGET_EXTENSION
         PRODUCT_BUNDLE_IDENTIFIER: net.smigi.dove.widgets
         GENERATE_INFOPLIST_FILE: YES
         INFOPLIST_KEY_CFBundleDisplayName: Dove

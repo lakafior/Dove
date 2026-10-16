@@ -41,7 +41,11 @@ struct RootView: View {
         // Download-only jobs wait for the service only while Dove is open: iOS has no background polling.
         .onChange(of: scenePhase, initial: true) {
             if scenePhase == .active { model.downloadJobs.startPolling() } else { model.downloadJobs.stopPolling() }
-            if scenePhase == .background { QuickActions.updateDynamic(using: model) }
+            if scenePhase == .background {
+                QuickActions.updateDynamic(using: model)
+                WidgetSnapshotWriter.update(using: model)
+                BackgroundRefresh.schedule()
+            }
         }
         .sheet(item: Binding(get: { model.openedSource }, set: { model.openedSource = $0 })) { batch in
             AddSourceSheet(sources: batch.sources) { result in

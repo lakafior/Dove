@@ -8,6 +8,7 @@ extension AppModel {
     func toggleWatchlist(_ media: MediaSummary, otherIDs: [String] = []) {
         watchlist.toggle(media, otherIDs: otherIDs)
         SpotlightIndex.update(using: self)
+        WidgetSnapshotWriter.update(using: self)
         guard watchlist.contains(media) else { return }
         Task {
             await review.run(using: self)

@@ -1,22 +1,24 @@
 import DoveKit
 import SwiftUI
 
-/// Small colored tag naming a service: RD, TB, OC, DL, ND.
+/// Small colored tag naming a service: RD, TB, OC, DL, ND. Also compiled into `DoveWidgets`.
 struct BackendBadge: View {
     let backend: BackendID
 
     var body: some View {
-        Text(abbreviation)
+        Text(backend.abbreviation)
             .font(.caption2.weight(.bold))
             .padding(.horizontal, 5)
             .padding(.vertical, 1)
-            .background(color.opacity(0.18), in: RoundedRectangle(cornerRadius: 4))
-            .foregroundStyle(color)
+            .background(backend.tint.opacity(0.18), in: RoundedRectangle(cornerRadius: 4))
+            .foregroundStyle(backend.tint)
             .accessibilityLabel(backend.displayName)
     }
+}
 
-    private var abbreviation: String {
-        switch backend {
+extension BackendID {
+    var abbreviation: String {
+        switch self {
         case .realDebrid: "RD"
         case .torBox: "TB"
         case .offcloud: "OC"
@@ -27,8 +29,8 @@ struct BackendBadge: View {
         }
     }
 
-    private var color: Color {
-        switch backend {
+    var tint: Color {
+        switch self {
         case .realDebrid: .green
         case .torBox: .purple
         case .offcloud: .blue

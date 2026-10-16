@@ -33,6 +33,7 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
         // Download notices show as banners while Dove is open too (`DownloadAlerts`).
         UNUserNotificationCenter.current().delegate = self
+        BackgroundRefresh.register(model: model)
         // Artwork has its own disk cache (`ImageCache`); this one serves the rest of URLSession.shared.
         URLCache.shared = URLCache(memoryCapacity: 50 * 1024 * 1024, diskCapacity: 50 * 1024 * 1024)
         return true

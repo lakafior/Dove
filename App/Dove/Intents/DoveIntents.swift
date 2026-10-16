@@ -99,21 +99,6 @@ struct SearchInDoveIntent: AppIntent {
     }
 }
 
-/// Plays on the audiobook last listened to, from its saved place, without opening Dove.
-struct ContinueAudiobookIntent: AudioPlaybackIntent {
-    static let title: LocalizedStringResource = "Continue Audiobook"
-    static let description = IntentDescription("Plays the audiobook you listened to last, from where you left it.")
-
-    @MainActor
-    func perform() async throws -> some IntentResult & ProvidesDialog {
-        let model = try runningModel()
-        switch await model.continueAudiobook() {
-        case .playing(let name): return .result(dialog: "Playing \(name).")
-        case .failed(let message): throw DoveIntentError.failed(message)
-        }
-    }
-}
-
 struct OpenWatchlistIntent: AppIntent {
     static let title: LocalizedStringResource = "Open Watchlist"
     static let description = IntentDescription("Opens Dove's watchlist.")
