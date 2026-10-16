@@ -192,6 +192,7 @@ final class LibraryModel {
         // After matching: only matched series have an episode list.
         await app.review.run(using: app)
         await app.watchlist.refresh(using: app)
+        SpotlightIndex.update(using: app)
     }
 
     /// Looks every title up again (e.g. after adding a TMDB key). The user's own choices stay, and a title

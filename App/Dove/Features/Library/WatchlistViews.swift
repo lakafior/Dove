@@ -7,6 +7,7 @@ extension AppModel {
     /// Adds or removes a title, then fetches what the watchlist needs for it (a series' episodes, a movie's dates).
     func toggleWatchlist(_ media: MediaSummary, otherIDs: [String] = []) {
         watchlist.toggle(media, otherIDs: otherIDs)
+        SpotlightIndex.update(using: self)
         guard watchlist.contains(media) else { return }
         Task {
             await review.run(using: self)

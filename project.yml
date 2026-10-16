@@ -61,6 +61,20 @@ targets:
         UIBackgroundModes: [audio]
         # Phone downloads on the Lock Screen and in the Dynamic Island (DownloadAlerts, DoveWidgets).
         NSSupportsLiveActivities: true
+        # The app icon's menu (QuickActions); "Continue Listening" is added at runtime.
+        UIApplicationShortcutItems:
+          - UIApplicationShortcutItemType: net.smigi.dove.add-clipboard
+            UIApplicationShortcutItemTitle: Add from Clipboard
+            UIApplicationShortcutItemIconSymbolName: doc.on.clipboard
+          - UIApplicationShortcutItemType: net.smigi.dove.search
+            UIApplicationShortcutItemTitle: Search
+            UIApplicationShortcutItemIconSymbolName: magnifyingglass
+          - UIApplicationShortcutItemType: net.smigi.dove.watchlist
+            UIApplicationShortcutItemTitle: Watchlist
+            UIApplicationShortcutItemIconSymbolName: bookmark
+          - UIApplicationShortcutItemType: net.smigi.dove.downloads
+            UIApplicationShortcutItemTitle: Downloads
+            UIApplicationShortcutItemIconSymbolName: arrow.down.circle
         # Downloaded files (Documents) show in Files under On My iPhone › Dove.
         UIFileSharingEnabled: true
         LSSupportsOpeningDocumentsInPlace: true

@@ -2,6 +2,7 @@ import AVFoundation
 import DoveKit
 import Foundation
 import Observation
+import SwiftUI
 
 /// App-wide state: which backends are configured and how sources are routed.
 @MainActor
@@ -31,6 +32,48 @@ final class AppModel {
     var selectedTab: AppTab = .search
     /// A shelf tapped on the home screen: the Library opens filtered to it, then clears this.
     var libraryCategoryRequest: LibraryFilter.Category?
+    /// Words to search, from Siri, Shortcuts or a Quick Action; the Search tab runs it and clears this.
+    var searchRequest: String?
+    /// The Search tab's stack, so Spotlight and Quick Actions can open a title or the watchlist there.
+    var searchPath = NavigationPath()
+
+    /// The model of the running app, for App Intents and the scene delegate (Quick Actions), which SwiftUI's
+    /// environment does not reach. Set once in `init`; `AppDelegate` keeps it alive.
+    private(set) static weak var current: AppModel?
+
+    /// Where Siri, Spotlight and Quick Actions send the user.
+    enum Destination {
+        case search(String?)
+        case title(id: String)
+        case book(id: String)
+        case media(MediaSummary)
+        case watchlist
+        case downloads
+    }
+
+    func show(_ destination: Destination) {
+        switch destination {
+        case .downloads:
+            selectedTab = .downloads
+            return
+        case .search(let text):
+            searchPath = NavigationPath()
+            searchRequest = text
+        case .title(let id):
+            searchPath = NavigationPath()
+            searchPath.append(TitleRoute(id: id))
+        case .book(let id):
+            searchPath = NavigationPath()
+            searchPath.append(BookRoute(id: id))
+        case .media(let media):
+            searchPath = NavigationPath()
+            searchPath.append(media)
+        case .watchlist:
+            searchPath = NavigationPath()
+            searchPath.append(WatchlistRoute())
+        }
+        selectedTab = .search
+    }
 
     /// Handles `onOpenURL`. Copies iOS made into Documents/Inbox are removed once read,
     /// so they do not pile up next to downloads in Files.
@@ -174,6 +217,7 @@ final class AppModel {
     }
 
     init() {
+        defer { Self.current = self }
         // Keys saved before the shared Keychain group existed move into it once, so the extension sees them.
         if SharedConfiguration.keychainGroup != nil, !UserDefaults.standard.bool(forKey: Self.migratedKey) {
             keychain.migrateToAccessGroup()

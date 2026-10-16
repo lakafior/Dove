@@ -64,7 +64,7 @@ struct SearchView: View {
     }
 
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: Bindable(model).searchPath) {
             Group {
                 if showsResults {
                     resultsList
@@ -106,6 +106,13 @@ struct SearchView: View {
             .textInputAutocapitalization(.never)
             .autocorrectionDisabled()
             .onSubmit(of: .search, handleSubmit)
+            // "Search in Dove" from Siri, Shortcuts or a Quick Action.
+            .task(id: model.searchRequest) {
+                guard let request = model.searchRequest else { return }
+                model.searchRequest = nil
+                text = request
+                if !request.isEmpty { handleSubmit() }
+            }
             .toolbar {
                 if !model.newznab.isEmpty {
                     ToolbarItem(placement: .topBarTrailing) { SourcesMenu(category: activeCategory, refresh: isSearching) }

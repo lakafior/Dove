@@ -1,3 +1,4 @@
+import CoreSpotlight
 import SwiftUI
 
 struct RootView: View {
@@ -31,12 +32,16 @@ struct RootView: View {
                 .tag(AppTab.settings)
         }
         .onOpenURL { model.open($0) }
+        .onContinueUserActivity(CSSearchableItemActionType) { activity in
+            if let id = activity.userInfo?[CSSearchableItemActivityIdentifier] as? String { SpotlightIndex.open(id, using: model) }
+        }
         #if DEBUG
         .task { AudiobookDemo.startIfRequested(on: model) }
         #endif
         // Download-only jobs wait for the service only while Dove is open: iOS has no background polling.
         .onChange(of: scenePhase, initial: true) {
             if scenePhase == .active { model.downloadJobs.startPolling() } else { model.downloadJobs.stopPolling() }
+            if scenePhase == .background { QuickActions.updateDynamic(using: model) }
         }
         .sheet(item: Binding(get: { model.openedSource }, set: { model.openedSource = $0 })) { batch in
             AddSourceSheet(sources: batch.sources) { result in
