@@ -87,6 +87,12 @@ struct SettingsView: View {
                     } label: {
                         SettingsRow("Book metadata", symbol: "books.vertical.fill", color: .brown)
                     }
+                    NavigationLink {
+                        DirectDownloadsSettingsView()
+                    } label: {
+                        SettingsRow("Direct downloads", symbol: "arrow.down.doc.fill", color: .green,
+                                    value: model.directSource?.url.host() ?? "Not set up")
+                    }
                 } header: {
                     Text("Search and metadata")
                 } footer: {

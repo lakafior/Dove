@@ -23,6 +23,8 @@ public enum CredentialKey: String, Sendable, CaseIterable {
     case hardcoverToken
     /// JSON array of `BookProvider` (Audiobookshelf metadata providers; URLs and keys may be secret).
     case bookProviders
+    /// JSON array of `DirectSource` (direct-download sites: address and member key).
+    case directSources
     /// JSON array of Stremio addon manifest URLs, in the user's order (they embed tokens).
     case stremioAddons
     /// Password of the user's AIOStreams configuration, for its Search API.

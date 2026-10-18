@@ -29,6 +29,12 @@ struct DownloadsView: View {
                 if let message {
                     Text(message).font(.footnote).foregroundStyle(.red)
                 }
+                if let direct = model.directDownloadMessage {
+                    Text(direct)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                        .onTapGesture { model.directDownloadMessage = nil }
+                }
                 if !activity.isEmpty {
                     Section {
                         ForEach(activity.active + activity.failed) { item in
@@ -181,13 +187,17 @@ private struct DownloadRow: View {
                     }
                 }
                 HStack(spacing: 8) {
-                    BackendBadge(backend: record.backend)
+                    if let backend = record.backend {
+                        BackendBadge(backend: backend)
+                    } else {
+                        Label("Direct", systemImage: "arrow.down.doc").labelStyle(.titleAndIcon)
+                    }
                     Text(detail)
                 }
                 .font(.caption)
                 .foregroundStyle(statusColor)
                 if removesFromService {
-                    Label("Removed from \(record.backend.displayName) when done", systemImage: "arrow.down.to.line")
+                    Label("Removed from \(record.backend?.displayName ?? "the service") when done", systemImage: "arrow.down.to.line")
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                 }

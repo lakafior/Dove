@@ -128,6 +128,11 @@ enum DeepLink {
         case "title":
             let id = String(url.path().dropFirst()).removingPercentEncoding ?? ""
             if !id.isEmpty { app.show(.title(id: id)) }
+        case "direct":
+            // From the share extension: a direct-download site's file page, fetched with the user's key.
+            let md5 = String(url.path().dropFirst())
+            app.show(.downloads)
+            Task { app.directDownloadMessage = await app.startDirectDownload(md5: md5) }
         default: break
         }
         return true

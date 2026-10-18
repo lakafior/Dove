@@ -46,6 +46,8 @@ final class ShareModel {
         case ready([Source])
         /// A movie's or series' page: Dove opens it.
         case title(TitleLink)
+        /// A direct-download site's file page: Dove downloads it.
+        case direct
         case nothing
         case added(String)
     }
@@ -71,6 +73,12 @@ final class ShareModel {
 
     func read(_ items: [NSExtensionItem]) async {
         let providers = items.flatMap { $0.attachments ?? [] }
+        // A direct-download site's file page, with a site set up: Dove fetches it with the user's key.
+        if (try? SharedConfiguration.keychain().get(.directSources)) != nil, let md5 = await Self.directMD5(from: providers) {
+            state = .direct
+            open(URL(string: "dove://direct/\(md5)")!)
+            return
+        }
         let sources = await Self.sources(from: providers)
         if sources.isEmpty, let link = await Self.titleLink(from: providers) {
             // Straight to the title's screen in Dove: nothing to choose here.
@@ -118,6 +126,15 @@ final class ShareModel {
         return found.filter { seen.insert($0.id).inserted }
     }
 
+    /// The md5 of a shared direct-download file page (`…/md5/<md5>`).
+    private static func directMD5(from providers: [NSItemProvider]) async -> String? {
+        for provider in providers where provider.hasItemConformingToTypeIdentifier(UTType.url.identifier) {
+            if let url = try? await url(from: provider), url.scheme?.hasPrefix("http") == true,
+               let md5 = DirectSource.md5(in: url) { return md5 }
+        }
+        return nil
+    }
+
     /// A movie's or series' page among the shared links or text (IMDb, Apple TV, Letterboxd…).
     private static func titleLink(from providers: [NSItemProvider]) async -> TitleLink? {
         for provider in providers where provider.hasItemConformingToTypeIdentifier(UTType.url.identifier) {
@@ -159,7 +176,7 @@ struct ShareView: View {
                 AddSourceView(sources: sources, router: model.router) { message in
                     if let message { model.added(message) } else { model.close() }
                 }
-            case .title:
+            case .title, .direct:
                 ProgressView("Opening in Dove…").navigationTitle("Dove")
             case .nothing:
                 ContentUnavailableView(

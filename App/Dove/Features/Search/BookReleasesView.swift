@@ -14,6 +14,7 @@ struct BookReleasesView: View {
     let route: BookSearchRoute
     @State private var releases: ReleaseList
     @State private var expanded = false
+    @State private var directSearch: BrowserRequest?
 
     init(route: BookSearchRoute) {
         self.route = route
@@ -24,7 +25,15 @@ struct BookReleasesView: View {
 
     var body: some View {
         List {
-            Section { header }
+            Section {
+                header
+                ForEach(model.directSources(for: route.category)) { source in
+                    Button("Search on \(source.url.host() ?? source.name)", systemImage: "safari") {
+                        let words = ([route.book.authors.first, route.book.searchTitle].compactMap { $0 }).joined(separator: " ")
+                        directSearch = BrowserRequest(url: source.searchURL(words, extensions: []))
+                    }
+                }
+            }
             if releases.isSearching {
                 HStack { Spacer(); ProgressView(); Spacer() }
                     .listRowBackground(Color.clear)
@@ -44,6 +53,7 @@ struct BookReleasesView: View {
         .task { if releases.isEmpty, releases.message == nil { search() } }
         .onChange(of: model.sourceSelection) { search() }
         .refreshable { search() }
+        .sheet(item: $directSearch) { DirectBrowserView(start: $0.url) }
     }
 
     private var header: some View {

@@ -20,6 +20,8 @@ struct SearchView: View {
     /// Books and Audiobooks: the metadata services' answer, before any indexer is asked.
     @State private var books: [BookSummary] = []
     @State private var searchedBooks: String?
+    /// The direct-download site's search page, in Dove's browser.
+    @State private var directSearch: BrowserRequest?
     @Environment(\.scenePhase) private var scenePhase
     /// `UIPasteboard.changeCount` the banner was last answered for, so it does not come back for the same copy.
     @AppStorage("clipboardAnsweredChange") private var answeredChange = -1
@@ -137,6 +139,7 @@ struct SearchView: View {
             .onAppear(perform: checkPasteboard)
             .onChange(of: scenePhase) { if scenePhase == .active { checkPasteboard() } }
             .onReceive(NotificationCenter.default.publisher(for: UIPasteboard.changedNotification)) { _ in checkPasteboard() }
+            .sheet(item: $directSearch) { DirectBrowserView(start: $0.url) }
             .sheet(item: $pendingSources) { batch in
                 AddSourceSheet(sources: batch.sources) { result in
                     pendingSources = nil
@@ -170,6 +173,7 @@ struct SearchView: View {
             if !activeCategory.usesAddons, !releases.isEmpty {
                 ReleaseListSection(list: releases, title: books.isEmpty ? nil : "Releases")
             }
+            directSearchSection
             if activeCategory == .media, !results.isEmpty {
                 Section {
                     ForEach(visibleResults) { item in
@@ -266,6 +270,11 @@ struct SearchView: View {
         answeredChange = pasteboardChange
         let trimmed = pasted.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
+        if model.directSource != nil, let url = URL(string: trimmed), url.scheme?.hasPrefix("http") == true,
+           let md5 = DirectSource.md5(in: url) {
+            Task { message = await model.startDirectDownload(md5: md5) }
+            return
+        }
         let sources = SourceDetector.sources(in: trimmed)
         if !sources.isEmpty {
             results = []
@@ -281,6 +290,12 @@ struct SearchView: View {
         // A movie's or series' page (IMDb, Apple TV, Letterboxd…): open that title.
         if SourceDetector.sources(in: text).isEmpty, let link = TitleLink.first(in: text) {
             Task { await model.openTitle(link) }
+            return
+        }
+        // A direct-download site's file page (…/md5/<md5>): fetch it with the user's key.
+        if model.directSource != nil, let url = URL(string: text.trimmingCharacters(in: .whitespacesAndNewlines)),
+           url.scheme?.hasPrefix("http") == true, let md5 = DirectSource.md5(in: url) {
+            Task { message = await model.startDirectDownload(md5: md5) }
             return
         }
         let sources = SourceDetector.sources(in: text)
@@ -333,6 +348,23 @@ extension SearchView {
             if !books.isEmpty { Text(activeCategory == .audiobooks ? "Audiobooks" : "Books") }
         } footer: {
             if !books.isEmpty { Text("From Open Library and Apple Books. Pick one to search the indexers for it.") }
+        }
+    }
+
+    /// "Search on <site>" for the direct-download sites that serve the picked category, once a search ran.
+    @ViewBuilder
+    var directSearchSection: some View {
+        let query = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        let sources = model.directSources(for: activeCategory)
+        let searched = !results.isEmpty || !releases.isEmpty || !books.isEmpty || message != nil || releases.message != nil
+        if !query.isEmpty, !sources.isEmpty, searched, !isSearching, !releases.isSearching {
+            Section {
+                ForEach(sources) { source in
+                    Button("Search on \(source.url.host() ?? source.name)", systemImage: "safari") {
+                        directSearch = BrowserRequest(url: source.searchURL(query, extensions: []))
+                    }
+                }
+            }
         }
     }
 

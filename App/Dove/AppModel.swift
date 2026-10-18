@@ -278,8 +278,12 @@ final class AppModel {
         reloadBookMetadata()
         addonEntries = storedAddonURLs().map { AddonEntry(url: $0) }
         downloads.requestProvider = { [weak self] record in
-            guard let backend = self?.backend(record.backend) else {
-                throw BackendError.api(message: "\(record.backend.displayName) is no longer configured.")
+            guard let self else { throw CancellationError() }
+            if let direct = record.direct {
+                return URLRequest(url: try await directLink(for: direct).url)
+            }
+            guard let id = record.backend, let backend = backend(id) else {
+                throw BackendError.api(message: "\(record.backend?.displayName ?? "The service") is no longer configured.")
             }
             return try await backend.downloadRequest(itemID: record.itemID, fileID: record.fileID)
         }
@@ -613,6 +617,82 @@ final class AppModel {
         else { throw BackendError.api(message: "Save your AIOStreams password first.") }
         try await AIOStreamsSearch(origin: instance.origin, uuid: instance.uuid, password: password).saveDoveVariant()
         aioStreamsVariant = AIOStreamsSearch.unfilteredVariantID
+    }
+
+    // MARK: - Direct downloads
+
+    /// Sites the user added for direct downloads (address and member key), in their order.
+    var directSources: [DirectSource] {
+        guard let json = try? keychain.get(.directSources) else { return [] }
+        return (try? JSONDecoder().decode([DirectSource].self, from: Data(json.utf8))) ?? []
+    }
+
+    /// The account's fast downloads per source, from the last answer (this device only).
+    var directQuotas: [String: DirectDownloadQuota] = {
+        guard let data = UserDefaults.standard.data(forKey: "directQuotas") else { return [:] }
+        return (try? JSONDecoder().decode([String: DirectDownloadQuota].self, from: data)) ?? [:]
+    }() {
+        didSet { UserDefaults.standard.set(try? JSONEncoder().encode(directQuotas), forKey: "directQuotas") }
+    }
+
+    /// Checks the key (when the source is on) before keeping the list.
+    func saveDirectSource(_ source: DirectSource) async throws {
+        if source.enabled { try await DirectDownloadClient(source: source).validate() }
+        var sources = directSources
+        if let index = sources.firstIndex(where: { $0.id == source.id }) {
+            sources[index] = source
+        } else {
+            sources.append(source)
+        }
+        try storeDirectSources(sources)
+    }
+
+    func removeDirectSources(_ ids: Set<String>) throws {
+        try storeDirectSources(directSources.filter { !ids.contains($0.id) })
+        directQuotas = directQuotas.filter { !ids.contains($0.key) }
+    }
+
+    private func storeDirectSources(_ sources: [DirectSource]) throws {
+        let data = try JSONEncoder().encode(sources)
+        try keychain.set(sources.isEmpty ? nil : String(decoding: data, as: UTF8.self), for: .directSources)
+    }
+
+    /// The last direct download started from outside (share sheet), shown at the top of Downloads.
+    var directDownloadMessage: String?
+
+    /// Enabled sites that serve a search category, in the user's order.
+    func directSources(for category: SearchCategory) -> [DirectSource] {
+        directSources.filter { $0.serves(category) }
+    }
+
+    /// The first enabled source; file pages from any host go through it.
+    var directSource: DirectSource? { directSources.first(where: \.enabled) }
+
+    private func directLink(for ref: DirectDownloadRef) async throws -> DirectDownloadLink {
+        guard let source = directSources.first(where: { $0.id == ref.sourceID && $0.enabled }) ?? directSource else {
+            throw BackendError.api(message: "No direct download site is set up. Add one in Settings › Direct downloads.")
+        }
+        let link = try await DirectDownloadClient(source: source).link(md5: ref.md5)
+        if let quota = link.quota { directQuotas[source.id] = quota }
+        return link
+    }
+
+    /// Downloads a file by its md5 through the first enabled source, straight to Downloads (no service, no
+    /// cache). Returns the message to show.
+    func startDirectDownload(md5: String) async -> String {
+        guard let source = directSource else {
+            return "Add a direct download site in Settings › Direct downloads first."
+        }
+        let ref = DirectDownloadRef(sourceID: source.id, md5: md5)
+        do {
+            let link = try await directLink(for: ref)
+            try downloads.start(URLRequest(url: link.url), direct: ref, name: link.fileName(md5: md5))
+            var message = "Downloading to Downloads."
+            if let left = link.quota?.left { message += " \(left) fast downloads left today." }
+            return message
+        } catch {
+            return error.localizedDescription
+        }
     }
 
     // MARK: - Book metadata

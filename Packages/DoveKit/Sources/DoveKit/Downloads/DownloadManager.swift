@@ -80,6 +80,25 @@ public final class DownloadManager: NSObject {
         return record.id
     }
 
+    /// Starts a direct download (a link from a direct-download site), or returns the record already downloading
+    /// or holding that file.
+    @discardableResult
+    public func start(_ request: URLRequest, direct: DirectDownloadRef, name: String, size: Int64? = nil) throws -> DownloadRecord.ID {
+        if let existing = records.first(where: { $0.direct == direct }) {
+            switch existing.state {
+            case .downloading, .finished: return existing.id
+            case .paused, .failed: remove(existing.id)
+            }
+        }
+        if let size { try checkSpace(for: size) }
+        let record = DownloadRecord(
+            backend: nil, direct: direct, itemID: "direct:\(direct.md5)", fileID: direct.md5, name: name, totalBytes: size
+        )
+        records.insert(record, at: 0)
+        run(session.downloadTask(with: request), for: record.id)
+        return record.id
+    }
+
     public func pause(_ id: DownloadRecord.ID) {
         guard let task = tasks[id], self[id]?.state == .downloading else { return }
         // Marked first, so the cancellation that follows is not reported as a failure.

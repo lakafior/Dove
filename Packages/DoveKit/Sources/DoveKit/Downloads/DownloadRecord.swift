@@ -13,7 +13,10 @@ public struct DownloadRecord: Codable, Sendable, Identifiable, Hashable {
     }
 
     public let id: String
-    public let backend: BackendID
+    /// The service the file came from; nil for a direct download (`direct`).
+    public let backend: BackendID?
+    /// Set for files fetched from a direct-download site instead of a service.
+    public let direct: DirectDownloadRef?
     public let itemID: LibraryItem.ID
     public let fileID: LibraryFile.ID
     /// The file's name on the service.
@@ -27,7 +30,8 @@ public struct DownloadRecord: Codable, Sendable, Identifiable, Hashable {
 
     public init(
         id: String = UUID().uuidString,
-        backend: BackendID,
+        backend: BackendID?,
+        direct: DirectDownloadRef? = nil,
         itemID: LibraryItem.ID,
         fileID: LibraryFile.ID,
         name: String,
@@ -38,6 +42,7 @@ public struct DownloadRecord: Codable, Sendable, Identifiable, Hashable {
     ) {
         self.id = id
         self.backend = backend
+        self.direct = direct
         self.itemID = itemID
         self.fileID = fileID
         self.name = name
