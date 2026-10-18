@@ -15,19 +15,11 @@ struct SearchView: View {
     @State private var isSearching = false
     @State private var typeFilter: MediaType?
     @AppStorage("searchCategory") private var category: SearchCategory = .media
-    @State private var otherResults: [StreamGroup] = []
-    @State private var busy: Set<StreamGroup.ID> = []
-    /// Search › Other's own filter (type, private, who found it), for this session only.
-    @State var otherFilter: SourceFilter = {
-        var filter = SourceFilter()
-        filter.sort = .addon
-        return filter
-    }()
-    @State var showOtherFilters = false
-    /// Books and Audiobooks: show the other kind the indexers filed in the category too.
-    @State var showOtherBookKind = false
-    /// Books and Audiobooks: only releases that name this format.
-    @State var bookFormat: BookFileFormat?
+    /// Name searches through Dove's indexers (every category but Movies & TV).
+    @State private var releases = ReleaseList()
+    /// Books and Audiobooks: the metadata services' answer, before any indexer is asked.
+    @State private var books: [BookSummary] = []
+    @State private var searchedBooks: String?
     @Environment(\.scenePhase) private var scenePhase
     /// `UIPasteboard.changeCount` the banner was last answered for, so it does not come back for the same copy.
     @AppStorage("clipboardAnsweredChange") private var answeredChange = -1
@@ -64,7 +56,8 @@ struct SearchView: View {
     /// Results (or a search on its way, or why there are none) replace the home screen; clearing the field
     /// brings it back.
     private var showsResults: Bool {
-        isSearching || !results.isEmpty || !otherResults.isEmpty || (message != nil && !text.isEmpty)
+        isSearching || releases.isSearching || !results.isEmpty || !releases.isEmpty || !books.isEmpty
+            || ((message != nil || releases.message != nil) && !text.isEmpty)
     }
 
     var body: some View {
@@ -126,6 +119,7 @@ struct SearchView: View {
             .navigationDestination(for: WatchlistRoute.self) { _ in WatchlistView() }
             .navigationDestination(for: TitleRoute.self) { LibraryTitleView(titleID: $0.id) }
             .navigationDestination(for: BookRoute.self) { BookTitleView(bookID: $0.id) }
+            .navigationDestination(for: BookSearchRoute.self) { BookReleasesView(route: $0) }
             .navigationDestination(for: ShelfItem.self) { LibraryItemView(item: $0.item) }
             // The field's clear button and Cancel empty the text: back to the home screen.
             .onChange(of: text) {
@@ -138,12 +132,11 @@ struct SearchView: View {
             }
             // Sources switched for a name search: ask again. Title searches use none of them (the source list does).
             .onChange(of: model.sourceSelection) {
-                if !activeCategory.usesAddons, !text.isEmpty, !otherResults.isEmpty || message != nil { handleSubmit() }
+                if !activeCategory.usesAddons, !text.isEmpty, !releases.isEmpty || releases.message != nil { searchReleases() }
             }
             .onAppear(perform: checkPasteboard)
             .onChange(of: scenePhase) { if scenePhase == .active { checkPasteboard() } }
             .onReceive(NotificationCenter.default.publisher(for: UIPasteboard.changedNotification)) { _ in checkPasteboard() }
-            .sheet(isPresented: $showOtherFilters) { otherFilterSheet }
             .sheet(item: $pendingSources) { batch in
                 AddSourceSheet(sources: batch.sources) { result in
                     pendingSources = nil
@@ -161,15 +154,21 @@ struct SearchView: View {
                     .listRowInsets(EdgeInsets())
                     .listRowBackground(Color.clear)
             }
-            if isSearching {
+            if isSearching || releases.isSearching {
                 HStack { Spacer(); ProgressView(); Spacer() }
                     .listRowBackground(Color.clear)
             }
             if let message {
                 Section { Text(message).font(.footnote).foregroundStyle(.secondary) }
             }
-            if !activeCategory.usesAddons, !otherResults.isEmpty {
-                otherResultsSection
+            if !books.isEmpty || searchedBooks != nil {
+                booksSection
+            }
+            if let message = releases.message {
+                Section { Text(message).font(.footnote).foregroundStyle(.secondary) }
+            }
+            if !activeCategory.usesAddons, !releases.isEmpty {
+                ReleaseListSection(list: releases, title: books.isEmpty ? nil : "Releases")
             }
             if activeCategory == .media, !results.isEmpty {
                 Section {
@@ -224,11 +223,11 @@ struct SearchView: View {
 
     private func clearResults() {
         results = []
-        otherResults = []
+        releases.clear()
+        books = []
+        searchedBooks = nil
         message = nil
         typeFilter = nil
-        showOtherBookKind = false
-        bookFormat = nil
     }
 
     /// Offers what was copied in another app. Only `hasStrings`/`hasURLs` are read here, which iOS does not report
@@ -295,7 +294,8 @@ struct SearchView: View {
         let category = activeCategory
         home.remember(query, category: category)
         SiriSuggestions.searched(query)
-        if let newznabCategory = category.newznabCategory { return searchOther(query, in: newznabCategory) }
+        if let format = category.bookFormat { return searchBooks(query, format: format) }
+        if category.newznabCategory != nil { return searchReleases() }
         guard model.addonSet.canSearch else {
             message = "Add a TMDB key or a Stremio addon that can search (for example AIOMetadata or Cinemeta) in Settings."
             return
@@ -314,179 +314,51 @@ struct SearchView: View {
     }
 }
 
-// MARK: - Other
+// MARK: - Books and releases
 
 extension SearchView {
-    @ViewBuilder
-    var otherResultsSection: some View {
-        @Bindable var model = model
+    /// Books and Audiobooks start from Open Library and Apple Books (no indexer hits): a tap on a book searches
+    /// the indexers for it. "Search releases" keeps the name search for what the services do not know.
+    var booksSection: some View {
         Section {
-            Toggle("Download only", isOn: $model.downloadOnly)
-            Button {
-                showOtherFilters = true
-            } label: {
-                Label(
-                    otherFilter.isActive
-                        ? "Showing \(visibleOtherResults.count) of \(otherResults.count) · filters on"
-                        : "Filter and sort",
-                    systemImage: otherFilter.isActive ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease.circle"
-                )
+            ForEach(books) { book in
+                NavigationLink(value: BookSearchRoute(book: book, category: activeCategory)) {
+                    BookRow(book: book, format: activeCategory.bookFormat ?? .ebook)
+                }
             }
-            if !bookFormats.isEmpty { bookFormatBar }
-            ForEach(visibleOtherResults) { group in
-                OtherResultRow(
-                    group: group,
-                    isBusy: busy.contains(group.id),
-                    downloadOnly: model.downloadOnly,
-                    onAdd: canAdd(group) ? { addOther(group) } : nil
-                )
+            if let query = searchedBooks, releases.isEmpty, !releases.isSearching {
+                Button("Search releases for \u{201C}\(query)\u{201D}", systemImage: "magnifyingglass") { searchReleases() }
             }
-            if let toggle = otherBookKindToggle {
-                Button(toggle) { showOtherBookKind.toggle() }
-                    .font(.subheadline)
-            }
+        } header: {
+            if !books.isEmpty { Text(activeCategory == .audiobooks ? "Audiobooks" : "Books") }
         } footer: {
-            if visibleOtherResults.contains(where: { !canAdd($0) }) {
-                Text("NZBs need nzbdav or Usenet on TorBox, Offcloud or Premiumize, torrents a debrid service: set them up in Settings.")
-            }
+            if !books.isEmpty { Text("From Open Library and Apple Books. Pick one to search the indexers for it.") }
         }
     }
 
-    var visibleOtherResults: [StreamGroup] {
-        var groups = bookSplit.matching + (showOtherBookKind ? bookSplit.other : [])
-        if let bookFormat { groups = groups.filter { BookRelease($0).formats.contains(bookFormat) } }
-        return otherFilter.apply(to: groups)
-    }
-
-    /// Books searches hide audiobooks the indexers filed under Books, and the other way round (`BookRelease`).
-    private var bookSplit: (matching: [StreamGroup], other: [StreamGroup]) {
-        guard let category = activeCategory.newznabCategory else { return (otherResults, []) }
-        return StreamGroup.splitByBookKind(otherResults, for: category)
-    }
-
-    private var otherBookKindToggle: String? {
-        let count = bookSplit.other.count
-        guard count > 0 else { return nil }
-        let kind = activeCategory == .books ? (count == 1 ? "audiobook" : "audiobooks") : (count == 1 ? "ebook" : "ebooks")
-        return showOtherBookKind ? "Hide \(count) \(kind)" : "Show \(count) \(kind) filed here"
-    }
-
-    /// Formats the shown book results name, for the chips.
-    private var bookFormats: [BookFileFormat] {
-        guard activeCategory == .books || activeCategory == .audiobooks else { return [] }
-        let groups = bookSplit.matching + (showOtherBookKind ? bookSplit.other : [])
-        return Set(groups.flatMap { BookRelease($0).formats }).sorted()
-    }
-
-    private var bookFormatBar: some View {
-        ScrollView(.horizontal) {
-            HStack(spacing: 8) {
-                formatChip("All", selected: bookFormat == nil) { bookFormat = nil }
-                ForEach(bookFormats, id: \.self) { format in
-                    formatChip(format.displayName, selected: bookFormat == format) {
-                        bookFormat = bookFormat == format ? nil : format
-                    }
-                }
-            }
-        }
-        .scrollIndicators(.hidden)
-    }
-
-    private func formatChip(_ title: String, selected: Bool, action: @escaping () -> Void) -> some View {
-        Button(title, action: action)
-            .font(.subheadline)
-            .buttonStyle(.bordered)
-            .tint(selected ? .accentColor : .secondary)
-            .buttonBorderShape(.capsule)
-    }
-
-    var otherFilterSheet: some View {
-        SourceFilterSheet(
-            filter: $otherFilter,
-            groups: otherResults,
-            dimensions: [.type, .privacy, .provider, .tracker, .cached],
-            sorts: [.addon, .seeders, .newest, .sizeDescending, .sizeAscending],
-            showsAppleTV: false
-        )
-        .presentationDetents([.medium, .large])
-    }
-
-    /// Words in the picked category, through the indexers picked in Sources. Same release from several
-    /// indexers: one row. Rows show at once; then TorBox/Offcloud say which torrents they have cached, and those
-    /// move up.
-    func searchOther(_ query: String, in category: NewznabCategory) {
-        guard !model.newznab.isEmpty else {
-            message = "Add a Newznab or Torznab indexer in Settings › Search › Indexers to search beyond movies and series."
-            return
-        }
-        let indexers = model.indexerIDs(for: activeCategory)
-        guard !indexers.isEmpty else {
-            otherResults = []
-            message = "Every source is off for \(activeCategory.displayName). Turn one on in Sources."
-            return
-        }
+    func searchBooks(_ query: String, format: BookFormat) {
         isSearching = true
-        otherResults = []
-        showOtherBookKind = false
-        bookFormat = nil
-        let search = model.newznab
-        let showAdult = model.showAdult
-        let usenet = model.usenetBackend
-        let checkers = model.cacheCheckers
+        books = []
+        searchedBooks = nil
+        releases.clear()
         Task {
-            let found = await search.search(.text(query, category: category), only: indexers).routed(to: usenet)
-            // Adult results stay out unless shown: indexer category 6000, or a marker in the name.
-            let candidates = showAdult ? found.candidates : found.candidates.filter { candidate in
-                candidate.category.map(ContentKind.init(newznabCategory:)) != .adult && !ContentClassifier.isAdult(name: candidate.title)
-            }
-            otherResults = StreamGroup.group(candidates)
-            let failures = found.failures.joined(separator: "\n")
-            message = otherResults.isEmpty
-                ? (failures.isEmpty ? "Nothing found." : failures)
-                : (failures.isEmpty ? nil : failures)
-            isSearching = false
-            guard !checkers.isEmpty, otherResults.contains(where: { $0.infoHash != nil }) else { return }
-            let checked = await CacheChecker.annotate(otherResults, using: checkers)
-            // Stable: cached torrents first, the indexers' order otherwise.
-            otherResults = checked.filter { $0.kind != .usenet && $0.isCached } + checked.filter { !($0.kind != .usenet && $0.isCached) }
-        }
-    }
-
-    func canAdd(_ group: StreamGroup) -> Bool {
-        group.kind == .usenet ? model.usenetBackend != nil : !model.backends(usenet: false).isEmpty
-    }
-
-    /// Adds through the priority order (NZBs: the Usenet priority; torrents: services that have it
-    /// cached first, then the debrid order); "Download only" fetches every file.
-    func addOther(_ group: StreamGroup) {
-        guard let route = group.route(through: model.router(preferring: group.cachedBackends())) else { return }
-        busy.insert(group.id)
-        Task {
-            defer { busy.remove(group.id) }
             do {
-                // NZBs are filed by the indexer's category (audio, software, books, xxx…), audiobooks the
-                // indexer filed under Books in audiobooks.
-                let category = group.contentKind == .audiobooks ? .audiobooks : group.category.flatMap(AddCategory.init(newznabCategory:))
-                // A Torznab result's .torrent link carries the indexer's key: fetch it here, never hand it over.
-                // A private release a service has cached goes there as a magnet (`AddRoute`).
-                let result = try await route.router.add(try await IndexerTorrent.prepare(route.source), category: category)
-                model.library.recordAdded(
-                    AddedHint(releaseName: group.releaseName),
-                    backend: result.backend, itemIDs: result.itemIDs, infoHash: group.infoHash
-                )
-                // The indexer knows better than the name: adult releases are often unmarked, audiobooks are
-                // often bare "Author - Title" folders of mp3s.
-                let kind = group.contentKind
-                if kind == .adult || kind == .audiobooks {
-                    model.library.setKind(kind, backend: result.backend, itemID: result.itemID)
-                }
-                message = model.downloadOnly
-                    ? await model.startDownloadOnly(result.itemID, on: result.backend, name: group.title, pick: .allVideos)
-                    : "Added to \(result.backend.displayName)."
+                books = BookSummary.unique(try await model.library.searchBooks(query, format: format))
             } catch {
                 message = error.localizedDescription
             }
+            searchedBooks = query
+            isSearching = false
+            // Nothing the services know (Polish editions, obscure titles): straight to the indexers.
+            if books.isEmpty { searchReleases() }
         }
+    }
+
+    /// The field's words through the indexers, in the picked category.
+    func searchReleases() {
+        let query = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !query.isEmpty, let category = activeCategory.newznabCategory else { return }
+        releases.search(.text(query, category: category), in: activeCategory, model: model)
     }
 }
 

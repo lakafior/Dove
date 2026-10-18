@@ -17,6 +17,10 @@ public enum CredentialKey: String, Sendable, CaseIterable {
     /// `/view` links. Optional.
     case nzbdavFrontendKey
     case tmdbAPIKey
+    /// Google Books API key (book covers and titles). Optional.
+    case googleBooksAPIKey
+    /// Hardcover API token (book covers and titles). Optional.
+    case hardcoverToken
     /// JSON array of Stremio addon manifest URLs, in the user's order (they embed tokens).
     case stremioAddons
     /// Password of the user's AIOStreams configuration, for its Search API.

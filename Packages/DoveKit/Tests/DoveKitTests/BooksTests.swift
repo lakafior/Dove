@@ -96,7 +96,7 @@ struct BookMetadataTests {
         let transport = MockTransport()
         await transport.stub("search", body: try Fixture.data("itunes_audiobook_search"))
 
-        let books = try await BookMetadata(transport: transport).search("andy weir project hail mary", in: .appleAudiobooks)
+        let books = try await BookMetadata(transport: transport).search("andy weir project hail mary", in: .appleAudiobooks())
 
         #expect(books.map(\.id) == ["itunes:1565808256", "itunes:1729184154"])
         #expect(books[0].title == "Project Hail Mary", "(Unabridged) is dropped")
@@ -117,7 +117,7 @@ struct BookMetadataTests {
         {"results":[{"trackId":42,"trackName":"Dune","artistName":"Frank Herbert",
         "trackViewUrl":"https://books.apple.com/book/id42","artworkUrl100":"https://x/100x100bb.jpg","releaseDate":"1965-08-01T07:00:00Z"}]}
         """)
-        let books = try await BookMetadata(transport: transport).search("dune", in: .appleBooks)
+        let books = try await BookMetadata(transport: transport).search("dune", in: .appleBooks())
         #expect(books == [BookSummary(
             id: "itunes:42", title: "Dune", authors: ["Frank Herbert"], year: 1965,
             cover: URL(string: "https://x/600x600bb.jpg"), link: URL(string: "https://books.apple.com/book/id42")
@@ -133,14 +133,14 @@ struct BookMetadataTests {
         let book = try await BookMetadata(transport: transport).match(guess)
 
         #expect(book?.id == "ol:OL21745884W")
-        #expect(await transport.requests.map { $0.url!.host() } == ["itunes.apple.com", "openlibrary.org"])
+        #expect(await transport.requests.map { $0.url!.host() } == ["api.audible.com", "itunes.apple.com", "openlibrary.org"], "Audible answered nothing (not stubbed): the next source is asked")
     }
 
     @Test func appleRateLimitIsNotAKeyError() async throws {
         let transport = MockTransport()
         await transport.stub("search", status: 403, json: "{}")
         await #expect(throws: BackendError.rateLimited) {
-            try await BookMetadata(transport: transport).search("dune", in: .appleBooks)
+            try await BookMetadata(transport: transport).search("dune", in: .appleBooks())
         }
     }
 
@@ -149,7 +149,7 @@ struct BookMetadataTests {
         await transport.stub("search", status: 500, json: "{}")
         await transport.stub("search.json", body: try Fixture.data("openlibrary_search"))
         let books = try await BookMetadata(transport: transport).search("project hail mary", format: .audiobook)
-        #expect(books.count == 3)
+        #expect(books.map(\.title) == ["Project Hail Mary", "The Martian / Artemis / Project Hail Mary"], "the summary is dropped")
     }
 }
 
@@ -425,5 +425,150 @@ struct BookReleaseTests {
         let audiobooks = StreamGroup.splitByBookKind(groups, for: .audiobooks)
         #expect(audiobooks.matching.count == 2 && audiobooks.other.count == 2)
         #expect(StreamGroup.splitByBookKind(groups, for: .software).other.isEmpty)
+    }
+}
+
+struct BookSearchTests {
+    private let book = BookSummary(id: "ol:OL1W", title: "Project Hail Mary", authors: ["Andy Weir"], year: 2021)
+
+    @Test func releasesOfThePickedBookComeFirst() {
+        let groups = StreamGroup.group([
+            "Andy Weir - Project Hail Mary (2021) [EPUB]",
+            "Andy.Weir.-.The.Martian.EPUB",
+            "Project Hail Mary by Andy Weir (Unabridged)",
+            "Andy Weir - Artemis",
+        ].map { StreamCandidate(id: $0, kind: .usenet, title: $0, category: 7000) })
+        let ebook = StreamGroup.split(groups, for: book, format: .ebook)
+        #expect(ebook.thisBook.map(\.title) == ["Andy Weir - Project Hail Mary (2021) [EPUB]", "Project Hail Mary by Andy Weir (Unabridged)"])
+        #expect(ebook.other.map(\.title) == ["Andy.Weir.-.The.Martian.EPUB", "Andy Weir - Artemis"])
+    }
+
+    @Test func searchTitleDropsSubtitleAndEdition() {
+        #expect(BookSummary(id: "a", title: "Project Hail Mary: A Novel").searchTitle == "Project Hail Mary")
+        #expect(BookSummary(id: "b", title: "Dune (Unabridged)").searchTitle == "Dune")
+    }
+
+    @Test func sameBookFromTwoSourcesIsOneResult() {
+        let apple = BookSummary(
+            id: "itunes:1", title: "Project Hail Mary (Unabridged)", authors: ["Andy Weir"],
+            cover: URL(string: "https://example.com/c.jpg"), description: "A lone astronaut."
+        )
+        let other = BookSummary(id: "ol:OL2W", title: "The Martian", authors: ["Andy Weir"])
+        let guide = BookSummary(id: "ol:OL3W", title: "SUMMARY and REVIEW : PROJECT HAIL MARY", authors: ["Unique Summary"])
+        let guide2 = BookSummary(id: "ol:OL4W", title: "Summary of Andy Weir's Project Hail Mary")
+        let unique = BookSummary.unique([book, guide, other, guide2, apple])
+        #expect(unique.map(\.id) == ["ol:OL1W", "ol:OL2W"])
+        #expect(unique[0].cover == apple.cover && unique[0].description == "A lone astronaut." && unique[0].year == 2021)
+    }
+}
+
+struct BookSourcesTests {
+    @Test func audibleGivesAudiobooksWithoutTranslatorsAndTheBiggestCover() async throws {
+        let transport = MockTransport()
+        await transport.stub("/catalog/products", body: try Fixture.data("audible_search"))
+        let books = try await BookMetadata(transport: transport).search("project hail mary", in: .audible(domain: "de"))
+
+        #expect(books.map(\.id) == ["audible:B08G9PRS1K", "audible:B0HDFGKSTL", "audible:B00KL73AKY"])
+        #expect(books[0].title == "Project Hail Mary" && books[0].authors == ["Andy Weir"] && books[0].year == 2021)
+        #expect(books[0].cover?.absoluteString == "https://m.media-amazon.com/images/I/51POf8gOyLL._SL500_.jpg")
+        #expect(books[0].description?.hasPrefix("When the Sun is threatened") == true, "HTML stripped")
+        #expect(books[0].link?.absoluteString == "https://www.audible.de/pd/B08G9PRS1K")
+        #expect(books[2].authors == ["Stanislaw Lem"], "the translator is not an author")
+
+        let request = try #require(await transport.requests.first)
+        #expect(request.url?.host() == "api.audible.de")
+        #expect(request.url?.query?.contains("keywords=project%20hail%20mary") == true)
+    }
+
+    @Test func storytelKeepsTheAskedFormat() async throws {
+        let transport = MockTransport()
+        await transport.stub("search.action", body: try Fixture.data("storytel_search"))
+        let metadata = BookMetadata(transport: transport)
+
+        let audiobooks = try await metadata.search("projekt hail mary", in: .storytel(locale: "pl"), format: .audiobook)
+        #expect(audiobooks.map(\.id) == ["storytel:10690015", "storytel:10493119"])
+        #expect(audiobooks[0].title == "Projekt Hail Mary" && audiobooks[0].year == 2026)
+        #expect(audiobooks[0].cover?.absoluteString == "https://www.storytel.com/images/320x320/0010690016.jpg")
+        #expect(audiobooks[0].link?.absoluteString == "https://www.storytel.com/pl/pl/books/projekt-hail-mary-13736722")
+
+        let ebooks = try await metadata.search("projekt hail mary", in: .storytel(locale: "pl"), format: .ebook)
+        #expect(ebooks.map(\.id) == ["storytel:9830272"])
+        #expect(await transport.requests.first?.url?.query?.contains("request_locale=pl") == true)
+    }
+
+    @Test func googleBooksNeedsAKeyAndCleansCovers() async throws {
+        let transport = MockTransport()
+        await transport.stub("/books/v1/volumes", body: try Fixture.data("googlebooks_search"))
+        #expect(try await BookMetadata(transport: transport).search("x", in: .googleBooks).isEmpty, "no key, no call")
+        #expect(await transport.requests.isEmpty)
+
+        let metadata = BookMetadata(configuration: .init(googleBooksKey: "KEY"), transport: transport)
+        let books = try await metadata.search("projekt hail mary", in: .googleBooks)
+        #expect(books.map(\.id) == ["gb:_9ZxEAAAQBAJ", "gb:noCover1"])
+        #expect(books[0].cover?.absoluteString
+            == "https://books.google.com/books/content?id=_9ZxEAAAQBAJ&printsec=frontcover&img=1&zoom=1&source=gbs_api")
+        #expect(books[0].description == "Samotny astronauta musi uratować Ziemię.")
+        #expect(books[0].year == 2021 && books[1].cover == nil)
+        #expect(await transport.requests.first?.url?.query?.contains("key=KEY") == true)
+    }
+
+    @Test func googleKeyErrorsSayWhy() async throws {
+        let transport = MockTransport()
+        await transport.stub("/books/v1/volumes", status: 400, json: #"{"error":{"code":400,"message":"API key not valid. Please pass a valid API key."}}"#)
+        await #expect(throws: BackendError.api(message: "API key not valid. Please pass a valid API key.")) {
+            try await BookMetadata(transport: transport).validateGoogleBooks(key: "bad")
+        }
+    }
+
+    @Test func hardcoverSearchesWithTheTokenAsBearer() async throws {
+        let transport = MockTransport()
+        await transport.stub("/v1/graphql", body: try Fixture.data("hardcover_search"))
+        let metadata = BookMetadata(configuration: .init(hardcoverToken: "Bearer TOKEN"), transport: transport)
+        let books = try await metadata.search("project hail mary", in: .hardcover)
+
+        #expect(books.map(\.id) == ["hardcover:382701", "hardcover:99"])
+        #expect(books[0].cover?.absoluteString == "https://assets.hardcover.app/edition/1/cover.jpg")
+        #expect(books[0].link?.absoluteString == "https://hardcover.app/books/project-hail-mary")
+        #expect(books[1].year == nil && books[1].cover == nil)
+
+        let request = try #require(await transport.requests.first)
+        #expect(request.httpMethod == "POST")
+        #expect(request.value(forHTTPHeaderField: "Authorization") == "Bearer TOKEN", "the copied prefix is not doubled")
+        let body = try #require(try JSONSerialization.jsonObject(with: request.httpBody ?? Data()) as? [String: Any])
+        #expect((body["variables"] as? [String: String])?["q"] == "project hail mary")
+    }
+
+    @Test func sourcesFollowTheRegionLanguageAndKeys() {
+        let us = BookMetadata(configuration: .init(region: "US", language: "en"))
+        #expect(us.sources(for: .ebook) == [.openLibrary, .appleBooks()])
+        #expect(us.sources(for: .audiobook) == [.audible(), .appleAudiobooks(), .openLibrary])
+
+        let poland = BookMetadata(configuration: .init(region: "PL", language: "pl", googleBooksKey: "K", hardcoverToken: "T"))
+        #expect(poland.sources(for: .ebook) == [
+            .openLibrary, .googleBooks, .hardcover, .appleBooks(country: "PL"), .appleBooks(), .storytel(locale: "pl"),
+        ])
+        #expect(poland.sources(for: .audiobook) == [
+            .audible(), .storytel(locale: "pl"), .appleAudiobooks(country: "PL"), .appleAudiobooks(), .hardcover, .openLibrary, .googleBooks,
+        ])
+
+        #expect(BookMetadata(configuration: .init(region: "PL", language: "en")).sources(for: .ebook).last == .storytel(locale: "pl"),
+                "the region picks Storytel's market")
+        #expect(BookMetadata(configuration: .init(region: "US", language: "sv")).sources(for: .ebook).last == .storytel(locale: "sv"))
+
+        let germany = BookMetadata(configuration: .init(region: "DE", language: "de"))
+        #expect(germany.sources(for: .audiobook).prefix(2) == [.audible(domain: "de"), .audible()])
+    }
+
+    @Test func searchAsksEverySourceAndPutsTheBestFitFirst() async throws {
+        let transport = MockTransport()
+        await transport.stub("/catalog/products", body: try Fixture.data("audible_search"))
+        await transport.stub("search.action", body: try Fixture.data("storytel_search"))
+        await transport.stub("search", json: #"{"results":[]}"#)
+        await transport.stub("search.json", status: 500, json: "{}")
+        let metadata = BookMetadata(configuration: .init(region: "PL", language: "pl"), transport: transport)
+
+        let books = try await metadata.search("projekt hail mary", format: .audiobook)
+        #expect(books.first?.id == "storytel:10690015", "the Polish title fits the Polish words best")
+        #expect(books.contains { $0.id == "audible:B08G9PRS1K" })
     }
 }

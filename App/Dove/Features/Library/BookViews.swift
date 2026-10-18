@@ -244,7 +244,7 @@ struct BookPickerSheet: View {
     }
 }
 
-private struct BookRow: View {
+struct BookRow: View {
     let book: BookSummary
     let format: BookFormat
 

@@ -6,5 +6,6 @@
     <search available="yes" supportedParams="q"/>
     <tv-search available="yes" supportedParams="q,rid,tvdbid,season,ep"/>
     <movie-search available="yes" supportedParams="q,imdbid"/>
+    <book-search available="yes" supportedParams="q,title,author"/>
   </searching>
 </caps>

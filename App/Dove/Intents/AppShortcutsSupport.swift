@@ -39,7 +39,8 @@ enum SiriSuggestions {
     }
 
     static func searched(_ query: String) {
-        var intent = SearchInDoveIntent()
+        // `@Parameter`'s setter is nonmutating, so a `let` intent takes the query.
+        let intent = SearchInDoveIntent()
         intent.query = query
         Task { _ = try? await IntentDonationManager.shared.donate(intent: intent) }
     }

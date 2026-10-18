@@ -113,3 +113,55 @@ extension StreamGroup {
         return (matching, other)
     }
 }
+
+extension StreamGroup {
+    /// A book's releases screen: what the indexers returned that is this book (`BookMatcher`: same title, or a
+    /// contained title with the author), then the rest of their answer (other books by the author, a plain
+    /// "author title" search's strays).
+    public static func split(_ groups: [StreamGroup], for book: BookSummary, format: BookFormat)
+        -> (thisBook: [StreamGroup], other: [StreamGroup])
+    {
+        var thisBook: [StreamGroup] = [], other: [StreamGroup] = []
+        for group in groups {
+            let guess = BookGuess(releaseName: group.title, format: format)
+            if BookMatcher.score(book, for: guess) != nil { thisBook.append(group) } else { other.append(group) }
+        }
+        return (thisBook, other)
+    }
+}
+
+extension BookSummary {
+    /// Summaries, study guides and workbooks about a book: Open Library lists many next to the book itself.
+    public var isCompanion: Bool {
+        title.range(
+            of: #"^(summary|study guide|workbook|analysis|sparknotes|cliffsnotes|quicklet|book review)\b|\bsummary (of|and review)\b"#,
+            options: [.regularExpression, .caseInsensitive]
+        ) != nil
+    }
+
+    /// The title indexers know: without a subtitle ("Project Hail Mary: A Novel") or an edition mark.
+    public var searchTitle: String {
+        let main = BookMatcher.withoutEdition(title).components(separatedBy: ":")[0].trimmingCharacters(in: .whitespaces)
+        return main.isEmpty ? title : main
+    }
+
+    /// One entry per book across sources (Open Library and Apple Books often both have it): the first source's
+    /// entry, with a cover, year or description the later ones add.
+    public static func unique(_ books: [BookSummary]) -> [BookSummary] {
+        var order: [String] = []
+        var byKey: [String: BookSummary] = [:]
+        for book in books where !book.isCompanion {
+            let key = MediaGuess.normalize(book.authors.first ?? "") + "|" + MediaGuess.normalize(BookMatcher.withoutEdition(book.title))
+            guard var known = byKey[key] else {
+                order.append(key)
+                byKey[key] = book
+                continue
+            }
+            known.cover = known.cover ?? book.cover
+            known.year = known.year ?? book.year
+            known.description = known.description ?? book.description
+            byKey[key] = known
+        }
+        return order.compactMap { byKey[$0] }
+    }
+}

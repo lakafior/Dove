@@ -34,7 +34,8 @@ final class LibraryModel {
     /// Matches survive launches; they are not secrets.
     private let store = MatchStore(fileURL: URL.applicationSupportDirectory.appending(path: "Dove/library-matches.json"))
     private let bookStore = MetadataStore<BookSummary>(fileURL: URL.applicationSupportDirectory.appending(path: "Dove/library-books.json"))
-    private let bookMetadata = BookMetadata()
+    /// Set by `AppModel.reloadBookMetadata` (region, language, the user's keys).
+    var bookMetadata = BookMetadata(configuration: .device())
     /// The last list, shown at once on launch while the services are asked again.
     private static let cacheURL = URL.applicationSupportDirectory.appending(path: "Dove/library-items.json")
     /// Kinds learned from an item's files once it was opened (Real-Debrid and Offcloud list items without files),

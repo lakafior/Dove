@@ -1,0 +1,15 @@
+{
+ "data": {
+  "search": {
+   "results": {
+    "found": 2,
+    "hits": [
+     {"document": {"id": "382701", "title": "Project Hail Mary", "author_names": ["Andy Weir"], "release_year": 2021,
+      "description": "Ryland Grace is the sole survivor.", "image": {"url": "https://assets.hardcover.app/edition/1/cover.jpg"},
+      "slug": "project-hail-mary"}},
+     {"document": {"id": 99, "title": "The Martian", "author_names": ["Andy Weir"], "release_year": null, "image": {}, "slug": "the-martian"}}
+    ]
+   }
+  }
+ }
+}

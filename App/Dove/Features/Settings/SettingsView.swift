@@ -82,10 +82,15 @@ struct SettingsView: View {
                         SettingsRow("TMDB", symbol: "film.stack.fill", color: .cyan,
                                     value: model.addonSet.tmdb != nil ? "Connected" : "Not set up")
                     }
+                    NavigationLink {
+                        BookMetadataSettingsView()
+                    } label: {
+                        SettingsRow("Book metadata", symbol: "books.vertical.fill", color: .brown)
+                    }
                 } header: {
                     Text("Search and metadata")
                 } footer: {
-                    Text("Addons give sources (and titles, without TMDB). Indexers are searched from your phone and power Search › Other. TMDB gives search, posters and episodes.")
+                    Text("Addons give sources (and titles, without TMDB). Indexers are searched from your phone and power Search › Other. TMDB gives search, posters and episodes. Book metadata finds books and audiobooks.")
                 }
 
                 Section("This iPhone") {

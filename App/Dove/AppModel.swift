@@ -275,6 +275,7 @@ final class AppModel {
         library.showAdult = showAdult
         reloadBackends()
         reloadNewznab()
+        reloadBookMetadata()
         addonEntries = storedAddonURLs().map { AddonEntry(url: $0) }
         downloads.requestProvider = { [weak self] record in
             guard let backend = self?.backend(record.backend) else {
@@ -359,6 +360,7 @@ final class AppModel {
         watchlist.reload()
         reloadBackends()
         reloadNewznab()
+        reloadBookMetadata()
         addonEntries = storedAddonURLs().map { AddonEntry(url: $0) }
         await loadAddons()
         await refreshAccounts(force: true)
@@ -611,6 +613,36 @@ final class AppModel {
         else { throw BackendError.api(message: "Save your AIOStreams password first.") }
         try await AIOStreamsSearch(origin: instance.origin, uuid: instance.uuid, password: password).saveDoveVariant()
         aioStreamsVariant = AIOStreamsSearch.unfilteredVariantID
+    }
+
+    // MARK: - Book metadata
+
+    var googleBooksKey: String { (try? keychain.get(.googleBooksAPIKey)) ?? "" }
+    var hardcoverToken: String { (try? keychain.get(.hardcoverToken)) ?? "" }
+
+    /// The book metadata sources for this device's region and language, with the user's keys.
+    var bookMetadataConfiguration: BookMetadata.Configuration {
+        .device(googleBooksKey: googleBooksKey, hardcoverToken: hardcoverToken)
+    }
+
+    func reloadBookMetadata() {
+        library.bookMetadata = BookMetadata(configuration: bookMetadataConfiguration)
+    }
+
+    /// Checks the key with one search before keeping it. Empty removes it.
+    func saveGoogleBooksKey(_ key: String) async throws {
+        let key = key.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !key.isEmpty { try await BookMetadata().validateGoogleBooks(key: key) }
+        try keychain.set(key, for: .googleBooksAPIKey)
+        reloadBookMetadata()
+    }
+
+    /// Checks the token (`me`) before keeping it. Empty removes it.
+    func saveHardcoverToken(_ token: String) async throws {
+        let token = token.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !token.isEmpty { try await BookMetadata().validateHardcover(token: token) }
+        try keychain.set(token, for: .hardcoverToken)
+        reloadBookMetadata()
     }
 
     // MARK: - TMDB

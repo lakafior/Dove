@@ -1,0 +1,61 @@
+{
+ "books": [
+  {
+   "book": {
+    "id": 10690015,
+    "name": "Projekt Hail Mary",
+    "authors": [
+     {
+      "name": "Andy Weir"
+     }
+    ],
+    "largeCover": "/images/320x320/0010690016.jpg",
+    "largeCoverE": "/images/nocover.png",
+    "latestReleaseDate": "20260305"
+   },
+   "abook": {
+    "description": "Samotny astronauta musi uratować Ziemię przed katastrofą.\n\nZ załogi, która wyruszyła na straceńczą misję ostatniej szans"
+   },
+   "ebook": null,
+   "shareUrl": "https://www.storytel.com/pl/pl/books/projekt-hail-mary-13736722"
+  },
+  {
+   "book": {
+    "id": 9830272,
+    "name": "Projekt Hail Mary",
+    "authors": [
+     {
+      "name": "Andy Weir"
+     }
+    ],
+    "largeCover": "/images/e/320x320/0009830277.jpg",
+    "largeCoverE": "/images/e/320x320/0009830277.jpg",
+    "latestReleaseDate": "20250908"
+   },
+   "abook": null,
+   "ebook": {
+    "description": "Samotny astronauta musi uratować Ziemię przed katastrofą.\n\n \n\n Z załogi, która wyruszyła na straceńczą misję ostatniej s"
+   },
+   "shareUrl": "https://www.storytel.com/pl/pl/books/projekt-hail-mary-12335408"
+  },
+  {
+   "book": {
+    "id": 10493119,
+    "name": "The Traveler: A gripping time travel thriller for fans of Project Hail Mary",
+    "authors": [
+     {
+      "name": "Joseph Eckert"
+     }
+    ],
+    "largeCover": "/images/320x320/0010493120.jpg",
+    "largeCoverE": "/images/nocover.png",
+    "latestReleaseDate": "20260611"
+   },
+   "abook": {
+    "description": "Narrated by Ray Porter, the multi-Audie Award winning voice behind Andy Weir’s Project Hail Mary and the Bobiverse serie"
+   },
+   "ebook": null,
+   "shareUrl": "https://www.storytel.com/pl/pl/books/the-traveler-a-gripping-time-travel-thriller-for-fans-of-project-hail-mary-12567372"
+  }
+ ]
+}

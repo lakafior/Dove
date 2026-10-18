@@ -27,6 +27,15 @@ public enum SearchCategory: String, CaseIterable, Sendable, Hashable, Codable {
         }
     }
 
+    /// Books and Audiobooks search the book metadata services first.
+    public var bookFormat: BookFormat? {
+        switch self {
+        case .books: .ebook
+        case .audiobooks: .audiobook
+        default: nil
+        }
+    }
+
     /// Only Movies & TV asks the Stremio addons.
     public var usesAddons: Bool { self == .media }
 

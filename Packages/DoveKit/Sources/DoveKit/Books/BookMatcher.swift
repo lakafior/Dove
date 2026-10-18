@@ -14,6 +14,14 @@ public enum BookMatcher {
         return best?.book
     }
 
+    /// Results that fit the guess first, best fit first; the rest after them in their order.
+    public static func rank(_ results: [BookSummary], for guess: BookGuess) -> [BookSummary] {
+        results.enumerated()
+            .map { (index: $0.offset, book: $0.element, score: score($0.element, for: guess) ?? -1) }
+            .sorted { $0.score != $1.score ? $0.score > $1.score : $0.index < $1.index }
+            .map(\.book)
+    }
+
     static func score(_ book: BookSummary, for guess: BookGuess) -> Int? {
         let full = MediaGuess.normalize(withoutEdition(book.title))
         // "Mistborn: The Final Empire" also answers to "Mistborn".

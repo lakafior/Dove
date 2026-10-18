@@ -43,7 +43,7 @@ struct NewznabTests {
         #expect(cat(.text("project hail mary", category: .audiobooks), ["q"]) == "3030")
 
         let text = NewznabQuery.text("Some Album", category: .music)
-        #expect(text.function == "search")
+        #expect(text.function(supported: ["q"]) == "search")
         #expect(text.parameters(supported: NewznabCaps(movieParams: [], tvParams: []).params(for: text))?.first
             == URLQueryItem(name: "q", value: "Some Album"))
     }
@@ -74,6 +74,42 @@ struct NewznabTests {
         #expect(all.compactMap(\.category).map(ContentKind.init(newznabCategory:)) == [.video, .software, .music])
     }
 
+    @Test func bookSearchesUseTitleAndAuthorWhereIndexersTakeThem() {
+        let book = NewznabQuery.book(title: "Project Hail Mary", author: "Andy Weir", category: .books)
+        let full = NewznabCaps(movieParams: [], tvParams: [], bookParams: ["q", "title", "author"])
+        #expect(book.function(supported: full.params(for: book)) == "book")
+        #expect(book.parameters(supported: full.params(for: book)) == [
+            URLQueryItem(name: "title", value: "Project Hail Mary"),
+            URLQueryItem(name: "author", value: "Andy Weir"),
+            URLQueryItem(name: "cat", value: "7000"),
+        ])
+        // No book-search (or caps from before Dove read it): a plain search for "author title".
+        for caps in [NewznabCaps(movieParams: [], tvParams: [], bookParams: []), NewznabCaps(movieParams: [], tvParams: [])] {
+            #expect(book.function(supported: caps.params(for: book)) == "search")
+            #expect(book.parameters(supported: caps.params(for: book))?.first == URLQueryItem(name: "q", value: "Andy Weir Project Hail Mary"))
+        }
+        let audiobook = NewznabQuery.book(title: "Dune", author: nil, category: .audiobooks)
+        #expect(audiobook.parameters(supported: ["title", "author"]) == [URLQueryItem(name: "title", value: "Dune"), URLQueryItem(name: "cat", value: "3030")])
+    }
+
+    @Test func capsSavedWithoutBookSearchAreAskedAgainForABook() async throws {
+        let stateURL = FileManager.default.temporaryDirectory.appending(path: "newznab-\(UUID().uuidString).json")
+        defer { try? FileManager.default.removeItem(at: stateURL) }
+        try Data(#"{"usage":{},"caps":{"Geek":{"movieParams":["q","imdbid"],"tvParams":["q"],"maxLimit":100}}}"#.utf8).write(to: stateURL)
+        let transport = MockTransport()
+        try await stubIndexer(transport)
+        await transport.stub("/api", queryContains: "t=book", body: try Fixture.data("newznab_movie", extension: "xml"), contentType: "application/xml")
+        let search = NewznabSearch(indexers: [indexer()], stateURL: stateURL, transport: transport)
+
+        _ = await search.search(.movie(imdbID: "tt1", title: "A"))
+        #expect(await transport.requests.count == 1, "old caps still serve movies")
+        _ = await search.search(.book(title: "Project Hail Mary", author: "Andy Weir", category: .books))
+        let asked = await transport.requests.map { query($0)["t"] ?? "" }
+        #expect(asked == ["movie", "caps", "book"])
+        _ = await search.search(.book(title: "Dune", author: nil, category: .books))
+        #expect(await transport.requests.count == 4, "caps asked once")
+    }
+
     @Test func normalizesPastedURLs() {
         #expect(NewznabIndexer.normalized(url: "api.nzbgeek.info")?.url.absoluteString == "https://api.nzbgeek.info")
         let full = NewznabIndexer.normalized(url: "https://x.example/sub/api?apikey=abc")
@@ -91,6 +127,7 @@ struct NewznabTests {
         #expect(caps.movieParams == ["q", "imdbid"])
         #expect(caps.tvParams.contains("tvdbid"))
         #expect(caps.maxLimit == 100)
+        #expect(caps.bookParams == ["q", "title", "author"])
 
         let found = try #require(try await client.search(.movie(imdbID: "tt15398776", title: "Some Movie"), caps: caps))
         #expect(found.count == 2)
