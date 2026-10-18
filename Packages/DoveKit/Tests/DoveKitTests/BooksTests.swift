@@ -133,7 +133,7 @@ struct BookMetadataTests {
         let book = try await BookMetadata(transport: transport).match(guess)
 
         #expect(book?.id == "ol:OL21745884W")
-        #expect(await transport.requests.map { $0.url!.host() } == ["api.audible.com", "itunes.apple.com", "openlibrary.org"], "Audible answered nothing (not stubbed): the next source is asked")
+        #expect(await transport.requests.map { $0.url!.host() } == ["itunes.apple.com", "openlibrary.org"])
     }
 
     @Test func appleRateLimitIsNotAKeyError() async throws {
@@ -443,6 +443,13 @@ struct BookSearchTests {
         #expect(ebook.other.map(\.title) == ["Andy.Weir.-.The.Martian.EPUB", "Andy Weir - Artemis"])
     }
 
+    @Test func rowsNameTheirSource() {
+        let provider = BookProvider(id: "p1", name: "aio-abs", url: URL(string: "https://x.example")!)
+        let names = ["ol:OL1W", "itunes:1", "gb:x", "hardcover:2", "provider:p1:978", "provider:gone:1"]
+            .map { BookSummary(id: $0, title: "T").sourceName(providers: [provider]) }
+        #expect(names == ["Open Library", "Apple Books", "Google Books", "Hardcover", "aio-abs", "Provider"])
+    }
+
     @Test func searchTitleDropsSubtitleAndEdition() {
         #expect(BookSummary(id: "a", title: "Project Hail Mary: A Novel").searchTitle == "Project Hail Mary")
         #expect(BookSummary(id: "b", title: "Dune (Unabridged)").searchTitle == "Dune")
@@ -463,23 +470,6 @@ struct BookSearchTests {
 }
 
 struct BookSourcesTests {
-    @Test func audibleGivesAudiobooksWithoutTranslatorsAndTheBiggestCover() async throws {
-        let transport = MockTransport()
-        await transport.stub("/catalog/products", body: try Fixture.data("audible_search"))
-        let books = try await BookMetadata(transport: transport).search("project hail mary", in: .audible(domain: "de"))
-
-        #expect(books.map(\.id) == ["audible:B08G9PRS1K", "audible:B0HDFGKSTL", "audible:B00KL73AKY"])
-        #expect(books[0].title == "Project Hail Mary" && books[0].authors == ["Andy Weir"] && books[0].year == 2021)
-        #expect(books[0].cover?.absoluteString == "https://m.media-amazon.com/images/I/51POf8gOyLL._SL500_.jpg")
-        #expect(books[0].description?.hasPrefix("When the Sun is threatened") == true, "HTML stripped")
-        #expect(books[0].link?.absoluteString == "https://www.audible.de/pd/B08G9PRS1K")
-        #expect(books[2].authors == ["Stanislaw Lem"], "the translator is not an author")
-
-        let request = try #require(await transport.requests.first)
-        #expect(request.url?.host() == "api.audible.de")
-        #expect(request.url?.query?.contains("keywords=project%20hail%20mary") == true)
-    }
-
     @Test func audiobookshelfProvidersAnswerInTheirFormat() async throws {
         let transport = MockTransport()
         await transport.stub("/search", body: try Fixture.data("abs_provider_search"))
@@ -496,7 +486,20 @@ struct BookSourcesTests {
         #expect(request.url?.path() == "/lc/search")
         #expect(request.url?.query?.contains("query=projekt%20hail%20mary") == true)
         #expect(request.url?.query?.contains("mediaType=book") == true)
+        #expect(request.url?.query?.contains("format=ebook") == true)
         #expect(request.value(forHTTPHeaderField: "Authorization") == "SECRET")
+    }
+
+    @Test func providerMatchesOfTheOtherKindAreDropped() async throws {
+        let transport = MockTransport()
+        await transport.stub("/search", json: """
+        {"matches":[{"title":"A","type":"audiobook"},{"title":"B","type":"book"},{"title":"C"}]}
+        """)
+        let provider = BookProvider(id: "p", name: "P", url: URL(string: "https://p.example")!)
+        let metadata = BookMetadata(transport: transport)
+        #expect(try await metadata.search("x", in: .provider(provider), format: .audiobook).map(\.title) == ["A", "C"])
+        #expect(try await metadata.search("x", in: .provider(provider), format: .ebook).map(\.title) == ["B", "C"])
+        #expect(await transport.requests.first?.url?.query?.contains("format=audiobook") == true)
     }
 
     @Test func providerURLs() {
@@ -552,7 +555,7 @@ struct BookSourcesTests {
     @Test func sourcesFollowTheRegionLanguageAndKeys() {
         let us = BookMetadata(configuration: .init(region: "US"))
         #expect(us.sources(for: .ebook) == [.openLibrary, .appleBooks()])
-        #expect(us.sources(for: .audiobook) == [.audible(), .appleAudiobooks(), .openLibrary])
+        #expect(us.sources(for: .audiobook) == [.appleAudiobooks(), .openLibrary])
 
         let provider = BookProvider(id: "p", name: "P", url: URL(string: "https://p.example")!)
         let off = BookProvider(id: "q", name: "Q", url: URL(string: "https://q.example")!, enabled: false)
@@ -561,16 +564,13 @@ struct BookSourcesTests {
             .provider(provider), .openLibrary, .googleBooks, .hardcover, .appleBooks(country: "PL"), .appleBooks(),
         ])
         #expect(poland.sources(for: .audiobook) == [
-            .provider(provider), .audible(), .appleAudiobooks(country: "PL"), .appleAudiobooks(), .hardcover, .openLibrary, .googleBooks,
+            .provider(provider), .appleAudiobooks(country: "PL"), .appleAudiobooks(), .hardcover, .openLibrary, .googleBooks,
         ])
 
-        let germany = BookMetadata(configuration: .init(region: "DE"))
-        #expect(germany.sources(for: .audiobook).prefix(2) == [.audible(domain: "de"), .audible()])
     }
 
     @Test func searchAsksEverySourceAndPutsTheBestFitFirst() async throws {
         let transport = MockTransport()
-        await transport.stub("/catalog/products", body: try Fixture.data("audible_search"))
         await transport.stub("/lc/search", body: try Fixture.data("abs_provider_search"))
         await transport.stub("search", json: #"{"results":[]}"#)
         await transport.stub("search.json", status: 500, json: "{}")
@@ -579,6 +579,5 @@ struct BookSourcesTests {
 
         let books = try await metadata.search("projekt hail mary", format: .audiobook)
         #expect(books.first?.id == "provider:p1:9788381885317", "the Polish title fits the Polish words best")
-        #expect(books.contains { $0.id == "audible:B08G9PRS1K" })
     }
 }

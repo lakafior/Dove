@@ -38,13 +38,12 @@ public struct BookSummary: Identifiable, Sendable, Hashable, Codable {
 /// |---|---|---|
 /// | Open Library (`openlibrary.org/search.json`) | none | books (and audiobooks as a fallback) |
 /// | Apple Books (iTunes Search, `media=ebook|audiobook`) | none | the US store and the device's region's store; about 20 calls a minute |
-/// | Audible catalog (`api.audible.<tld>/1.0/catalog/products`) | none | audiobooks; the device's region's store and the US one. Undocumented but public (Audiobookshelf uses it) |
 /// | Google Books (`googleapis.com/books/v1/volumes`) | user's | the anonymous quota is shared and usually used up, so only with a key |
 /// | Hardcover (`api.hardcover.app/v1/graphql`) | user's token | books and audiobooks |
 /// | The user's Audiobookshelf metadata providers (`BookProvider`) | the provider's, if any | whatever they cover: Storytel, lubimyczytac… |
 ///
-/// Dove itself scrapes nothing: unofficial sources (Storytel, Goodreads, local shops) come only as providers the
-/// user adds by URL, in Audiobookshelf's custom metadata provider format.
+/// Dove itself calls only official APIs: unofficial sources (Audible's catalog, Storytel, lubimyczytac, Goodreads)
+/// come only as providers the user adds by URL, in Audiobookshelf's custom metadata provider format.
 /// The picker search asks every source at once and ranks the answers against the words typed; matching a
 /// library item asks one source after another until one has the book.
 public struct BookMetadata: Sendable {
@@ -52,8 +51,6 @@ public struct BookMetadata: Sendable {
         case openLibrary
         case appleBooks(country: String = "US")
         case appleAudiobooks(country: String = "US")
-        /// `com`, `co.uk`, `de`…
-        case audible(domain: String = "com")
         /// One of the user's Audiobookshelf metadata providers.
         case provider(BookProvider)
         case googleBooks
@@ -62,7 +59,7 @@ public struct BookMetadata: Sendable {
 
     /// Where the device is and the keys the user gave.
     public struct Configuration: Sendable, Hashable {
-        /// ISO region (`PL`, `DE`): picks the Apple Books and Audible stores.
+        /// ISO region (`PL`, `DE`): picks the Apple Books store.
         public var region: String?
         public var googleBooksKey: String?
         public var hardcoverToken: String?
@@ -93,23 +90,6 @@ public struct BookMetadata: Sendable {
                 hardcoverToken: hardcoverToken,
                 providers: providers
             )
-        }
-
-        /// Audible's store for the region; nil where Audible has none (Poland, the Nordics…).
-        var audibleDomain: String? {
-            switch region {
-            case "US": "com"
-            case "GB", "IE": "co.uk"
-            case "DE", "AT", "CH": "de"
-            case "FR", "BE": "fr"
-            case "IT": "it"
-            case "ES": "es"
-            case "CA": "ca"
-            case "AU", "NZ": "com.au"
-            case "IN": "in"
-            case "JP": "co.jp"
-            default: nil
-            }
         }
 
         /// Apple's stores to ask: the device's, then the US one.
@@ -147,8 +127,6 @@ public struct BookMetadata: Sendable {
             if config.hardcoverToken != nil { sources.append(.hardcover) }
             sources += config.appleCountries.map { .appleBooks(country: $0) }
         case .audiobook:
-            if let domain = config.audibleDomain, domain != "com" { sources.append(.audible(domain: domain)) }
-            sources.append(.audible())
             sources += config.appleCountries.map { .appleAudiobooks(country: $0) }
             if config.hardcoverToken != nil { sources.append(.hardcover) }
             sources.append(.openLibrary)
@@ -215,20 +193,15 @@ public struct BookMetadata: Sendable {
             if country != "US" { parameters["country"] = country }
             let page = try await get(ITunesPage.self, Self.iTunesURL, parameters)
             return page.results.compactMap(\.summary)
-        case .audible(let domain):
-            let url = URL(string: "https://api.audible.\(domain)/1.0/catalog/products")!
-            let page = try await get(AudiblePage.self, url, [
-                "keywords": query,
-                "num_results": String(Self.limit),
-                "products_sort_by": "Relevance",
-                "response_groups": "contributors,media,product_desc,product_attrs",
-            ])
-            return page.products.compactMap { $0.summary(domain: domain) }
         case .provider(let provider):
             var headers: [String: String] = [:]
             if let key = provider.authorization, !key.isEmpty { headers["Authorization"] = key }
-            let page = try await get(ProviderPage.self, provider.searchURL, ["query": query, "mediaType": "book"], headers: headers)
-            return page.matches.prefix(Self.limit).compactMap { $0.summary(provider: provider) }
+            // `format` is not in Audiobookshelf's spec: providers that know it (aio-abs-providers) answer one kind,
+            // the rest ignore it; a match's `type`, when given, filters either way.
+            let page = try await get(ProviderPage.self, provider.searchURL, [
+                "query": query, "mediaType": "book", "format": format == .audiobook ? "audiobook" : "ebook",
+            ], headers: headers)
+            return page.matches.filter { $0.fits(format) }.prefix(Self.limit).compactMap { $0.summary(provider: provider) }
         case .googleBooks:
             guard let key = configuration.googleBooksKey else { return [] }
             let page = try await get(GoogleBooksPage.self, Self.googleBooksURL, [
@@ -398,49 +371,6 @@ struct ITunesPage: Decodable {
     }
 }
 
-// MARK: - Audible
-
-struct AudiblePage: Decodable {
-    var products: [Product]
-
-    struct Product: Decodable {
-        var asin: String
-        var title: String?
-        var subtitle: String?
-        var authors: [Person]?
-        var narrators: [Person]?
-        var releaseDate: String?
-        var productImages: [String: String]?
-        var merchandisingSummary: String?
-
-        struct Person: Decodable {
-            var name: String
-        }
-
-        enum CodingKeys: String, CodingKey {
-            case asin, title, subtitle, authors, narrators
-            case releaseDate = "release_date"
-            case productImages = "product_images"
-            case merchandisingSummary = "merchandising_summary"
-        }
-
-        func summary(domain: String) -> BookSummary? {
-            guard let title, !title.isEmpty else { return nil }
-            // Translators are listed as authors ("Irmtraud Zimmermann-Göllheim - translator").
-            let authors = (authors ?? []).map(\.name).filter { !$0.lowercased().hasSuffix(" - translator") }
-            return BookSummary(
-                id: "audible:\(asin)",
-                title: BookMatcher.withoutEdition(title),
-                authors: authors,
-                year: releaseDate.flatMap { Int($0.prefix(4)) },
-                cover: productImages?.sorted { (Int($0.key) ?? 0) > (Int($1.key) ?? 0) }.first.flatMap { URL(string: $0.value) },
-                description: merchandisingSummary.map(ITunesPage.Result.plainText),
-                link: URL(string: "https://www.audible.\(domain)/pd/\(asin)")
-            )
-        }
-    }
-}
-
 // MARK: - Google Books
 
 struct GoogleBooksPage: Decodable {
@@ -595,9 +525,17 @@ struct ProviderPage: Decodable {
         var cover: String?
         var isbn: String?
         var asin: String?
+        /// `audiobook` or `book` from providers that tell them apart (aio-abs-providers); absent elsewhere.
+        var type: String?
 
         enum CodingKeys: String, CodingKey {
-            case title, subtitle, author, publishedYear, description, cover, isbn, asin
+            case title, subtitle, author, publishedYear, description, cover, isbn, asin, type
+        }
+
+        /// Matches without a type fit both formats.
+        func fits(_ format: BookFormat) -> Bool {
+            guard let type = type?.lowercased(), !type.isEmpty else { return true }
+            return (type == "audiobook") == (format == .audiobook)
         }
 
         init(from decoder: any Decoder) throws {
@@ -612,6 +550,7 @@ struct ProviderPage: Decodable {
             cover = try? container.decodeIfPresent(String.self, forKey: .cover)
             isbn = try? container.decodeIfPresent(String.self, forKey: .isbn)
             asin = try? container.decodeIfPresent(String.self, forKey: .asin)
+            type = try? container.decodeIfPresent(String.self, forKey: .type)
         }
 
         func summary(provider: BookProvider) -> BookSummary? {

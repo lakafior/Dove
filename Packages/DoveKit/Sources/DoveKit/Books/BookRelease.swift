@@ -131,6 +131,22 @@ extension StreamGroup {
 }
 
 extension BookSummary {
+    /// Where the entry came from, for rows: read from the ID's prefix. Provider entries
+    /// (`provider:<provider id>:…`) take the provider's name from `providers`.
+    public func sourceName(providers: [BookProvider] = []) -> String {
+        let prefix = id.split(separator: ":").first.map(String.init) ?? ""
+        switch prefix {
+        case "ol": return "Open Library"
+        case "itunes": return "Apple Books"
+        case "gb": return "Google Books"
+        case "hardcover": return "Hardcover"
+        case "provider":
+            let providerID = id.split(separator: ":").dropFirst().first.map(String.init)
+            return providers.first { $0.id == providerID }?.name ?? "Provider"
+        default: return prefix
+        }
+    }
+
     /// Summaries, study guides and workbooks about a book: Open Library lists many next to the book itself.
     public var isCompanion: Bool {
         title.range(

@@ -114,7 +114,7 @@ struct BookTitleView: View {
                     }
                     if let link = book.book?.link {
                         Link(destination: link) {
-                            Label(link.host()?.contains("apple") == true ? "Apple Books" : "Open Library", systemImage: "safari")
+                            Label(book.book?.sourceName(providers: model.bookProviders) ?? "Open", systemImage: "safari")
                         }
                         .font(.footnote)
                     }
@@ -245,6 +245,7 @@ struct BookPickerSheet: View {
 }
 
 struct BookRow: View {
+    @Environment(AppModel.self) private var model
     let book: BookSummary
     let format: BookFormat
 
@@ -260,7 +261,7 @@ struct BookRow: View {
                 HStack(spacing: 6) {
                     if let author = book.authors.first { Text(author) }
                     if let year = book.year { Text(String(year)) }
-                    Text(book.id.hasPrefix("itunes:") ? "Apple Books" : "Open Library")
+                    Text(book.sourceName(providers: model.bookProviders))
                 }
                 .font(.caption)
                 .foregroundStyle(.secondary)
