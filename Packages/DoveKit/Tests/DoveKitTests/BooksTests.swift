@@ -372,3 +372,58 @@ struct AudiobookTests {
         #expect(AudiobookChapter.current(in: chapters, trackIndex: 1, seconds: 10)?.title == "Three")
     }
 }
+
+struct BookReleaseTests {
+    @Test(arguments: [
+        ("Andy Weir - Project Hail Mary (2021) [EPUB]", 7020, 3_000_000, ContentKind.books, [BookFileFormat.epub]),
+        ("Andy Weir - Project Hail Mary (2021) [epub, mobi, pdf]", 7000, 9_000_000, .books, [.epub, .pdf, .kindle]),
+        ("Andy Weir - Project Hail Mary (Unabridged) [Ray Porter]", 7000, 500_000_000, .audiobooks, []),
+        ("Andy Weir - Project Hail Mary [M4B]", 7000, 20_000_000, .audiobooks, [.m4b]),
+        ("Andy.Weir.-.Project.Hail.Mary.64kbps", 7000, nil, .audiobooks, []),
+        ("Andy Weir - Project Hail Mary", 3030, 4_000_000, .audiobooks, []),
+        ("Andy Weir - Project Hail Mary", 7000, 900_000_000, .audiobooks, []),
+        ("Andy Weir - Project Hail Mary", 7000, 4_000_000, .books, []),
+        ("Andy Weir - Project Hail Mary", 7000, nil, .books, []),
+        ("Saga Vol 1-9 CBR", 7030, 2_000_000_000, .books, [.comic]),
+        ("Sci-Fi Collection 2024", 7000, 5_000_000_000, .books, []),
+        ("Andy Weir - Project Hail Mary EPUB + MP3", 7000, 600_000_000, .books, [.epub, .mp3]),
+    ] as [(String, Int, Int64?, ContentKind, [BookFileFormat])])
+    func tellsBooksFromAudiobooks(name: String, category: Int, size: Int64?, kind: ContentKind, formats: [BookFileFormat]) {
+        let release = BookRelease(name: name, category: category, size: size)
+        #expect(release.kind == kind)
+        #expect(release.formats == formats)
+    }
+
+    @Test func audiobookCategoryWinsOverBooks() {
+        var item = NewznabItem()
+        item.categories = [7000, 3000, 3030, 100_123]
+        #expect(item.category == 3030, "Jackett tags audiobooks Books too")
+        item.categories = [7000, 7020]
+        #expect(item.category == 7020)
+    }
+
+    @Test func nothingToSayOutsideBookCategories() {
+        #expect(BookRelease(name: "Some Program v2.0 x64", category: 4000, size: 900_000_000).kind == nil)
+        #expect(BookRelease(name: "Some Book EPUB", category: nil, size: nil).kind == .books)
+    }
+
+    @Test func splitsBooksSearchesOnly() {
+        func group(_ title: String, _ category: Int, _ size: Int64? = nil) -> StreamGroup {
+            StreamGroup.group([StreamCandidate(id: title, kind: .usenet, title: title, size: size, category: category)])[0]
+        }
+        let groups = [
+            group("Author - Title [EPUB]", 7020),
+            group("Author - Title (Unabridged)", 7000, 400_000_000),
+            group("Author - Title", 3030),
+            group("Author - Other Title", 7000, 2_000_000),
+        ]
+        let books = StreamGroup.splitByBookKind(groups, for: .books)
+        #expect(books.matching.map(\.title) == ["Author - Title [EPUB]", "Author - Other Title"])
+        #expect(books.other.map(\.title) == ["Author - Title (Unabridged)", "Author - Title"])
+        #expect(groups.map(\.contentKind) == [.books, .audiobooks, .audiobooks, .books])
+
+        let audiobooks = StreamGroup.splitByBookKind(groups, for: .audiobooks)
+        #expect(audiobooks.matching.count == 2 && audiobooks.other.count == 2)
+        #expect(StreamGroup.splitByBookKind(groups, for: .software).other.isEmpty)
+    }
+}

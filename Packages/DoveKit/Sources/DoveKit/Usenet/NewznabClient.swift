@@ -238,8 +238,12 @@ struct NewznabItem {
     }
 
     /// The most specific standard category the indexer gave. Jackett adds its trackers' own categories
-    /// (100000 and up); they say nothing Dove understands.
-    var category: Int? { categories.filter { $0 < 100_000 }.max() }
+    /// (100000 and up); they say nothing Dove understands. Audiobook (3030) wins over anything else: Jackett and
+    /// Prowlarr often tag audiobooks Books (7000) too, which made them pass a Books search.
+    var category: Int? {
+        let standard = categories.filter { $0 < 100_000 }
+        return standard.contains(3030) ? 3030 : standard.max()
+    }
 
     func candidate(id: String, indexer: NewznabIndexer) -> StreamCandidate? {
         guard let title, !title.isEmpty else { return nil }

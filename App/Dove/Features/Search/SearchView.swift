@@ -24,6 +24,10 @@ struct SearchView: View {
         return filter
     }()
     @State var showOtherFilters = false
+    /// Books and Audiobooks: show the other kind the indexers filed in the category too.
+    @State var showOtherBookKind = false
+    /// Books and Audiobooks: only releases that name this format.
+    @State var bookFormat: BookFileFormat?
     @Environment(\.scenePhase) private var scenePhase
     /// `UIPasteboard.changeCount` the banner was last answered for, so it does not come back for the same copy.
     @AppStorage("clipboardAnsweredChange") private var answeredChange = -1
@@ -223,6 +227,8 @@ struct SearchView: View {
         otherResults = []
         message = nil
         typeFilter = nil
+        showOtherBookKind = false
+        bookFormat = nil
     }
 
     /// Offers what was copied in another app. Only `hasStrings`/`hasURLs` are read here, which iOS does not report
@@ -326,6 +332,7 @@ extension SearchView {
                     systemImage: otherFilter.isActive ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease.circle"
                 )
             }
+            if !bookFormats.isEmpty { bookFormatBar }
             ForEach(visibleOtherResults) { group in
                 OtherResultRow(
                     group: group,
@@ -333,6 +340,10 @@ extension SearchView {
                     downloadOnly: model.downloadOnly,
                     onAdd: canAdd(group) ? { addOther(group) } : nil
                 )
+            }
+            if let toggle = otherBookKindToggle {
+                Button(toggle) { showOtherBookKind.toggle() }
+                    .font(.subheadline)
             }
         } footer: {
             if visibleOtherResults.contains(where: { !canAdd($0) }) {
@@ -342,7 +353,51 @@ extension SearchView {
     }
 
     var visibleOtherResults: [StreamGroup] {
-        otherFilter.apply(to: otherResults)
+        var groups = bookSplit.matching + (showOtherBookKind ? bookSplit.other : [])
+        if let bookFormat { groups = groups.filter { BookRelease($0).formats.contains(bookFormat) } }
+        return otherFilter.apply(to: groups)
+    }
+
+    /// Books searches hide audiobooks the indexers filed under Books, and the other way round (`BookRelease`).
+    private var bookSplit: (matching: [StreamGroup], other: [StreamGroup]) {
+        guard let category = activeCategory.newznabCategory else { return (otherResults, []) }
+        return StreamGroup.splitByBookKind(otherResults, for: category)
+    }
+
+    private var otherBookKindToggle: String? {
+        let count = bookSplit.other.count
+        guard count > 0 else { return nil }
+        let kind = activeCategory == .books ? (count == 1 ? "audiobook" : "audiobooks") : (count == 1 ? "ebook" : "ebooks")
+        return showOtherBookKind ? "Hide \(count) \(kind)" : "Show \(count) \(kind) filed here"
+    }
+
+    /// Formats the shown book results name, for the chips.
+    private var bookFormats: [BookFileFormat] {
+        guard activeCategory == .books || activeCategory == .audiobooks else { return [] }
+        let groups = bookSplit.matching + (showOtherBookKind ? bookSplit.other : [])
+        return Set(groups.flatMap { BookRelease($0).formats }).sorted()
+    }
+
+    private var bookFormatBar: some View {
+        ScrollView(.horizontal) {
+            HStack(spacing: 8) {
+                formatChip("All", selected: bookFormat == nil) { bookFormat = nil }
+                ForEach(bookFormats, id: \.self) { format in
+                    formatChip(format.displayName, selected: bookFormat == format) {
+                        bookFormat = bookFormat == format ? nil : format
+                    }
+                }
+            }
+        }
+        .scrollIndicators(.hidden)
+    }
+
+    private func formatChip(_ title: String, selected: Bool, action: @escaping () -> Void) -> some View {
+        Button(title, action: action)
+            .font(.subheadline)
+            .buttonStyle(.bordered)
+            .tint(selected ? .accentColor : .secondary)
+            .buttonBorderShape(.capsule)
     }
 
     var otherFilterSheet: some View {
@@ -372,6 +427,8 @@ extension SearchView {
         }
         isSearching = true
         otherResults = []
+        showOtherBookKind = false
+        bookFormat = nil
         let search = model.newznab
         let showAdult = model.showAdult
         let usenet = model.usenetBackend
@@ -407,8 +464,9 @@ extension SearchView {
         Task {
             defer { busy.remove(group.id) }
             do {
-                // NZBs are filed by the indexer's category (audio, software, books, xxx…).
-                let category = group.category.flatMap(AddCategory.init(newznabCategory:))
+                // NZBs are filed by the indexer's category (audio, software, books, xxx…), audiobooks the
+                // indexer filed under Books in audiobooks.
+                let category = group.contentKind == .audiobooks ? .audiobooks : group.category.flatMap(AddCategory.init(newznabCategory:))
                 // A Torznab result's .torrent link carries the indexer's key: fetch it here, never hand it over.
                 // A private release a service has cached goes there as a magnet (`AddRoute`).
                 let result = try await route.router.add(try await IndexerTorrent.prepare(route.source), category: category)
@@ -418,7 +476,8 @@ extension SearchView {
                 )
                 // The indexer knows better than the name: adult releases are often unmarked, audiobooks are
                 // often bare "Author - Title" folders of mp3s.
-                if let kind = group.category.map(ContentKind.init(newznabCategory:)), kind == .adult || kind == .audiobooks {
+                let kind = group.contentKind
+                if kind == .adult || kind == .audiobooks {
                     model.library.setKind(kind, backend: result.backend, itemID: result.itemID)
                 }
                 message = model.downloadOnly

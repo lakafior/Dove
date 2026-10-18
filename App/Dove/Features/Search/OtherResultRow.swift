@@ -9,8 +9,11 @@ struct OtherResultRow: View {
     let downloadOnly: Bool
     let onAdd: (() -> Void)?
 
-    private var kind: ContentKind {
-        group.category.map(ContentKind.init(newznabCategory:)) ?? .other
+    private var kind: ContentKind { group.contentKind }
+
+    /// Formats a book or audiobook release names (EPUB, M4B…).
+    private var formats: [BookFileFormat] {
+        kind == .books || kind == .audiobooks ? BookRelease(group).formats : []
     }
 
     var body: some View {
@@ -28,6 +31,12 @@ struct OtherResultRow: View {
                         Text(size.formatted(.byteCount(style: .file))).monospacedDigit()
                     }
                     Text(kind.displayName)
+                    ForEach(formats, id: \.self) { format in
+                        Text(format.displayName)
+                            .padding(.horizontal, 5)
+                            .padding(.vertical, 1)
+                            .background(.quaternary, in: Capsule())
+                    }
                 }
                 .font(.caption)
                 .foregroundStyle(.secondary)
