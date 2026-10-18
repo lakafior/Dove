@@ -1,8 +1,8 @@
 import DoveKit
 import SwiftUI
 
-/// Where book and audiobook covers and titles come from: the free sources this device's region reaches, and
-/// the two that need the user's key.
+/// Where book and audiobook covers and titles come from: the built-in sources, the two that need the user's
+/// key, and metadata providers the user adds by URL (Audiobookshelf's format).
 struct BookMetadataSettingsView: View {
     @Environment(AppModel.self) private var model
     @State private var googleKey = ""
@@ -10,22 +10,52 @@ struct BookMetadataSettingsView: View {
     @State private var googleStatus: String?
     @State private var hardcoverStatus: String?
     @State private var saving: Set<String> = []
-
-    private var configuration: BookMetadata.Configuration { model.bookMetadataConfiguration }
-    private var metadata: BookMetadata { BookMetadata(configuration: configuration) }
+    @State private var providers: [BookProvider] = []
+    @State private var editing: BookProvider?
+    @State private var addingProvider = false
+    @State private var providerError: String?
 
     var body: some View {
         Form {
             Section {
-                ForEach(BookSourceRow.rows(for: metadata), id: \.name) { row in
-                    LabeledContent(row.name) {
-                        Text(row.detail).foregroundStyle(row.isOn ? .secondary : .tertiary)
-                    }
-                }
+                LabeledContent("Open Library", value: "Free")
+                LabeledContent("Apple Books", value: "Free")
+                LabeledContent("Google Books", value: model.googleBooksKey.isEmpty ? "Needs a key" : "Key set")
+                LabeledContent("Hardcover", value: model.hardcoverToken.isEmpty ? "Needs a token" : "Token set")
             } header: {
                 Text("Sources")
             } footer: {
-                Text("Searched at once for Books and Audiobooks; library covers ask them one by one. Stores follow this iPhone's region and language. Audible and Storytel are used without an official API and may change.")
+                Text("Searched at once for Books and Audiobooks; library covers ask them one by one.")
+            }
+
+            Section {
+                ForEach(providers) { provider in
+                    Button {
+                        editing = provider
+                    } label: {
+                        LabeledContent {
+                            Text(provider.enabled ? "On" : "Off")
+                        } label: {
+                            Text(provider.name).foregroundStyle(.primary)
+                            Text(provider.url.host() ?? "").font(.caption).foregroundStyle(.secondary)
+                        }
+                    }
+                }
+                .onDelete { offsets in
+                    let ids = Set(offsets.map { providers[$0].id })
+                    do {
+                        try model.removeBookProviders(ids)
+                        providers = model.bookProviders
+                    } catch {
+                        providerError = error.localizedDescription
+                    }
+                }
+                Button("Add provider", systemImage: "plus") { addingProvider = true }
+                if let providerError { Text(providerError).font(.footnote).foregroundStyle(.red) }
+            } header: {
+                Text("Metadata providers")
+            } footer: {
+                Text("Any Audiobookshelf custom metadata provider: paste its address (and its key, if it has one). The community runs providers for stores and catalogues without an official API. Asked first, before the sources above.")
             }
 
             keySection(
@@ -50,6 +80,13 @@ struct BookMetadataSettingsView: View {
         .onAppear {
             googleKey = model.googleBooksKey
             hardcoverToken = model.hardcoverToken
+            providers = model.bookProviders
+        }
+        .sheet(isPresented: $addingProvider) {
+            BookProviderSheet(provider: nil) { providers = model.bookProviders }
+        }
+        .sheet(item: $editing) { provider in
+            BookProviderSheet(provider: provider) { providers = model.bookProviders }
         }
     }
 
@@ -104,34 +141,81 @@ struct BookMetadataSettingsView: View {
     }
 }
 
-/// One line per source: on for this device (and which store), or why not.
-struct BookSourceRow {
-    let name: String
-    let detail: String
-    let isOn: Bool
+/// Adds or edits one provider; it is tested with a search before it is kept.
+private struct BookProviderSheet: View {
+    @Environment(AppModel.self) private var model
+    @Environment(\.dismiss) private var dismiss
+    let provider: BookProvider?
+    let onSave: () -> Void
+    @State private var name = ""
+    @State private var address = ""
+    @State private var key = ""
+    @State private var enabled = true
+    @State private var status: String?
+    @State private var isSaving = false
 
-    static func rows(for metadata: BookMetadata) -> [BookSourceRow] {
-        let sources = metadata.sources(for: .ebook) + metadata.sources(for: .audiobook)
-        let apple = sources.compactMap { source -> String? in
-            if case .appleBooks(let country) = source { country } else { nil }
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    TextField("Name", text: $name)
+                    TextField("Address", text: $address)
+                        .keyboardType(.URL)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                    SecureField("Key (optional)", text: $key)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                    Toggle("On", isOn: $enabled)
+                } footer: {
+                    Text("The address Audiobookshelf would use (Settings › Item metadata utils › Custom metadata providers). Dove asks its /search.")
+                }
+                if let status {
+                    Section { Text(status).font(.footnote) }
+                }
+            }
+            .navigationTitle(provider == nil ? "Add provider" : "Provider")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+                ToolbarItem(placement: .confirmationAction) {
+                    if isSaving { ProgressView() } else { Button("Save", action: save) }
+                }
+            }
+            .onAppear {
+                guard let provider else { return }
+                name = provider.name
+                address = provider.url.absoluteString
+                key = provider.authorization ?? ""
+                enabled = provider.enabled
+            }
         }
-        let audible = sources.compactMap { source -> String? in
-            if case .audible(let domain) = source { "audible.\(domain)" } else { nil }
+    }
+
+    private func save() {
+        guard let url = BookProvider.url(from: address) else {
+            status = "❌ Enter the provider's http(s) address."
+            return
         }
-        let storytel = sources.lazy.compactMap { source -> String? in
-            if case .storytel(let locale) = source { locale } else { nil }
-        }.first
-        return [
-            BookSourceRow(name: "Open Library", detail: "Books", isOn: true),
-            BookSourceRow(name: "Apple Books", detail: apple.joined(separator: ", "), isOn: true),
-            BookSourceRow(name: "Audible", detail: audible.joined(separator: ", "), isOn: true),
-            BookSourceRow(
-                name: "Storytel",
-                detail: storytel.map { "Market: \($0)" } ?? "Not in this region or language",
-                isOn: storytel != nil
-            ),
-            BookSourceRow(name: "Google Books", detail: sources.contains(.googleBooks) ? "Key set" : "Needs a key", isOn: sources.contains(.googleBooks)),
-            BookSourceRow(name: "Hardcover", detail: sources.contains(.hardcover) ? "Token set" : "Needs a token", isOn: sources.contains(.hardcover)),
-        ]
+        let trimmedName = name.trimmingCharacters(in: .whitespaces)
+        let updated = BookProvider(
+            id: provider?.id ?? UUID().uuidString,
+            name: trimmedName.isEmpty ? (url.host() ?? "Provider") : trimmedName,
+            url: url,
+            authorization: key.isEmpty ? nil : key,
+            enabled: enabled
+        )
+        isSaving = true
+        status = nil
+        Task {
+            do {
+                try await model.saveBookProvider(updated)
+                onSave()
+                dismiss()
+            } catch {
+                status = "❌ \(error.localizedDescription)"
+            }
+            isSaving = false
+        }
     }
 }

@@ -620,9 +620,37 @@ final class AppModel {
     var googleBooksKey: String { (try? keychain.get(.googleBooksAPIKey)) ?? "" }
     var hardcoverToken: String { (try? keychain.get(.hardcoverToken)) ?? "" }
 
-    /// The book metadata sources for this device's region and language, with the user's keys.
+    /// The user's Audiobookshelf metadata providers, in their order.
+    var bookProviders: [BookProvider] {
+        guard let json = try? keychain.get(.bookProviders) else { return [] }
+        return (try? JSONDecoder().decode([BookProvider].self, from: Data(json.utf8))) ?? []
+    }
+
+    /// The book metadata sources for this device's region, with the user's keys and providers.
     var bookMetadataConfiguration: BookMetadata.Configuration {
-        .device(googleBooksKey: googleBooksKey, hardcoverToken: hardcoverToken)
+        .device(googleBooksKey: googleBooksKey, hardcoverToken: hardcoverToken, providers: bookProviders)
+    }
+
+    /// Checks a new or changed provider (when it is on) with one search before keeping the list.
+    func saveBookProvider(_ provider: BookProvider) async throws {
+        if provider.enabled { try await BookMetadata().validate(provider) }
+        var providers = bookProviders
+        if let index = providers.firstIndex(where: { $0.id == provider.id }) {
+            providers[index] = provider
+        } else {
+            providers.append(provider)
+        }
+        try storeBookProviders(providers)
+    }
+
+    func removeBookProviders(_ ids: Set<String>) throws {
+        try storeBookProviders(bookProviders.filter { !ids.contains($0.id) })
+    }
+
+    private func storeBookProviders(_ providers: [BookProvider]) throws {
+        let data = try JSONEncoder().encode(providers)
+        try keychain.set(providers.isEmpty ? nil : String(decoding: data, as: UTF8.self), for: .bookProviders)
+        reloadBookMetadata()
     }
 
     func reloadBookMetadata() {

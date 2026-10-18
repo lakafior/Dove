@@ -480,20 +480,31 @@ struct BookSourcesTests {
         #expect(request.url?.query?.contains("keywords=project%20hail%20mary") == true)
     }
 
-    @Test func storytelKeepsTheAskedFormat() async throws {
+    @Test func audiobookshelfProvidersAnswerInTheirFormat() async throws {
         let transport = MockTransport()
-        await transport.stub("search.action", body: try Fixture.data("storytel_search"))
-        let metadata = BookMetadata(transport: transport)
+        await transport.stub("/search", body: try Fixture.data("abs_provider_search"))
+        let provider = BookProvider(id: "p1", name: "Lubimyczytac", url: URL(string: "https://abs.example/lc/")!, authorization: "SECRET")
+        let books = try await BookMetadata(transport: transport).search("projekt hail mary", in: .provider(provider))
 
-        let audiobooks = try await metadata.search("projekt hail mary", in: .storytel(locale: "pl"), format: .audiobook)
-        #expect(audiobooks.map(\.id) == ["storytel:10690015", "storytel:10493119"])
-        #expect(audiobooks[0].title == "Projekt Hail Mary" && audiobooks[0].year == 2026)
-        #expect(audiobooks[0].cover?.absoluteString == "https://www.storytel.com/images/320x320/0010690016.jpg")
-        #expect(audiobooks[0].link?.absoluteString == "https://www.storytel.com/pl/pl/books/projekt-hail-mary-13736722")
+        #expect(books.map(\.id) == ["provider:p1:9788381885317", "provider:p1:andyweirmarsjanin"])
+        #expect(books[0].title == "Projekt Hail Mary" && books[0].year == 2021)
+        #expect(books[0].description == "Samotny astronauta musi uratować Ziemię.")
+        #expect(books[0].cover?.absoluteString == "https://covers.example/phm.jpg")
+        #expect(books[1].authors == ["Andy Weir", "Jan Kraśko"] && books[1].year == 2014, "a numeric year is read too")
 
-        let ebooks = try await metadata.search("projekt hail mary", in: .storytel(locale: "pl"), format: .ebook)
-        #expect(ebooks.map(\.id) == ["storytel:9830272"])
-        #expect(await transport.requests.first?.url?.query?.contains("request_locale=pl") == true)
+        let request = try #require(await transport.requests.first)
+        #expect(request.url?.path() == "/lc/search")
+        #expect(request.url?.query?.contains("query=projekt%20hail%20mary") == true)
+        #expect(request.url?.query?.contains("mediaType=book") == true)
+        #expect(request.value(forHTTPHeaderField: "Authorization") == "SECRET")
+    }
+
+    @Test func providerURLs() {
+        #expect(BookProvider.url(from: "abs.example/provider")?.absoluteString == "https://abs.example/provider")
+        #expect(BookProvider.url(from: "ftp://x") == nil)
+        #expect(BookProvider.url(from: "  ") == nil)
+        let pasted = BookProvider(name: "X", url: URL(string: "https://x.example/api/search?region=pl")!)
+        #expect(pasted.searchURL.absoluteString == "https://x.example/api/search?region=pl", "an address ending in /search keeps its query")
     }
 
     @Test func googleBooksNeedsAKeyAndCleansCovers() async throws {
@@ -539,36 +550,35 @@ struct BookSourcesTests {
     }
 
     @Test func sourcesFollowTheRegionLanguageAndKeys() {
-        let us = BookMetadata(configuration: .init(region: "US", language: "en"))
+        let us = BookMetadata(configuration: .init(region: "US"))
         #expect(us.sources(for: .ebook) == [.openLibrary, .appleBooks()])
         #expect(us.sources(for: .audiobook) == [.audible(), .appleAudiobooks(), .openLibrary])
 
-        let poland = BookMetadata(configuration: .init(region: "PL", language: "pl", googleBooksKey: "K", hardcoverToken: "T"))
+        let provider = BookProvider(id: "p", name: "P", url: URL(string: "https://p.example")!)
+        let off = BookProvider(id: "q", name: "Q", url: URL(string: "https://q.example")!, enabled: false)
+        let poland = BookMetadata(configuration: .init(region: "PL", googleBooksKey: "K", hardcoverToken: "T", providers: [provider, off]))
         #expect(poland.sources(for: .ebook) == [
-            .openLibrary, .googleBooks, .hardcover, .appleBooks(country: "PL"), .appleBooks(), .storytel(locale: "pl"),
+            .provider(provider), .openLibrary, .googleBooks, .hardcover, .appleBooks(country: "PL"), .appleBooks(),
         ])
         #expect(poland.sources(for: .audiobook) == [
-            .audible(), .storytel(locale: "pl"), .appleAudiobooks(country: "PL"), .appleAudiobooks(), .hardcover, .openLibrary, .googleBooks,
+            .provider(provider), .audible(), .appleAudiobooks(country: "PL"), .appleAudiobooks(), .hardcover, .openLibrary, .googleBooks,
         ])
 
-        #expect(BookMetadata(configuration: .init(region: "PL", language: "en")).sources(for: .ebook).last == .storytel(locale: "pl"),
-                "the region picks Storytel's market")
-        #expect(BookMetadata(configuration: .init(region: "US", language: "sv")).sources(for: .ebook).last == .storytel(locale: "sv"))
-
-        let germany = BookMetadata(configuration: .init(region: "DE", language: "de"))
+        let germany = BookMetadata(configuration: .init(region: "DE"))
         #expect(germany.sources(for: .audiobook).prefix(2) == [.audible(domain: "de"), .audible()])
     }
 
     @Test func searchAsksEverySourceAndPutsTheBestFitFirst() async throws {
         let transport = MockTransport()
         await transport.stub("/catalog/products", body: try Fixture.data("audible_search"))
-        await transport.stub("search.action", body: try Fixture.data("storytel_search"))
+        await transport.stub("/lc/search", body: try Fixture.data("abs_provider_search"))
         await transport.stub("search", json: #"{"results":[]}"#)
         await transport.stub("search.json", status: 500, json: "{}")
-        let metadata = BookMetadata(configuration: .init(region: "PL", language: "pl"), transport: transport)
+        let provider = BookProvider(id: "p1", name: "Lubimyczytac", url: URL(string: "https://abs.example/lc")!)
+        let metadata = BookMetadata(configuration: .init(region: "PL", providers: [provider]), transport: transport)
 
         let books = try await metadata.search("projekt hail mary", format: .audiobook)
-        #expect(books.first?.id == "storytel:10690015", "the Polish title fits the Polish words best")
+        #expect(books.first?.id == "provider:p1:9788381885317", "the Polish title fits the Polish words best")
         #expect(books.contains { $0.id == "audible:B08G9PRS1K" })
     }
 }
