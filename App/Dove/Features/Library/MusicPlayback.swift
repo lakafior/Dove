@@ -7,6 +7,8 @@ extension AppModel {
         case beginning
         /// A track of the first album, as the metadata lists it (matched to its file by title, else position).
         case track(AlbumTrack)
+        /// A file of the first album's release.
+        case file(LibraryFile.ID)
     }
 
     /// Plays albums in Dove's player: an album, an artist's albums, the whole library. The first album (a random
@@ -35,6 +37,8 @@ extension AppModel {
         switch start {
         case .track(let track):
             startIndex = MusicTracks.index(of: track, in: first.entries.map(\.track), artist: order[first.index].artist) ?? 0
+        case .file(let fileID):
+            startIndex = first.entries.firstIndex { $0.track.fileID == fileID } ?? 0
         case .beginning:
             // Shuffled, the first track is a random one too, not the album's opener.
             if shuffled { startIndex = Int.random(in: first.entries.indices) }

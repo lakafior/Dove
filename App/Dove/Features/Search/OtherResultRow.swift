@@ -11,9 +11,13 @@ struct OtherResultRow: View {
 
     private var kind: ContentKind { group.contentKind }
 
-    /// Formats a book or audiobook release names (EPUB, M4B…).
-    private var formats: [BookFileFormat] {
-        kind == .books || kind == .audiobooks ? BookRelease(group).formats : []
+    /// Formats a book, audiobook or music release names (EPUB, M4B, FLAC, Hi-Res…).
+    private var formats: [String] {
+        switch kind {
+        case .books, .audiobooks: BookRelease(group).formats.map(\.displayName)
+        case .music: MusicFileFormat.formats(in: group.title).map(\.displayName)
+        default: []
+        }
     }
 
     var body: some View {
@@ -32,7 +36,7 @@ struct OtherResultRow: View {
                     }
                     Text(kind.displayName)
                     ForEach(formats, id: \.self) { format in
-                        Text(format.displayName)
+                        Text(format)
                             .padding(.horizontal, 5)
                             .padding(.vertical, 1)
                             .background(.quaternary, in: Capsule())

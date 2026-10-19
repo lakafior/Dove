@@ -224,3 +224,17 @@ struct MusicTrackNameTests {
         #expect(MusicTracks.index(of: AlbumTrack(id: "z", position: 9, title: "Nope"), in: files) == nil)
     }
 }
+
+struct MusicFormatTests {
+    @Test func formatsFromReleaseNames() {
+        #expect(MusicFileFormat.formats(in: "Green Day - Dookie (30th Anniversary Deluxe Edition)  (2023) [24Bit-192kHz] FLAC [PMEDIA] ⭐️") == [.hiRes, .flac])
+        #expect(MusicFileFormat.formats(in: "Daft_Punk-Discovery-CD-FLAC-2001-PERFECT") == [.flac])
+        #expect(MusicFileFormat.formats(in: "Radiohead - OK Computer (1997) [MP3 320]") == [.mp3])
+        #expect(MusicFileFormat.formats(in: "Artist - Album (2020) WEB 320kbps") == [.mp3])
+        #expect(MusicFileFormat.formats(in: "Pink Floyd - Wish You Were Here (SACD DSD64)") == [.dsd])
+        #expect(MusicFileFormat.formats(in: "Artist - Album [24-96 ALAC]") == [.hiRes, .alac])
+        #expect(MusicFileFormat.formats(in: "Artist - Album (Hi-Res) [M4A]") == [.hiRes, .aac])
+        #expect(MusicFileFormat.formats(in: "Artist - Album 2024") == [], "a year is no format")
+        #expect(MusicFileFormat.formats(in: "Blink-182 - Enema of the State") == [], "a band named after a number is no format")
+    }
+}

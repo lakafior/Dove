@@ -779,6 +779,11 @@ struct LibraryItemView: View {
                 Button(model.playback.playLabel, systemImage: "play") { play(file) }
                 PlayInMenu { play(file, in: $0) }
             }
+            if let album = musicRelease, AudiobookTracks.playableExtensions.contains((file.name as NSString).pathExtension.lowercased()) {
+                Button("Play from here", systemImage: "play") {
+                    Task { message = await model.playMusic([album], title: album.name, cover: album.album?.cover, start: .file(file.id)) }
+                }
+            }
             if !item.backend.isStorage {
                 Button("Copy link", systemImage: "link") { copyLink(file) }
                 Button("Download to phone", systemImage: "arrow.down.circle") { download(file) }
@@ -787,6 +792,14 @@ struct LibraryItemView: View {
                 }
             }
         }
+    }
+
+    /// A music item: its album in the Library, with only this release, for Play and Shuffle here.
+    private var musicRelease: AlbumTitle? {
+        let id = ShelfItem.id(backend: item.backend, itemID: item.id)
+        guard var album = model.library.albums.first(where: { $0.items.contains { $0.id == id } }) else { return nil }
+        album.items = album.items.filter { $0.id == id }
+        return album
     }
 
     /// Set when the service waits for the user to pick files (Real-Debrid).
@@ -802,6 +815,13 @@ struct LibraryItemView: View {
                 LabeledContent("Status", value: (detail ?? item).status.label)
                 if let size = item.size {
                     LabeledContent("Size", value: size.formatted(.byteCount(style: .file)))
+                }
+            }
+            if let album = musicRelease, current.status == .ready {
+                Section {
+                    MusicPlayButtons(albums: [album], title: album.name, cover: album.album?.cover)
+                } footer: {
+                    Text("Plays this release in Dove. Touch and hold a track to start there.")
                 }
             }
             if let seeding = current.seeding {

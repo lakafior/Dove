@@ -19,6 +19,8 @@ final class ReleaseList {
     var showOtherBookKind = false
     /// Books and Audiobooks: only releases that name this format.
     var bookFormat: BookFileFormat?
+    /// Music: only releases that name this format (FLAC, Hi-Res, MP3…).
+    var musicFormat: MusicFileFormat?
     /// A book's screen: the rest of the indexers' answer, not this book.
     var showOtherBooks = false
 
@@ -44,6 +46,7 @@ final class ReleaseList {
         message = nil
         showOtherBookKind = false
         bookFormat = nil
+        musicFormat = nil
         showOtherBooks = false
     }
 
@@ -71,6 +74,13 @@ final class ReleaseList {
     }
 
     /// Formats the shown book results name, for the chips.
+    /// Formats the shown music results name, for the chips.
+    var musicFormats: [MusicFileFormat] {
+        guard category == .music else { return [] }
+        let groups = bookSplit.thisBook + (showOtherBooks ? bookSplit.other : [])
+        return Set(groups.flatMap { MusicFileFormat.formats(in: $0.title) }).sorted()
+    }
+
     var formats: [BookFileFormat] {
         guard category == .books || category == .audiobooks else { return [] }
         let groups = bookSplit.thisBook + (showOtherBooks ? bookSplit.other : [])
@@ -80,6 +90,7 @@ final class ReleaseList {
     var visible: [StreamGroup] {
         var shown = bookSplit.thisBook + (showOtherBooks ? bookSplit.other : [])
         if let bookFormat { shown = shown.filter { BookRelease($0).formats.contains(bookFormat) } }
+        if let musicFormat { shown = shown.filter { MusicFileFormat.formats(in: $0.title).contains(musicFormat) } }
         return filter.apply(to: shown)
     }
 
@@ -192,6 +203,7 @@ struct ReleaseListSection: View {
                 )
             }
             if !list.formats.isEmpty { formatBar }
+            if !list.musicFormats.isEmpty { musicFormatBar }
             ForEach(list.visible) { group in
                 OtherResultRow(
                     group: group,
@@ -244,6 +256,20 @@ struct ReleaseListSection: View {
                 ForEach(list.formats, id: \.self) { format in
                     chip(format.displayName, selected: list.bookFormat == format) {
                         list.bookFormat = list.bookFormat == format ? nil : format
+                    }
+                }
+            }
+        }
+        .scrollIndicators(.hidden)
+    }
+
+    private var musicFormatBar: some View {
+        ScrollView(.horizontal) {
+            HStack(spacing: 8) {
+                chip("All", selected: list.musicFormat == nil) { list.musicFormat = nil }
+                ForEach(list.musicFormats, id: \.self) { format in
+                    chip(format.displayName, selected: list.musicFormat == format) {
+                        list.musicFormat = list.musicFormat == format ? nil : format
                     }
                 }
             }

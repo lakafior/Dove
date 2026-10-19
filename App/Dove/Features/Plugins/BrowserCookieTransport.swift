@@ -25,10 +25,7 @@ struct BrowserCookieTransport: HTTPTransport {
     /// The browser's `Cookie` header for a URL, the way `HTTPCookieStorage` would send it: cookies the
     /// default web data store holds for the host, the path and the scheme.
     private static func cookies(for url: URL) async -> String? {
-        let store = await MainActor.run { WKWebsiteDataStore.default().httpCookieStore }
-        let cookies = await withCheckedContinuation { continuation in
-            store.getAllCookies { continuation.resume(returning: $0) }
-        }
+        let cookies = await browserCookies()
         let host = url.host() ?? ""
         let path = url.path.isEmpty ? "/" : url.path
         let header = cookies
@@ -41,5 +38,22 @@ struct BrowserCookieTransport: HTTPTransport {
             .map { "\($0.name)=\($0.value)" }
             .joined(separator: "; ")
         return header.isEmpty ? nil : header
+    }
+
+    /// What a cookie needs to be matched, copied out of WebKit's store.
+    private struct Cookie: Sendable {
+        let name: String
+        let value: String
+        let domain: String
+        let path: String
+        let isSecure: Bool
+    }
+
+    /// WebKit's cookie store belongs to the main actor: it is read there, and only plain values leave it.
+    @MainActor
+    private static func browserCookies() async -> [Cookie] {
+        await WKWebsiteDataStore.default().httpCookieStore.allCookies().map {
+            Cookie(name: $0.name, value: $0.value, domain: $0.domain, path: $0.path, isSecure: $0.isSecure)
+        }
     }
 }
