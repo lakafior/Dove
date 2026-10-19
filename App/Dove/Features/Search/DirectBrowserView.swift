@@ -49,9 +49,9 @@ struct DirectBrowserView: View {
                         Spacer()
                         if let md5 {
                             // A tap goes to the kind's default place; a long press offers the others.
-                            let standard = model.downloadDestination(for: category.contentKind)
+                            let standard = model.place(for: category.contentKind)
                             Menu {
-                                ForEach(places, id: \.self) { place in
+                                ForEach(model.places, id: \.self) { place in
                                     Button(place.displayName, systemImage: place.symbol) { download(md5, to: place) }
                                 }
                             } label: {
@@ -72,12 +72,7 @@ struct DirectBrowserView: View {
         }
     }
 
-    /// Places this device can save to (iCloud Drive only when available).
-    private var places: [DownloadDestination] {
-        DownloadDestination.allCases.filter { $0 != .iCloud || model.iCloudFolder != nil }
-    }
-
-    private func download(_ md5: String, to place: DownloadDestination) {
+    private func download(_ md5: String, to place: FilePlace) {
         isStarting = true
         Task {
             message = await model.startDirectDownload(md5: md5, to: place, kind: category.contentKind, book: book)

@@ -446,10 +446,32 @@ final class AppModel {
         reloadBackends()
     }
 
-    /// Where a download of this kind goes: the user's default, or this device while iCloud Drive is unavailable.
-    func downloadDestination(for kind: ContentKind) -> DownloadDestination {
-        let chosen = downloadDestinations.destination(for: kind)
-        return chosen == .iCloud && iCloudFolder == nil ? .device : chosen
+    /// Where a file of this kind goes: the user's default, unless that place is gone (iCloud Drive unavailable,
+    /// the service's key removed), then the kind's standard place, then this device.
+    func place(for kind: ContentKind) -> FilePlace {
+        let chosen = downloadDestinations.place(for: kind)
+        if isAvailable(chosen) { return chosen }
+        let standard = DownloadDestinations.standard(for: kind)
+        return isAvailable(standard) ? standard : .device
+    }
+
+    /// Every place a file can go from this device: downloads, then the services that fetch plain links.
+    var places: [FilePlace] {
+        [.device] + (iCloudFolder == nil ? [] : [.iCloud]) + directLinkServices.map(FilePlace.service)
+    }
+
+    /// Configured services that fetch any HTTP link into their cloud, in the debrid priority order.
+    var directLinkServices: [BackendID] {
+        let rank = { (id: BackendID) in self.debridOrder.firstIndex(of: id) ?? Int.max }
+        return backends.filter(\.acceptsDirectLinks).map(\.id).sorted { rank($0) < rank($1) }
+    }
+
+    func isAvailable(_ place: FilePlace) -> Bool {
+        switch place {
+        case .download(.device): true
+        case .download(.iCloud): iCloudFolder != nil
+        case .service(let id): backend(id)?.acceptsDirectLinks == true
+        }
     }
 
     // MARK: - Newznab indexers
@@ -755,17 +777,22 @@ final class AppModel {
     /// cache). Returns the message to show.
     func startDirectDownload(
         md5: String,
-        to destination: DownloadDestination? = nil,
+        to place: FilePlace? = nil,
         kind: ContentKind = .books,
         book: BookSummary? = nil
     ) async -> String {
-        let destination = destination ?? downloadDestination(for: kind)
+        let place = place ?? self.place(for: kind)
         guard let source = directSource else {
             return "Add a direct download site in Settings › Direct downloads first."
         }
         let ref = DirectDownloadRef(sourceID: source.id, md5: md5)
         do {
             let link = try await directLink(for: ref)
+            let quota = link.quota?.left.map { " \($0) fast downloads left today." } ?? ""
+            guard case .download(let destination) = place else {
+                guard case .service(let id) = place else { return "" }
+                return try await sendToService(link, md5: md5, service: id, kind: kind, book: book) + quota
+            }
             var name = link.fileName(md5: md5)
             var subfolder: String?
             if destination == .iCloud {
@@ -775,12 +802,28 @@ final class AppModel {
                 rememberICloud(place, book: book, kind: kind)
             }
             try downloads.start(URLRequest(url: link.url), direct: ref, name: name, destination: destination, subfolder: subfolder)
-            var message = "Downloading to \(destination.displayName)."
-            if let left = link.quota?.left { message += " \(left) fast downloads left today." }
-            return message
+            return "Downloading to \(destination.displayName)." + quota
         } catch {
             return error.localizedDescription
         }
+    }
+
+    /// Hands a direct link to a service that fetches it into its cloud (`acceptsDirectLinks`); the Library then
+    /// lists it like anything added there, matched to the book it was found for.
+    private func sendToService(
+        _ link: DirectDownloadLink, md5: String, service id: BackendID, kind: ContentKind, book: BookSummary?
+    ) async throws -> String {
+        guard let backend = backend(id), backend.acceptsDirectLinks else {
+            throw BackendError.api(message: "\(id.displayName) is not set up, or does not fetch direct links.")
+        }
+        let itemIDs = try await backend.addAll(.hosterURL(link.url), category: nil, privateTracker: false)
+        let name = link.fileName(md5: md5)
+        library.recordAdded(AddedHint(releaseName: name, book: book), backend: id, itemIDs: itemIDs, infoHash: nil)
+        if kind == .books || kind == .audiobooks {
+            for itemID in itemIDs { library.setKind(kind, backend: id, itemID: itemID) }
+        }
+        Task { await library.refresh(using: self, afterChange: true) }
+        return "Sent to \(id.displayName). It fetches the file into its cloud."
     }
 
     // MARK: - Book metadata

@@ -15,6 +15,7 @@ import Foundation
 public struct TorBoxBackend: LibraryBackend {
     public let id: BackendID = .torBox
     public let supportedSources: Set<SourceKind>
+    public var acceptsDirectLinks: Bool { true }
     public let takesPrivateTorrents: Bool
 
     private let apiKey: String

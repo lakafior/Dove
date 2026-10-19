@@ -52,3 +52,12 @@ extension DownloadDestination {
         }
     }
 }
+
+extension FilePlace {
+    var symbol: String {
+        switch self {
+        case .download(let destination): destination.symbol
+        case .service: "cloud"
+        }
+    }
+}

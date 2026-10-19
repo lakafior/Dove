@@ -15,25 +15,87 @@ public enum DownloadDestination: String, Codable, Sendable, Hashable, CaseIterab
     }
 }
 
+/// Where a file goes when the user gets it: downloaded (to this device or iCloud Drive), or fetched by a
+/// service into its cloud (`LibraryBackend.acceptsDirectLinks`). Stored as one string: `device`, `iCloud`,
+/// `service:offcloud`, so preferences saved before services were places still read.
+public enum FilePlace: Sendable, Hashable, Codable {
+    case download(DownloadDestination)
+    case service(BackendID)
+
+    public static let device = FilePlace.download(.device)
+    public static let iCloud = FilePlace.download(.iCloud)
+
+    public var rawValue: String {
+        switch self {
+        case .download(let destination): destination.rawValue
+        case .service(let backend): "service:\(backend.rawValue)"
+        }
+    }
+
+    public init?(rawValue: String) {
+        if let destination = DownloadDestination(rawValue: rawValue) {
+            self = .download(destination)
+        } else if rawValue.hasPrefix("service:"), let backend = BackendID(rawValue: String(rawValue.dropFirst(8))) {
+            self = .service(backend)
+        } else {
+            return nil
+        }
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let raw = try decoder.singleValueContainer().decode(String.self)
+        guard let place = FilePlace(rawValue: raw) else {
+            throw DecodingError.dataCorrupted(.init(codingPath: decoder.codingPath, debugDescription: "Unknown place \(raw)"))
+        }
+        self = place
+    }
+
+    public func encode(to encoder: any Encoder) throws {
+        var container = encoder.singleValueContainer()
+        try container.encode(rawValue)
+    }
+
+    public var displayName: String {
+        switch self {
+        case .download(let destination): destination.displayName
+        case .service(let backend): backend.displayName
+        }
+    }
+}
+
 /// The default place per content kind: books, audiobooks and music to iCloud Drive (read and played on every
 /// device, small enough for iCloud), everything else (video, software) to the device.
 public struct DownloadDestinations: Codable, Sendable, Hashable {
-    /// The user's choices by `ContentKind.rawValue`; kinds not listed take `standard(for:)`.
-    public var chosen: [String: DownloadDestination] = [:]
+    /// The user's choices by `ContentKind.rawValue`; kinds not listed take `standard(for:)`. Values read as
+    /// `FilePlace`; an unknown one (a newer build's) falls back to the default.
+    public var chosen: [String: FilePlace] = [:]
 
-    public init(chosen: [String: DownloadDestination] = [:]) {
+    public init(chosen: [String: FilePlace] = [:]) {
         self.chosen = chosen
     }
 
-    public func destination(for kind: ContentKind) -> DownloadDestination {
+    enum CodingKeys: String, CodingKey { case chosen }
+
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let raw = (try? container.decodeIfPresent([String: String].self, forKey: .chosen)) ?? [:]
+        chosen = raw.compactMapValues(FilePlace.init(rawValue:))
+    }
+
+    public func encode(to encoder: any Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(chosen.mapValues(\.rawValue), forKey: .chosen)
+    }
+
+    public func place(for kind: ContentKind) -> FilePlace {
         chosen[kind.rawValue] ?? Self.standard(for: kind)
     }
 
-    public mutating func set(_ destination: DownloadDestination, for kind: ContentKind) {
-        chosen[kind.rawValue] = destination == Self.standard(for: kind) ? nil : destination
+    public mutating func set(_ place: FilePlace, for kind: ContentKind) {
+        chosen[kind.rawValue] = place == Self.standard(for: kind) ? nil : place
     }
 
-    public static func standard(for kind: ContentKind) -> DownloadDestination {
+    public static func standard(for kind: ContentKind) -> FilePlace {
         switch kind {
         case .books, .audiobooks, .music: .iCloud
         case .video, .software, .adult, .other: .device

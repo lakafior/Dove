@@ -20,18 +20,18 @@ struct DownloadSettingsView: View {
             Section {
                 ForEach(kinds, id: \.self) { kind in
                     Picker(selection: binding(for: kind)) {
-                        ForEach(DownloadDestination.allCases, id: \.self) { place in
+                        ForEach(model.places, id: \.self) { place in
                             Text(place.displayName).tag(place)
                         }
                     } label: {
                         Label(kind.displayName, systemImage: kind.symbol)
                     }
-                    .disabled(model.iCloudFolder == nil)
+                    .disabled(model.places.count < 2)
                 }
             } header: {
                 Text("Download to")
             } footer: {
-                Text("Direct downloads and Save to… use these; a long press on Download picks another place for one file.")
+                Text("Direct downloads use these; a long press on Download picks another place for one file. Offcloud, TorBox and Premiumize fetch the file into their cloud (Real-Debrid, AllDebrid and Debrid-Link only take hosters they list).")
             }
         }
         .navigationTitle("Downloads")
@@ -43,9 +43,9 @@ struct DownloadSettingsView: View {
         return model.iCloudChecked ? "Not available" : "Checking…"
     }
 
-    private func binding(for kind: ContentKind) -> Binding<DownloadDestination> {
+    private func binding(for kind: ContentKind) -> Binding<FilePlace> {
         Binding(
-            get: { model.downloadDestination(for: kind) },
+            get: { model.place(for: kind) },
             set: { model.downloadDestinations.set($0, for: kind) }
         )
     }

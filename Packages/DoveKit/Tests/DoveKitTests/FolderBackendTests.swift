@@ -96,19 +96,32 @@ struct FolderBackendTests {
         #expect(BackendID.iCloudDrive.isStorage && !BackendID.iCloudDrive.isUsenet)
         #expect(!SharedConfiguration.debrids.contains(.iCloudDrive))
         #expect(FolderBackend(directory: URL(filePath: "/tmp")).supportedSources.isEmpty, "the router never picks it")
+        #expect(OffcloudBackend(apiKey: "k").acceptsDirectLinks && TorBoxBackend(apiKey: "k").acceptsDirectLinks)
+        #expect(PremiumizeBackend(apiKey: "k").acceptsDirectLinks)
+        #expect(!RealDebridBackend(apiKey: "k").acceptsDirectLinks && !AllDebridBackend(apiKey: "k").acceptsDirectLinks)
+        #expect(!DebridLinkBackend(apiKey: "k").acceptsDirectLinks)
     }
 }
 
 struct DownloadDestinationTests {
     @Test func defaultsByKindAndChoices() throws {
         var destinations = DownloadDestinations()
-        #expect(destinations.destination(for: .books) == .iCloud)
-        #expect(destinations.destination(for: .audiobooks) == .iCloud)
-        #expect(destinations.destination(for: .video) == .device)
+        #expect(destinations.place(for: .books) == .iCloud)
+        #expect(destinations.place(for: .audiobooks) == .iCloud)
+        #expect(destinations.place(for: .video) == .device)
         destinations.set(.device, for: .books)
         destinations.set(.device, for: .video)
-        #expect(destinations.destination(for: .books) == .device)
-        #expect(destinations.chosen == ["books": .device], "a choice equal to the default is not stored")
+        destinations.set(.service(.offcloud), for: .software)
+        #expect(destinations.place(for: .books) == .device)
+        #expect(destinations.chosen == ["books": .device, "software": .service(.offcloud)], "a choice equal to the default is not stored")
+
+        let saved = try JSONEncoder().encode(destinations)
+        #expect(String(decoding: saved, as: UTF8.self).contains(#""service:offcloud""#))
+        #expect(try JSONDecoder().decode(DownloadDestinations.self, from: saved) == destinations)
+        let older = Data(#"{"chosen":{"books":"device","music":"somewhere-new"}}"#.utf8)
+        #expect(try JSONDecoder().decode(DownloadDestinations.self, from: older).chosen == ["books": .device],
+                "a place this build does not know falls back to the default")
+        #expect(FilePlace(rawValue: "service:torBox") == .service(.torBox) && FilePlace(rawValue: "service:nope") == nil)
         #expect(SearchCategory.audiobooks.contentKind == .audiobooks && SearchCategory.media.contentKind == .video)
 
         let old = Data(#"{"id":"1","backend":"torBox","itemID":"i","fileID":"f","name":"a.mkv","state":{"finished":{}},"bytesWritten":1,"createdAt":0}"#.utf8)

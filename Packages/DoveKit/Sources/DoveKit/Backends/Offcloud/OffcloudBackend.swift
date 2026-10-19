@@ -19,6 +19,7 @@ import Foundation
 public struct OffcloudBackend: LibraryBackend {
     public let id: BackendID = .offcloud
     public let supportedSources: Set<SourceKind>
+    public var acceptsDirectLinks: Bool { true }
 
     private let apiKey: String
     private let usenet: Bool

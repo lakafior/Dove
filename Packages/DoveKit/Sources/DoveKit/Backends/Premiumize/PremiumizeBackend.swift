@@ -19,6 +19,7 @@ import Foundation
 public struct PremiumizeBackend: LibraryBackend {
     public let id: BackendID = .premiumize
     public let supportedSources: Set<SourceKind>
+    public var acceptsDirectLinks: Bool { true }
 
     private let apiKey: String
     private let usenet: Bool

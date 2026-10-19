@@ -10,6 +10,9 @@ public protocol LibraryBackend: Sendable {
     /// Private trackers' torrents may go here: the service keeps seeding (Debrid-Link, TorBox on a paid plan)
     /// and the user lets them in (`PrivateTrackerTarget`). Everyone else refuses them (`TorrentFile.isPrivate`).
     var takesPrivateTorrents: Bool { get }
+    /// The service fetches any plain HTTP link into its cloud (a direct download), not only hosters it lists:
+    /// Offcloud, TorBox web downloads and Premiumize. Real-Debrid, AllDebrid and Debrid-Link only unlock hosters.
+    var acceptsDirectLinks: Bool { get }
 
     /// Cheap authenticated call used by the "Test connection" button in Settings.
     func validateCredentials() async throws
@@ -62,6 +65,7 @@ extension LibraryBackend {
     }
 
     public var takesPrivateTorrents: Bool { false }
+    public var acceptsDirectLinks: Bool { false }
 
     public func supports(_ source: Source) -> Bool {
         supportedSources.contains(source.kind) && (takesPrivateTorrents || !source.isPrivateTorrent)
