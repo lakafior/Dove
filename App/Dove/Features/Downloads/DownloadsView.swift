@@ -10,6 +10,8 @@ struct DownloadsView: View {
     @Environment(\.scenePhase) private var scenePhase
     @State private var message: String?
     @State private var cancelling: DownloadJob?
+    /// A release whose files are about to be deleted together.
+    @State private var deletingGroup: DownloadGroup?
 
     private var downloads: DownloadManager { model.downloads }
 
@@ -58,16 +60,18 @@ struct DownloadsView: View {
                         Text("Dove checks the service while the app is open. The files download, then the item is removed from the service.")
                     }
                 }
-                let active = downloads.records.filter { $0.state != .finished }
-                let finished = downloads.records.filter { $0.state == .finished }
+                // A release's files (an album, an audiobook's parts) are one row; it is finished when all are.
+                let groups = DownloadGroup.make(downloads.records)
+                let active = groups.filter { $0.state != .finished }
+                let finished = groups.filter { $0.state == .finished }
                 if !active.isEmpty {
                     Section("In progress") {
-                        ForEach(active) { row($0) }
+                        ForEach(active) { entry($0) }
                     }
                 }
                 if !finished.isEmpty {
                     Section {
-                        ForEach(finished) { row($0) }
+                        ForEach(finished) { entry($0) }
                     } header: {
                         Text("On this iPhone")
                     } footer: {
@@ -86,6 +90,19 @@ struct DownloadsView: View {
             }
             .navigationTitle("Downloads")
             .navigationDestination(for: ShelfItem.self) { LibraryItemView(item: $0.item) }
+            .navigationDestination(for: DownloadGroupRoute.self) { DownloadGroupView(groupID: $0.id) }
+            .confirmationDialog(
+                deletingGroup.map { "Delete \($0.records.count) files?" } ?? "",
+                isPresented: Binding(get: { deletingGroup != nil }, set: { if !$0 { deletingGroup = nil } }),
+                titleVisibility: .visible,
+                presenting: deletingGroup
+            ) { group in
+                Button("Delete \(group.title)", role: .destructive) {
+                    for record in group.records { downloads.remove(record.id) }
+                }
+            } message: { group in
+                Text(group.state == .finished ? "The files leave this iPhone." : "Their downloads stop and the files leave this iPhone.")
+            }
             .refreshable { await model.library.refresh(using: model) }
             .task(id: polls) {
                 guard polls else { return }
@@ -140,6 +157,20 @@ struct DownloadsView: View {
         }
     }
 
+    @ViewBuilder
+    private func entry(_ group: DownloadGroup) -> some View {
+        if group.isSingle, let record = group.records.first {
+            row(record)
+        } else {
+            NavigationLink(value: DownloadGroupRoute(id: group.id)) {
+                DownloadGroupRow(group: group, downloads: downloads) { message = $0 }
+            }
+            .swipeActions {
+                Button("Delete", systemImage: "trash", role: .destructive) { deletingGroup = group }
+            }
+        }
+    }
+
     private func row(_ record: DownloadRecord) -> some View {
         DownloadRow(
             record: record,
@@ -161,6 +192,164 @@ struct DownloadsView: View {
         case .resume:
             Task {
                 do { try await downloads.resume(record.id) } catch { message = error.localizedDescription }
+            }
+        }
+    }
+}
+
+struct DownloadGroupRoute: Hashable {
+    let id: String
+}
+
+/// One release's files: its title, how many are done, the bytes of all of them, pause or resume them all.
+private struct DownloadGroupRow: View {
+    let group: DownloadGroup
+    let downloads: DownloadManager
+    let report: (String) -> Void
+
+    var body: some View {
+        HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 4) {
+                Label(group.title, systemImage: "folder").font(.subheadline).lineLimit(2)
+                if group.state != .finished {
+                    if let progress = group.progress {
+                        ProgressView(value: progress)
+                    } else {
+                        ProgressView().progressViewStyle(.linear)
+                    }
+                }
+                HStack(spacing: 8) {
+                    if let backend = group.records.first?.backend {
+                        BackendBadge(backend: backend)
+                    } else {
+                        Label("Plugin", systemImage: "puzzlepiece").labelStyle(.titleAndIcon)
+                    }
+                    Text(detail)
+                }
+                .font(.caption)
+                .foregroundStyle(isFailed ? .red : .secondary)
+            }
+            Spacer(minLength: 0)
+            switch group.state {
+            case .downloading:
+                Button { DownloadGroupActions.pause(group, in: downloads) } label: { Image(systemName: "pause.fill") }
+                    .buttonStyle(.bordered)
+                    .accessibilityLabel("Pause all")
+            case .paused, .failed:
+                Button {
+                    Task { if let error = await DownloadGroupActions.resume(group, in: downloads) { report(error) } }
+                } label: { Image(systemName: isFailed ? "arrow.clockwise" : "play.fill") }
+                    .buttonStyle(.bordered)
+                    .accessibilityLabel(isFailed ? "Retry" : "Resume all")
+            case .finished:
+                EmptyView()
+            }
+        }
+    }
+
+    private var isFailed: Bool {
+        if case .failed = group.state { return true }
+        return false
+    }
+
+    private var detail: String {
+        let files = "\(group.finishedCount) of \(group.records.count) files"
+        let written = group.bytesWritten.formatted(.byteCount(style: .file))
+        switch group.state {
+        case .finished:
+            return "\(group.records.count) files · " + (group.totalBytes ?? group.bytesWritten).formatted(.byteCount(style: .file))
+        case .failed(let reason):
+            return "\(files) · \(reason)"
+        case .paused:
+            return "Paused · \(files)"
+        case .downloading:
+            return "\(files) · " + (group.totalBytes.map { "\(written) of \($0.formatted(.byteCount(style: .file)))" } ?? written)
+        }
+    }
+}
+
+/// Pause or resume every file of a release at once.
+enum DownloadGroupActions {
+    @MainActor
+    static func pause(_ group: DownloadGroup, in downloads: DownloadManager) {
+        for record in group.records where record.state == .downloading { downloads.pause(record.id) }
+    }
+
+    /// The first error, if any file could not be resumed.
+    @MainActor
+    static func resume(_ group: DownloadGroup, in downloads: DownloadManager) async -> String? {
+        var failure: String?
+        for record in group.records {
+            switch record.state {
+            case .paused, .failed:
+                do { try await downloads.resume(record.id) } catch { failure = failure ?? error.localizedDescription }
+            case .downloading, .finished:
+                break
+            }
+        }
+        return failure
+    }
+}
+
+/// The files of one release, each with its own controls; pause, resume or delete them all from the menu.
+private struct DownloadGroupView: View {
+    @Environment(AppModel.self) private var model
+    @Environment(\.dismiss) private var dismiss
+    let groupID: String
+    @State private var message: String?
+    @State private var confirmsDelete = false
+
+    private var downloads: DownloadManager { model.downloads }
+    private var group: DownloadGroup? { DownloadGroup.make(downloads.records).first { $0.id == groupID } }
+
+    var body: some View {
+        List {
+            if let message { Text(message).font(.footnote).foregroundStyle(.red) }
+            if let group {
+                ForEach(group.records) { record in
+                    DownloadRow(
+                        record: record,
+                        fileURL: downloads.fileURL(for: record),
+                        removesFromService: model.downloadJobs.job(for: record) != nil
+                    ) { action in
+                        switch action {
+                        case .pause:
+                            downloads.pause(record.id)
+                        case .resume:
+                            Task { do { try await downloads.resume(record.id) } catch { message = error.localizedDescription } }
+                        }
+                    }
+                    .swipeActions {
+                        Button("Delete", systemImage: "trash", role: .destructive) { downloads.remove(record.id) }
+                    }
+                }
+            } else {
+                ContentUnavailableView("No files left", systemImage: "folder")
+            }
+        }
+        .navigationTitle(group?.title ?? "")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            if let group {
+                ToolbarItem(placement: .primaryAction) {
+                    Menu("More", systemImage: "ellipsis.circle") {
+                        if group.records.contains(where: { $0.state == .downloading }) {
+                            Button("Pause all", systemImage: "pause") { DownloadGroupActions.pause(group, in: downloads) }
+                        }
+                        if group.state != .finished {
+                            Button("Resume all", systemImage: "play") {
+                                Task { message = await DownloadGroupActions.resume(group, in: downloads) }
+                            }
+                        }
+                        Button("Delete all", systemImage: "trash", role: .destructive) { confirmsDelete = true }
+                    }
+                }
+            }
+        }
+        .confirmationDialog("Delete \(group?.records.count ?? 0) files?", isPresented: $confirmsDelete, titleVisibility: .visible) {
+            Button("Delete all", role: .destructive) {
+                for record in group?.records ?? [] { downloads.remove(record.id) }
+                dismiss()
             }
         }
     }

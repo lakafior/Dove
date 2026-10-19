@@ -767,13 +767,15 @@ final class AppModel {
                 for (index, link) in links.enumerated() {
                     var name = link.name
                     var subfolder: String?
-                    if destination == .iCloud {
+                    // iCloud files by the layout; on the device a release of several files (an album, an
+                    // audiobook's parts) gets the same folder, rather than every file loose in Dove's root.
+                    if destination == .iCloud || !single {
                         let place = LibraryFolderLayout.placement(
                             kind: kind, book: book, itemName: title ?? link.name, fileName: link.name, singleFile: single
                         )
                         name = place.fileName
                         subfolder = place.folder
-                        rememberedPlace = rememberedPlace ?? place
+                        if destination == .iCloud { rememberedPlace = rememberedPlace ?? place }
                     }
                     let ref = PluginFileRef(pluginID: call.id, fileID: single ? id : "\(id)#\(index)")
                     try downloads.start(Self.request(for: link), plugin: ref, name: name, size: link.size, destination: destination, subfolder: subfolder)
