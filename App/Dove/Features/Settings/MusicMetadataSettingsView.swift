@@ -5,6 +5,7 @@ import SwiftUI
 /// Where album covers, titles and tracks come from: MusicBrainz always, Apple Music when the user turns it on
 /// (MusicKit permission, this device only).
 struct MusicMetadataSettingsView: View {
+    @Environment(AppModel.self) private var model
     @Environment(\.openURL) private var openURL
     @AppStorage(AppleMusicCatalog.preferenceKey) private var appleMusic = false
     @State private var status: String?
@@ -33,6 +34,20 @@ struct MusicMetadataSettingsView: View {
                 Text("Sources")
             } footer: {
                 Text("Searched at once for Music. MusicBrainz knows releases, years and track lists, but has no cover for many albums. Apple Music adds covers and albums MusicBrainz lacks, from your account's store. No subscription needed; Dove asks once for access to Apple Music and reads only the catalog, never your library.")
+            }
+
+            Section {
+                let plugins = model.plugins.calls(.metadata, category: .music).filter { $0.manifest.categories.contains(.music) }
+                if plugins.isEmpty {
+                    Text("None. Plugins can add more sources: Settings › Plugins.").foregroundStyle(.secondary)
+                }
+                ForEach(plugins, id: \.id) { call in
+                    Text(call.manifest.name)
+                }
+            } header: {
+                Text("From plugins")
+            } footer: {
+                Text("Asked at the same time as the sources above; the same album from several sources is one row.")
             }
         }
         .navigationTitle("Music metadata")
