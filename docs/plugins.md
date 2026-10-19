@@ -12,6 +12,7 @@ Status: draft, API version `1`.
 | Capability | Dove calls | Used for |
 |---|---|---|
 | `metadata` | `metadata({query, format}, ctx)` | covers, titles and authors for Books and Audiobooks (like Open Library or Apple Books) |
+| `metadata` for Music | `metadata({query, category: "music"}, ctx)`, optional `tracks({id}, ctx)` | albums beside MusicBrainz (only plugins whose `categories` name `music`); `tracks` gives an album's track list |
 | `search` | `search({query, category, book, title, album}, ctx)` | downloadable rows: on a picked book's, title's or album's screen (Books, Audiobooks, Movies & TV, Music), under the results elsewhere |
 | `resolve` | `resolve({id}, ctx)` | turns a search row or a file page into a file link Dove downloads or hands to a service |
 | `browse` (manifest only) | — | "Search on <site>" opens the site's own search page in Dove's browser |
@@ -61,7 +62,8 @@ One JavaScript file (bundle libraries such as an HTML parser into it). It runs i
 ```js
 globalThis.plugin = {
   manifest: { /* see below */ },
-  async metadata({ query, format }, ctx) { return [/* Book */] },
+  async metadata({ query, format, category }, ctx) { return [/* Book, or Album when category is "music" */] },
+  async tracks({ id }, ctx) { return [/* Track */] },
   async search({ query, category, book, title, album }, ctx) { return [/* Result */] },
   async resolve({ id }, ctx) { return { url, headers, fileName, size } },
 }
@@ -141,6 +143,19 @@ When `search` is asked (`query` is always the words to search with):
 
 Only `name` and `type` are always there; `season` alone means a season pack, neither a whole series. `query`
 is then "Name 1999", "Name S01E02" or "Name S01".
+
+`Album` (from `metadata` for Music):
+
+```js
+{ id, title, artist, artists: ["…"], year, cover, type, link }
+```
+
+Only `id` and `title` are required; `artist` (one name) or `artists`. `type`: `album`, `ep`, `single`,
+`compilation`, `live`… The same album from MusicBrainz and a plugin is one row in Dove (artist and title, the year
+when both give one): MusicBrainz's, with the plugin's cover.
+
+`Track` (from `tracks`, for an `Album`'s `id`): `{ id, title, disc, position, duration }`, `duration` in seconds;
+only `title` is required.
 
 `Result` (from `search`):
 

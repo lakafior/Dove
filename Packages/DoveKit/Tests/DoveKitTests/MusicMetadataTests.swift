@@ -141,3 +141,67 @@ struct MusicMetadataTests {
         #expect(split.thisAlbum.map(\.title) == ["Daft Punk - Discovery [FLAC]"] && split.other.count == 1)
     }
 }
+
+struct AlbumLibraryTests {
+    @Test func guessesArtistAndAlbumFromReleaseNames() {
+        let dookie = AlbumGuess(releaseName: "Green Day - Dookie (30th Anniversary Deluxe Edition)  (2023) [24Bit-192kHz] FLAC [PMEDIA] ⭐️")
+        #expect(dookie.artist == "Green Day" && dookie.title == "Dookie" && dookie.year == 2023)
+        #expect(dookie.key == "music|greenday|dookie")
+        let idiot = AlbumGuess(releaseName: "Green Day - American Idiot (20th Anniversary Deluxe Edition) (2024) [24Bit-192kHz] FLAC [PMEDIA] ⭐️")
+        #expect(idiot.artist == "Green Day" && idiot.title == "American Idiot")
+
+        let scene = AlbumGuess(releaseName: "Daft_Punk-Discovery-CD-FLAC-2001-PERFECT")
+        #expect(scene.artist == "Daft Punk" && scene.title == "Discovery" && scene.year == 2001)
+        let web = AlbumGuess(releaseName: "Taco_Hemingway-1-800-OSWIECENIE-WEB-PL-2023-GRP")
+        #expect(web.artist == "Taco Hemingway" && web.title.hasPrefix("1"))
+
+        let tidy = AlbumGuess(releaseName: "Radiohead - OK Computer (1997) [MP3 320]")
+        #expect(tidy.artist == "Radiohead" && tidy.title == "OK Computer" && tidy.year == 1997)
+        let parens = AlbumGuess(releaseName: "Oasis - (What's the Story) Morning Glory (1995) FLAC")
+        #expect(parens.title == "(What's the Story) Morning Glory", "parentheses that are part of the title stay")
+        let file = AlbumGuess(releaseName: "Kult - Spokojnie.flac")
+        #expect(file.artist == "Kult" && file.title == "Spokojnie")
+    }
+
+    @Test func matchesTheGuessedAlbumOrNothing() {
+        let results = [
+            AlbumSummary(id: "mb:1", title: "Dookie Demos", artists: ["Green Day"]),
+            AlbumSummary(id: "mb:2", title: "Dookie", artists: ["Green Day"], year: 1994),
+            AlbumSummary(id: "mb:3", title: "Dookie", artists: ["Tribute Band"]),
+        ]
+        let guess = AlbumGuess(releaseName: "Green Day - Dookie (30th Anniversary Deluxe Edition) (2023) FLAC")
+        #expect(AlbumMatcher.best(results, for: guess)?.id == "mb:2", "the same title beats a longer one; the reissue's year does not matter")
+        #expect(AlbumMatcher.best(results, for: AlbumGuess(title: "Nimrod", artist: "Green Day")) == nil)
+        #expect(AlbumMatcher.best([results[2]], for: guess) == nil, "another artist's album of that name is not it")
+    }
+
+    @Test func musicIsShelvedByArtistNotWithOtherFiles() {
+        func item(_ id: String, _ name: String, added: Double) -> ShelfItem {
+            ShelfItem(item: LibraryItem(id: id, backend: .offcloud, name: name, size: 10, status: .ready, addedAt: Date(timeIntervalSince1970: added)), kind: .music)
+        }
+        let items = [
+            item("1", "Green Day - Dookie (30th Anniversary Deluxe Edition) (2023) FLAC", added: 1),
+            item("2", "Green Day - American Idiot (2024) FLAC", added: 2),
+            item("3", "Green Day - Dookie (1994) [MP3 320]", added: 3),
+            item("4", "Kult - Spokojnie (1988) FLAC", added: 0),
+            ShelfItem(item: LibraryItem(id: "5", backend: .offcloud, name: "setup.exe", size: 1, status: .ready), kind: .software),
+        ]
+        let cover = URL(string: "https://img.test/dookie.jpg")!
+        let dookie = AlbumSummary(id: "mb:dookie", title: "Dookie", artists: ["Green Day"], year: 1994, cover: cover)
+        let albums = LibraryShelf.albums(items, matches: ["music|greenday|dookie": dookie])
+        #expect(albums.count == 3)
+        #expect(albums.first { $0.id == "album:mb:dookie" }?.items.count == 2, "two releases of one album")
+
+        let artists = LibraryShelf.artists(albums)
+        #expect(artists.map(\.name) == ["Green Day", "Kult"])
+        #expect(artists[0].albums.map(\.name) == ["American Idiot", "Dookie"] && artists[0].cover == cover)
+        #expect(LibraryShelf.others(items).map(\.item.id) == ["5"])
+
+        var filter = LibraryFilter()
+        filter.query = "kult"
+        #expect(filter.apply(to: albums).map(\.name) == ["Spokojnie"])
+        filter.query = ""
+        filter.category = .books
+        #expect(filter.apply(to: albums).isEmpty)
+    }
+}

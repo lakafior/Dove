@@ -188,7 +188,8 @@ struct BookShelfTests {
         #expect(books[1].book == nil)
         #expect(books[1].name == "Project Hail Mary")
         #expect(books[1].author == "Andy Weir")
-        #expect(LibraryShelf.others(items).map(\.item.id) == ["4"])
+        #expect(LibraryShelf.others(items).isEmpty, "music has its own shelf")
+        #expect(LibraryShelf.albums(items, matches: [:]).flatMap(\.items).map(\.item.id) == ["4"])
     }
 
     @Test func filterPicksTheFormatAndSearchesAuthors() {

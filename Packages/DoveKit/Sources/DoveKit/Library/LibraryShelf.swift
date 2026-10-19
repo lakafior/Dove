@@ -132,6 +132,36 @@ public struct BookTitle: Identifiable, Sendable, Hashable {
     public var status: LibraryFilter.Status { LibraryFilter.Status(least: items) }
 }
 
+/// Every release of one album (FLAC and MP3, a reissue), across services.
+public struct AlbumTitle: Identifiable, Sendable, Hashable {
+    public let id: String
+    public let guess: AlbumGuess
+    public var album: AlbumSummary?
+    public var items: [ShelfItem]
+
+    public var name: String { album?.title ?? guess.title }
+    public var artist: String? { album?.artist ?? guess.artist }
+    public var year: String? { (album?.year ?? guess.year).map(String.init) }
+    public var backends: [BackendID] {
+        Array(Set(items.map(\.item.backend))).sorted { $0.rawValue < $1.rawValue }
+    }
+    public var latestAdded: Date? { items.compactMap(\.item.addedAt).max() }
+    public var size: Int64 { items.compactMap(\.item.size).reduce(0, +) }
+    public var status: LibraryFilter.Status { LibraryFilter.Status(least: items) }
+}
+
+/// One artist's albums in the library.
+public struct ArtistShelf: Identifiable, Sendable, Hashable {
+    /// The artist's name, normalized: the same artist spelled "AC/DC" and "ACDC" is one shelf.
+    public let id: String
+    public var name: String
+    public var albums: [AlbumTitle]
+
+    /// The newest album's cover stands for the artist.
+    public var cover: URL? { albums.lazy.compactMap(\.album?.cover).first }
+    public var latestAdded: Date? { albums.compactMap(\.latestAdded).max() }
+}
+
 public enum LibraryShelf {
     /// Groups items by matched title (several releases of one show share its metadata ID),
     /// falling back to the guessed title when there is no match. Newest first.
@@ -169,9 +199,50 @@ public enum LibraryShelf {
             .sorted { ($0.latestAdded ?? .distantPast) > ($1.latestAdded ?? .distantPast) }
     }
 
-    /// Everything that is neither video nor a book, newest first: listed by name, no titles or covers.
+    /// Music grouped by matched album, else by guessed artist and title. Newest first.
+    public static func albums(_ items: [ShelfItem], matches: [String: AlbumSummary]) -> [AlbumTitle] {
+        var albums: [String: AlbumTitle] = [:]
+        var order: [String] = []
+        for item in items {
+            guard let guess = item.albumGuess else { continue }
+            let album = matches[guess.key]
+            let id = album.map { "album:\($0.id)" } ?? "guess:\(guess.key)"
+            if albums[id] == nil {
+                albums[id] = AlbumTitle(id: id, guess: guess, album: album, items: [])
+                order.append(id)
+            }
+            albums[id]!.items.append(item)
+        }
+        return order.compactMap { albums[$0] }
+            .sorted { ($0.latestAdded ?? .distantPast) > ($1.latestAdded ?? .distantPast) }
+    }
+
+    /// Albums by artist (the matched album's first artist, else the guessed one; "Unknown Artist" without either),
+    /// artists with the newest album first, their albums newest year first.
+    public static func artists(_ albums: [AlbumTitle]) -> [ArtistShelf] {
+        var artists: [String: ArtistShelf] = [:]
+        var order: [String] = []
+        for album in albums {
+            let name = album.album?.artists.first ?? album.guess.artist ?? "Unknown Artist"
+            let id = MediaGuess.normalize(name).isEmpty ? name : MediaGuess.normalize(name)
+            if artists[id] == nil {
+                artists[id] = ArtistShelf(id: id, name: name, albums: [])
+                order.append(id)
+            }
+            artists[id]!.albums.append(album)
+        }
+        return order.compactMap { artists[$0] }
+            .map { artist in
+                var artist = artist
+                artist.albums.sort { (Int($0.year ?? "") ?? 0) > (Int($1.year ?? "") ?? 0) }
+                return artist
+            }
+            .sorted { ($0.latestAdded ?? .distantPast) > ($1.latestAdded ?? .distantPast) }
+    }
+
+    /// Everything that is neither video, a book nor music, newest first: listed by name, no titles or covers.
     public static func others(_ items: [ShelfItem]) -> [ShelfItem] {
-        items.filter { $0.kind != .video && BookFormat(kind: $0.kind) == nil }
+        items.filter { $0.kind != .video && $0.kind != .music && BookFormat(kind: $0.kind) == nil }
     }
 }
 
@@ -280,6 +351,16 @@ public struct LibraryFilter: Equatable, Sendable {
             var book = book
             book.items = book.items.filter { keeps($0, names: [book.name, book.author].compactMap { $0 }) }
             return book.items.isEmpty ? nil : book
+        }
+    }
+
+    /// The same for albums: only Music (or no category) keeps them; the query also finds the artist.
+    public func apply(to albums: [AlbumTitle]) -> [AlbumTitle] {
+        albums.compactMap { album in
+            if let category, category != .music { return nil }
+            var album = album
+            album.items = album.items.filter { keeps($0, names: [album.name, album.artist].compactMap { $0 }) }
+            return album.items.isEmpty ? nil : album
         }
     }
 

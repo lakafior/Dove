@@ -146,6 +146,9 @@ struct LibraryView: View {
             }
             .navigationDestination(for: TitleRoute.self) { LibraryTitleView(titleID: $0.id) }
             .navigationDestination(for: BookRoute.self) { BookTitleView(bookID: $0.id) }
+            .navigationDestination(for: ArtistRoute.self) { ArtistView(artistID: $0.id) }
+            .navigationDestination(for: LibraryAlbumRoute.self) { LibraryAlbumView(albumID: $0.id) }
+            .navigationDestination(for: AlbumRoute.self) { AlbumReleasesView(route: $0) }
             .navigationDestination(for: ShelfItem.self) { LibraryItemView(item: $0.item) }
             .navigationDestination(for: WatchlistRoute.self) { _ in WatchlistView() }
             .navigationDestination(for: MediaSummary.self) { MediaDetailView(item: $0) }
@@ -159,6 +162,7 @@ struct LibraryView: View {
     private var titlesView: some View {
         let titles = filter.apply(to: library.titles)
         let books = filter.apply(to: library.books)
+        let artists = LibraryShelf.artists(filter.apply(to: library.albums))
         let others = filter.apply(to: library.others)
         return ScrollView {
             failuresBanner.padding(.horizontal)
@@ -166,6 +170,7 @@ struct LibraryView: View {
             titleGrid("Series", titles.filter { $0.type == .series })
             bookGrid("Books", books.filter { $0.format == .ebook }, minimum: 104)
             bookGrid("Audiobooks", books.filter { $0.format == .audiobook }, minimum: 140)
+            artistGrid(artists)
             if !others.isEmpty {
                 LazyVStack(alignment: .leading, spacing: 0) {
                     HStack(alignment: .firstTextBaseline) {
@@ -245,6 +250,36 @@ struct LibraryView: View {
                             Button("Wrong book?", systemImage: "magnifyingglass") { fixingBook = book }
                             batchActions(book.items)
                             Button("Delete", systemImage: "trash", role: .destructive) { pending = .delete(book.items) }
+                        }
+                    }
+                }
+            }
+            .padding(.horizontal)
+            .padding(.bottom)
+        }
+    }
+
+    /// Music by artist: a tap opens the artist's albums.
+    @ViewBuilder
+    private func artistGrid(_ artists: [ArtistShelf]) -> some View {
+        if !artists.isEmpty {
+            LazyVStack(alignment: .leading, spacing: 8) {
+                HStack(alignment: .firstTextBaseline) {
+                    Text("Music").font(.title3.bold())
+                    let albums = artists.reduce(0) { $0 + $1.albums.count }
+                    Text(albums == 1 ? "1 album" : "\(albums) albums").font(.subheadline).foregroundStyle(.secondary)
+                }
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 120), spacing: 12)], alignment: .leading, spacing: 16) {
+                    ForEach(artists) { artist in
+                        NavigationLink(value: ArtistRoute(id: artist.id)) {
+                            ArtistCard(artist: artist)
+                        }
+                        .buttonStyle(.plain)
+                        .contextMenu {
+                            let items = artist.albums.flatMap(\.items)
+                            kindMenu(items)
+                            batchActions(items)
+                            Button("Delete", systemImage: "trash", role: .destructive) { pending = .delete(items) }
                         }
                     }
                 }

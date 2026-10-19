@@ -147,7 +147,7 @@ final class ReleaseList {
                 let result = try await route.router.add(try await IndexerTorrent.prepare(route.source), category: category)
                 // From a book's screen: the book it was found for, so the Library shows it without a search.
                 model.library.recordAdded(
-                    AddedHint(releaseName: group.releaseName, book: book?.summary),
+                    AddedHint(releaseName: group.releaseName, book: book?.summary, album: album),
                     backend: result.backend, itemIDs: result.itemIDs, infoHash: group.infoHash
                 )
                 // The indexer knows better than the name: adult releases are often unmarked, audiobooks are

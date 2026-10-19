@@ -111,7 +111,8 @@ struct LibraryKindShelfTests {
             ShelfItem(item: LibraryItem(id: "torrent:3", backend: .torBox, name: "random stuff", status: .ready)),
         ]
         #expect(LibraryShelf.titles(items, matches: [:]).map(\.name) == ["Dune"])
-        #expect(LibraryShelf.others(items).map(\.kind) == [.music, .other])
+        #expect(LibraryShelf.others(items).map(\.kind) == [.other], "music is shelved by artist")
+        #expect(LibraryShelf.albums(items, matches: [:]).map(\.name) == ["Album"])
 
         var filter = LibraryFilter()
         filter.category = .music

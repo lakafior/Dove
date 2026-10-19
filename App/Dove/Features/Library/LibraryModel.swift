@@ -18,6 +18,8 @@ final class LibraryModel {
     private(set) var matches: [String: MediaSummary] = [:]
     /// Covers for books and audiobooks, keyed by `BookGuess.key`.
     private(set) var bookMatches: [String: BookSummary] = [:]
+    /// Albums for music, keyed by `AlbumGuess.key`.
+    private(set) var albumMatches: [String: AlbumSummary] = [:]
     private(set) var isLoading = false
     /// Something to show: the cached list from the last launch, or a finished refresh.
     private(set) var hasLoaded = false
@@ -34,6 +36,7 @@ final class LibraryModel {
     /// Matches survive launches; they are not secrets.
     private let store = MatchStore(fileURL: URL.applicationSupportDirectory.appending(path: "Dove/library-matches.json"))
     private let bookStore = MetadataStore<BookSummary>(fileURL: URL.applicationSupportDirectory.appending(path: "Dove/library-books.json"))
+    private let albumStore = MetadataStore<AlbumSummary>(fileURL: URL.applicationSupportDirectory.appending(path: "Dove/library-albums.json"))
     /// Set by `AppModel.reloadBookMetadata` (region, language, the user's keys).
     var bookMetadata = BookMetadata(configuration: .device())
     /// The last list, shown at once on launch while the services are asked again.
@@ -74,7 +77,11 @@ final class LibraryModel {
         LibraryShelf.books(items, matches: bookMatches)
     }
 
-    /// Music, software and the rest: listed by name under the posters.
+    var albums: [AlbumTitle] {
+        LibraryShelf.albums(items, matches: albumMatches)
+    }
+
+    /// Software and the rest: listed by name under the posters.
     var others: [ShelfItem] {
         LibraryShelf.others(items)
     }
@@ -103,6 +110,7 @@ final class LibraryModel {
         FilesLocation.libraryChanged()
         await matchMissing(using: app.addonSet)
         await matchMissingBooks()
+        await matchMissingAlbums(using: app.musicMetadata)
     }
 
     /// A kind known when the item was added (an indexer's adult category), kept like the user's choice.
@@ -153,12 +161,21 @@ final class LibraryModel {
         books.first { $0.id == id }
     }
 
+    func album(id: String) -> AlbumTitle? {
+        albums.first { $0.id == id }
+    }
+
+    func artist(id: String) -> ArtistShelf? {
+        LibraryShelf.artists(albums).first { $0.id == id }
+    }
+
     /// First visit of the tab: the cached list and its posters right away, then the services behind it.
     func start(using app: AppModel) async {
         guard !hasStarted else { return }
         hasStarted = true
         matches = await store.all().compactMapValues(\.media)
         bookMatches = await bookStore.all().compactMapValues(\.media)
+        albumMatches = await albumStore.all().compactMapValues(\.media)
         await refresh(using: app)
     }
 
@@ -197,9 +214,11 @@ final class LibraryModel {
         FilesLocation.libraryChanged()
         matches = await store.all().compactMapValues(\.media)
         bookMatches = await bookStore.all().compactMapValues(\.media)
+        albumMatches = await albumStore.all().compactMapValues(\.media)
         async let titles: Void = matchMissing(using: app.addonSet)
         async let books: Void = matchMissingBooks()
-        _ = await (titles, books)
+        async let albums: Void = matchMissingAlbums(using: app.musicMetadata)
+        _ = await (titles, books, albums)
         // After matching: only matched series have an episode list.
         await app.review.run(using: app)
         await app.watchlist.refresh(using: app)
@@ -214,7 +233,8 @@ final class LibraryModel {
         defer { isRematching = false }
         async let titles: Void = matchMissing(using: app.addonSet, everything: true)
         async let books: Void = matchMissingBooks(everything: true)
-        _ = await (titles, books)
+        async let albums: Void = matchMissingAlbums(using: app.musicMetadata, everything: true)
+        _ = await (titles, books, albums)
     }
 
     /// Looks up posters for titles without one, through TMDB or the search addon. Rows update as answers arrive.
@@ -259,6 +279,37 @@ final class LibraryModel {
 
     private func recordBook(_ book: BookSummary, for key: String) {
         bookMatches[key] = book
+    }
+
+    /// Albums for music through MusicBrainz (and Apple Music, music plugins). MusicBrainz takes one call a
+    /// second (`MusicBrainzGate`), so one album at a time; a refused search is tried again on the next refresh.
+    private func matchMissingAlbums(using metadata: MusicMetadata, everything: Bool = false) async {
+        // Albums added from an album's screen need no search.
+        for (key, album) in await LibraryMatcher.applyAlbumHints(items, store: albumStore) { albumMatches[key] = album }
+        var guesses: [String: AlbumGuess] = [:]
+        for item in items {
+            if let guess = item.albumGuess, guesses[guess.key] == nil { guesses[guess.key] = guess }
+        }
+        await LibraryMatcher.matchMissing(
+            guesses,
+            store: albumStore,
+            everything: everything,
+            concurrency: 1,
+            lookup: { try await metadata.match($0) },
+            onMatch: { key, album in await self.recordAlbum(album, for: key) }
+        )
+    }
+
+    private func recordAlbum(_ album: AlbumSummary, for key: String) {
+        albumMatches[key] = album
+    }
+
+    /// The user's choice for an album; applies to every release with the same guess.
+    func setAlbumMatch(_ album: AlbumSummary, for keys: Set<String>) async {
+        for key in keys {
+            await albumStore.set(.manual(album), for: key)
+            albumMatches[key] = album
+        }
     }
 
     /// The user's choice for a book; applies to every release with the same guess.

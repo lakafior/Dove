@@ -111,6 +111,22 @@ public enum LibraryMatcher {
 
     /// Books added or downloaded from a book's screen: the book they were found for, without a search. Like
     /// `applyHints`, the user's own choice stays.
+    /// The same for albums added from an album's screen.
+    public static func applyAlbumHints(_ items: [ShelfItem], store: MetadataStore<AlbumSummary>) async -> [String: AlbumSummary] {
+        var applied: [String: AlbumSummary] = [:]
+        for item in items {
+            guard let album = item.hint?.album, let key = item.albumGuess?.key, applied[key] == nil else { continue }
+            switch await store.entry(for: key) {
+            case .manual: continue
+            case .matched(let current) where current.id == album.id: continue
+            default:
+                await store.set(.matched(album), for: key)
+                applied[key] = album
+            }
+        }
+        return applied
+    }
+
     public static func applyBookHints(_ items: [ShelfItem], store: MetadataStore<BookSummary>) async -> [String: BookSummary] {
         var applied: [String: BookSummary] = [:]
         for item in items {
