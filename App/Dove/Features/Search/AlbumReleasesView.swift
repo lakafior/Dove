@@ -87,7 +87,7 @@ struct AlbumReleasesView: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 if let link = album.link {
-                    Link(album.sourceName, destination: link).font(.caption)
+                    Link(album.sourceName(plugins: model.plugins.manifests()), destination: link).font(.caption)
                 }
             }
         }
@@ -119,7 +119,7 @@ struct AlbumReleasesView: View {
             }
         } else if let tracksError {
             Text(tracksError).font(.footnote).foregroundStyle(.secondary)
-        } else if tracks == nil, album.releaseID != nil || album.catalogID != nil || album.id.hasPrefix("am:") {
+        } else if tracks == nil, album.releaseID != nil || album.catalogID != nil || !album.id.hasPrefix("mb:") {
             HStack(spacing: 8) {
                 ProgressView()
                 Text("Loading tracks…").font(.subheadline).foregroundStyle(.secondary)
@@ -149,6 +149,7 @@ struct AlbumReleasesView: View {
 }
 
 struct AlbumRow: View {
+    @Environment(AppModel.self) private var model
     let album: AlbumSummary
 
     var body: some View {
@@ -165,7 +166,7 @@ struct AlbumRow: View {
                     if let artist = album.artist { Text(artist).lineLimit(1) }
                     if let year = album.year { Text(String(year)) }
                     if let type = album.type { Text(type) }
-                    if album.id.hasPrefix("am:") { Text(album.sourceName) }
+                    if !album.id.hasPrefix("mb:") { Text(album.sourceName(plugins: model.plugins.manifests())) }
                 }
                 .font(.caption)
                 .foregroundStyle(.secondary)

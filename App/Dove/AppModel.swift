@@ -865,9 +865,13 @@ final class AppModel {
     var googleBooksKey: String { (try? keychain.get(.googleBooksAPIKey)) ?? "" }
     var hardcoverToken: String { (try? keychain.get(.hardcoverToken)) ?? "" }
 
-    /// Album search for Music: MusicBrainz, plus Apple Music when it is on and allowed (Settings › Music metadata).
+    /// Album search for Music: MusicBrainz, plus the plugins with music metadata (they name `music` among their
+    /// categories), plus Apple Music when it is on and allowed (Settings › Music metadata).
     var musicMetadata: MusicMetadata {
-        MusicMetadata(catalogs: AppleMusicCatalog.isEnabled ? [AppleMusicCatalog()] : [])
+        let plugins: [any AlbumCatalog] = plugins.calls(.metadata, category: .music)
+            .filter { $0.manifest.categories.contains(.music) }
+            .map { PluginAlbumCatalog(call: $0) }
+        return MusicMetadata(catalogs: plugins + (AppleMusicCatalog.isEnabled ? [AppleMusicCatalog()] : []))
     }
 
     /// The book metadata sources for this device's region, with the user's keys and plugins.

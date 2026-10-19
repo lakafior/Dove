@@ -8,6 +8,8 @@ import MusicKit
 /// another Apple ID gets no developer token and every request fails.
 struct AppleMusicCatalog: AlbumCatalog {
     let name = "Apple Music"
+
+    func owns(_ albumID: String) -> Bool { albumID.hasPrefix("am:") }
     /// Settings › Music metadata (this device: the permission is per device too).
     static let preferenceKey = "appleMusicMetadata"
 
@@ -82,6 +84,13 @@ struct AppleMusicCatalog: AlbumCatalog {
 }
 
 extension AlbumSummary {
-    /// Where the row came from, for its caption and link.
-    var sourceName: String { id.hasPrefix("am:") ? "Apple Music" : "MusicBrainz" }
+    /// Where the row came from, for its caption and link: a plugin's entry (`plugin:<id>:…`) takes the plugin's name.
+    func sourceName(plugins: [PluginManifest] = []) -> String {
+        if id.hasPrefix("am:") { return "Apple Music" }
+        if id.hasPrefix("plugin:") {
+            let pluginID = id.split(separator: ":").dropFirst().first.map(String.init)
+            return plugins.first { $0.id == pluginID }?.name ?? "Plugin"
+        }
+        return "MusicBrainz"
+    }
 }
