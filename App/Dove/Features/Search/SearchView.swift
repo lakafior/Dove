@@ -21,6 +21,7 @@ struct SearchView: View {
     @State private var books: [BookSummary] = []
     /// Rows from the plugins that serve the picked category.
     @State private var pluginSearch = PluginSearch()
+    @State private var resultsTab = ResultsTab.sources
     @State private var searchedBooks: String?
     /// A plugin's search page, in Dove's browser.
     @State private var siteSearch: BrowserRequest?
@@ -160,40 +161,72 @@ struct SearchView: View {
                     .listRowInsets(EdgeInsets())
                     .listRowBackground(Color.clear)
             }
-            if isSearching || releases.isSearching {
-                HStack { Spacer(); ProgressView(); Spacer() }
+            if showsResultTabs {
+                ResultsTabPicker(tab: $resultsTab, sourcesTitle: ownResultsTitle, sourcesCount: ownResultsCount, plugins: pluginSearch)
+                    .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16))
                     .listRowBackground(Color.clear)
             }
-            if let message {
-                Section { Text(message).font(.footnote).foregroundStyle(.secondary) }
+            if showsResultTabs, resultsTab == .plugins {
+                PluginResultsSections(search: pluginSearch, showsState: true)
+                siteSearchSection
+            } else {
+                ownResults
             }
-            if !books.isEmpty || searchedBooks != nil {
-                booksSection
-            }
-            if let message = releases.message {
-                Section { Text(message).font(.footnote).foregroundStyle(.secondary) }
-            }
-            if !activeCategory.usesAddons, !releases.isEmpty {
-                ReleaseListSection(list: releases, title: books.isEmpty ? nil : "Releases")
-            }
-            PluginResultsSections(search: pluginSearch)
-            siteSearchSection
-            if activeCategory == .media, !results.isEmpty {
-                Section {
-                    ForEach(visibleResults) { item in
-                        NavigationLink(value: item) { MediaRow(item: item) }
-                            .contextMenu { WatchlistMenuItem(media: item) }
-                    }
-                } header: {
-                    Picker("Type", selection: $typeFilter) {
-                        Text("All").tag(MediaType?.none)
-                        Text("Movies").tag(MediaType?.some(.movie))
-                        Text("Series").tag(MediaType?.some(.series))
-                    }
-                    .pickerStyle(.segmented)
-                    .textCase(nil)
-                    .padding(.bottom, 4)
+        }
+    }
+
+    /// Indexers and plugins both answered something: a tap switches instead of a scroll past every release.
+    private var showsResultTabs: Bool {
+        pluginSearch.wasAsked && (!releases.isEmpty || releases.isSearching || !books.isEmpty || !results.isEmpty)
+    }
+
+    private var ownResultsTitle: String {
+        if !books.isEmpty { return activeCategory == .audiobooks ? "Audiobooks" : "Books" }
+        if activeCategory == .media, !results.isEmpty { return "Titles" }
+        return "Releases"
+    }
+
+    private var ownResultsCount: Int? {
+        if !books.isEmpty { return books.count }
+        if activeCategory == .media, !results.isEmpty { return visibleResults.count }
+        return releases.isSearching ? nil : releases.visible.count
+    }
+
+    @ViewBuilder
+    private var ownResults: some View {
+        if isSearching || releases.isSearching {
+            HStack { Spacer(); ProgressView(); Spacer() }
+                .listRowBackground(Color.clear)
+        }
+        if let message {
+            Section { Text(message).font(.footnote).foregroundStyle(.secondary) }
+        }
+        if !books.isEmpty || searchedBooks != nil {
+            booksSection
+        }
+        if let message = releases.message {
+            Section { Text(message).font(.footnote).foregroundStyle(.secondary) }
+        }
+        if !activeCategory.usesAddons, !releases.isEmpty {
+            ReleaseListSection(list: releases, title: books.isEmpty ? "Releases from your indexers" : "Releases")
+        }
+        if !showsResultTabs { PluginResultsSections(search: pluginSearch) }
+        siteSearchSection
+        if activeCategory == .media, !results.isEmpty {
+            Section {
+                ForEach(visibleResults) { item in
+                    NavigationLink(value: item) { MediaRow(item: item) }
+                        .contextMenu { WatchlistMenuItem(media: item) }
                 }
+            } header: {
+                Picker("Type", selection: $typeFilter) {
+                    Text("All").tag(MediaType?.none)
+                    Text("Movies").tag(MediaType?.some(.movie))
+                    Text("Series").tag(MediaType?.some(.series))
+                }
+                .pickerStyle(.segmented)
+                .textCase(nil)
+                .padding(.bottom, 4)
             }
         }
     }
@@ -230,6 +263,7 @@ struct SearchView: View {
     }
 
     private func clearResults() {
+        resultsTab = .sources
         results = []
         releases.clear()
         pluginSearch.clear()
@@ -320,9 +354,13 @@ struct SearchView: View {
         let category = activeCategory
         home.remember(query, category: category)
         SiriSuggestions.searched(query)
-        pluginSearch.search(query, category: category, calls: model.plugins.calls(.search, category: category))
         if let format = category.bookFormat { return searchBooks(query, format: format) }
-        if category.newznabCategory != nil { return searchReleases() }
+        // Categories without a title to pick: the plugins answer the words beside the indexers. Books and
+        // Movies & TV ask them once a title is picked (its screen), or here when no title is found.
+        if category.newznabCategory != nil {
+            searchPlugins()
+            return searchReleases()
+        }
         guard model.addonSet.canSearch else {
             message = "Add a TMDB key or a Stremio addon that can search (for example AIOMetadata or Cinemeta) in Settings."
             return
@@ -332,7 +370,10 @@ struct SearchView: View {
         Task {
             do {
                 results = try await model.addonSet.search(query)
-                if results.isEmpty { message = "Nothing found." }
+                if results.isEmpty {
+                    message = "Nothing found."
+                    searchPlugins()
+                }
             } catch {
                 message = error.localizedDescription
             }
@@ -353,8 +394,11 @@ extension SearchView {
                     BookRow(book: book, format: activeCategory.bookFormat ?? .ebook)
                 }
             }
-            if let query = searchedBooks, releases.isEmpty, !releases.isSearching {
-                Button("Search releases for \u{201C}\(query)\u{201D}", systemImage: "magnifyingglass") { searchReleases() }
+            if let query = searchedBooks, releases.isEmpty, !releases.isSearching, pluginSearch.answers.isEmpty {
+                Button("Search releases for \u{201C}\(query)\u{201D}", systemImage: "magnifyingglass") {
+                    searchReleases()
+                    searchPlugins()
+                }
             }
         } header: {
             if !books.isEmpty { Text(activeCategory == .audiobooks ? "Audiobooks" : "Books") }
@@ -394,9 +438,18 @@ extension SearchView {
             }
             searchedBooks = query
             isSearching = false
-            // Nothing the services know (Polish editions, obscure titles): straight to the indexers.
-            if books.isEmpty { searchReleases() }
+            // Nothing the services know (Polish editions, obscure titles): straight to the indexers and plugins.
+            if books.isEmpty {
+                searchReleases()
+                searchPlugins()
+            }
         }
+    }
+
+    /// The field's words through the plugins that search the picked category.
+    func searchPlugins() {
+        let query = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        pluginSearch.search(query, category: activeCategory, calls: model.plugins.calls(.search, category: activeCategory))
     }
 
     /// The field's words through the indexers, in the picked category.

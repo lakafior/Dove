@@ -16,6 +16,7 @@ struct BookReleasesView: View {
     @State private var expanded = false
     @State private var siteSearch: BrowserRequest?
     @State private var pluginSearch = PluginSearch()
+    @State private var tab = ResultsTab.sources
 
     init(route: BookSearchRoute) {
         self.route = route
@@ -35,18 +36,22 @@ struct BookReleasesView: View {
                     }
                 }
             }
-            if releases.isSearching {
-                HStack { Spacer(); ProgressView(); Spacer() }
-                    .listRowBackground(Color.clear)
-            }
-            if let message = releases.message {
-                Section { Text(message).font(.footnote).foregroundStyle(.secondary) }
-            }
-            PluginResultsSections(search: pluginSearch)
-            if !releases.isEmpty {
-                ReleaseListSection(list: releases, title: "Releases")
+            if tab == .plugins {
+                PluginResultsSections(search: pluginSearch, showsState: true)
+            } else {
+                if releases.isSearching {
+                    HStack { Spacer(); ProgressView(); Spacer() }
+                        .listRowBackground(Color.clear)
+                }
+                if let message = releases.message {
+                    Section { Text(message).font(.footnote).foregroundStyle(.secondary) }
+                }
+                if !releases.isEmpty {
+                    ReleaseListSection(list: releases, title: "Releases")
+                }
             }
         }
+        .resultsTabs($tab, sources: "Releases", count: releases.isSearching ? nil : releases.visible.count, plugins: pluginSearch)
         .navigationTitle(route.book.title)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {

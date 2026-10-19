@@ -368,10 +368,10 @@ final class AppModel {
     }
 
     /// Tells the Library what a file arriving in iCloud Drive will be: the book it was found for.
-    private func rememberICloud(_ place: LibraryFolderLayout.Placement, book: BookSummary?, kind: ContentKind) {
-        guard let book else { return }
+    private func rememberICloud(_ place: LibraryFolderLayout.Placement, book: BookSummary?, media: MediaSummary? = nil, kind: ContentKind) {
+        guard book != nil || media != nil else { return }
         let itemPath = LibraryFolderLayout.byAuthor(kind) ? place.folder : "\(place.folder)/\(place.fileName)"
-        library.recordAdded(AddedHint(releaseName: nil, book: book), backend: .iCloudDrive, itemIDs: ["folder:\(itemPath)"], infoHash: nil)
+        library.recordAdded(AddedHint(releaseName: nil, media: media, book: book), backend: .iCloudDrive, itemIDs: ["folder:\(itemPath)"], infoHash: nil)
     }
 
     /// Lists the Library again a moment after files land in iCloud Drive (once for a batch).
@@ -736,7 +736,8 @@ final class AppModel {
     /// Asks a plugin for a search row's or file page's file(s) and sends them to a place: downloaded (to iCloud
     /// Drive filed by `LibraryFolderLayout`), or handed to a service when the links need no headers.
     func getFile(
-        from call: PluginCall, id: String, title: String? = nil, kind: ContentKind, book: BookSummary? = nil, to place: FilePlace? = nil
+        from call: PluginCall, id: String, title: String? = nil, kind: ContentKind, book: BookSummary? = nil, media: MediaSummary? = nil,
+        to place: FilePlace? = nil
     ) async -> String {
         let place = place ?? self.place(for: kind)
         do {
@@ -754,7 +755,7 @@ final class AppModel {
                 for link in links {
                     itemIDs += try await backend.addAll(.hosterURL(link.url), category: nil, privateTracker: false)
                 }
-                library.recordAdded(AddedHint(releaseName: title ?? links.first?.name, book: book), backend: serviceID, itemIDs: itemIDs, infoHash: nil)
+                library.recordAdded(AddedHint(releaseName: title ?? links.first?.name, media: media, book: book), backend: serviceID, itemIDs: itemIDs, infoHash: nil)
                 if kind == .books || kind == .audiobooks {
                     for itemID in itemIDs { library.setKind(kind, backend: serviceID, itemID: itemID) }
                 }
@@ -777,7 +778,7 @@ final class AppModel {
                     let ref = PluginFileRef(pluginID: call.id, fileID: single ? id : "\(id)#\(index)")
                     try downloads.start(Self.request(for: link), plugin: ref, name: name, size: link.size, destination: destination, subfolder: subfolder)
                 }
-                if let rememberedPlace { rememberICloud(rememberedPlace, book: book, kind: kind) }
+                if let rememberedPlace { rememberICloud(rememberedPlace, book: book, media: media, kind: kind) }
                 return single ? "Downloading to \(destination.displayName)." : "Downloading \(links.count) files to \(destination.displayName)."
             }
         } catch {

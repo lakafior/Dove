@@ -16,12 +16,16 @@ final class PluginSearch {
     private(set) var isSearching = false
     private(set) var busy: Set<String> = []
     var message: String?
-    /// What the rows were searched for: their default kind and book.
+    /// What the rows were searched for: their default kind and the book or title picked before.
     private(set) var category: SearchCategory = .books
     private(set) var book: BookSummary?
+    private(set) var media: MediaSummary?
     @ObservationIgnored private var task: Task<Void, Never>?
 
     var isEmpty: Bool { answers.allSatisfy { $0.results.isEmpty && $0.error == nil } }
+    /// Plugins were asked (some serve the category), whatever they answered.
+    var wasAsked: Bool { !answers.isEmpty }
+    var resultCount: Int { answers.reduce(0) { $0 + $1.results.count } }
 
     func clear() {
         task?.cancel()
@@ -30,11 +34,15 @@ final class PluginSearch {
         message = nil
     }
 
-    func search(_ query: String, category: SearchCategory, book: BookSummary? = nil, calls: [PluginCall]) {
+    func search(
+        _ query: String, category: SearchCategory, book: BookSummary? = nil, title: PluginTitle? = nil, media: MediaSummary? = nil,
+        calls: [PluginCall]
+    ) {
         clear()
         guard !calls.isEmpty, !query.isEmpty else { return }
         self.category = category
         self.book = book
+        self.media = media
         answers = calls.map { Answer(call: $0) }
         isSearching = true
         task = Task {
@@ -43,7 +51,7 @@ final class PluginSearch {
                     group.addTask {
                         do {
                             let rows = try await PluginRunner().search(
-                                call.manifest, script: call.script, settings: call.settings, query: query, category: category, book: book
+                                call.manifest, script: call.script, settings: call.settings, query: query, category: category, book: book, title: title
                             )
                             return (call.id, .success(rows))
                         } catch {
@@ -68,7 +76,7 @@ final class PluginSearch {
         busy.insert(key)
         Task {
             message = await model.getFile(
-                from: call, id: row.id, title: row.title, kind: row.kind ?? category.contentKind, book: book, to: place
+                from: call, id: row.id, title: row.title, kind: row.kind ?? category.contentKind, book: book, media: media, to: place
             )
             busy.remove(key)
         }
@@ -77,12 +85,61 @@ final class PluginSearch {
     func isBusy(_ row: PluginResult, of call: PluginCall) -> Bool { busy.contains("\(call.id)/\(row.id)") }
 }
 
+/// Which results a screen with plugins shows: its own (addons, indexers) or the plugins'.
+enum ResultsTab: Hashable {
+    case sources
+    case plugins
+}
+
+/// Two segments for a screen whose own results can run long (a popular title's sources), so the plugins'
+/// rows are one tap away instead of below all of them.
+struct ResultsTabPicker: View {
+    @Binding var tab: ResultsTab
+    let sourcesTitle: String
+    let sourcesCount: Int?
+    let plugins: PluginSearch
+
+    var body: some View {
+        Picker("Results", selection: $tab) {
+            Text(label(sourcesTitle, sourcesCount)).tag(ResultsTab.sources)
+            Text(label("Plugins", plugins.isSearching && plugins.resultCount == 0 ? nil : plugins.resultCount)).tag(ResultsTab.plugins)
+        }
+        .pickerStyle(.segmented)
+    }
+
+    private func label(_ title: String, _ count: Int?) -> String { count.map { "\(title) (\($0))" } ?? title }
+}
+
+extension View {
+    /// The picker pinned above a list, shown only when plugins were asked.
+    func resultsTabs(_ tab: Binding<ResultsTab>, sources: String, count: Int?, plugins: PluginSearch) -> some View {
+        safeAreaInset(edge: .top, spacing: 0) {
+            if plugins.wasAsked {
+                ResultsTabPicker(tab: tab, sourcesTitle: sources, sourcesCount: count, plugins: plugins)
+                    .padding(.horizontal)
+                    .padding(.vertical, 8)
+                    .background(.bar)
+            }
+        }
+    }
+}
+
 /// One section per plugin with its rows, inside a `List`.
 struct PluginResultsSections: View {
     @Environment(AppModel.self) private var model
     let search: PluginSearch
+    /// On a plugins-only tab: a spinner while nothing has come back, and a line when nothing was found.
+    var showsState = false
 
     var body: some View {
+        if showsState, search.resultCount == 0 {
+            if search.isSearching {
+                HStack { Spacer(); ProgressView("Asking your plugins…"); Spacer() }
+                    .listRowBackground(Color.clear)
+            } else if search.isEmpty {
+                ContentUnavailableView("No results from your plugins", systemImage: "puzzlepiece")
+            }
+        }
         if let message = search.message {
             Section { Text(message).font(.footnote).foregroundStyle(.secondary).onTapGesture { search.message = nil } }
         }

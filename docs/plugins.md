@@ -12,7 +12,7 @@ Status: draft, API version `1`.
 | Capability | Dove calls | Used for |
 |---|---|---|
 | `metadata` | `metadata({query, format}, ctx)` | covers, titles and authors for Books and Audiobooks (like Open Library or Apple Books) |
-| `search` | `search({query, category, book}, ctx)` | rows under a search category's results, each one downloadable |
+| `search` | `search({query, category, book, title}, ctx)` | downloadable rows: on a picked book's or title's screen (Books, Audiobooks, Movies & TV), under the results elsewhere |
 | `resolve` | `resolve({id}, ctx)` | turns a search row or a file page into a file link Dove downloads or hands to a service |
 | `browse` (manifest only) | — | "Search on <site>" opens the site's own search page in Dove's browser |
 | `links` (manifest only) | — | a file page (opened in the browser, pasted, shared) is recognised and `resolve`d |
@@ -62,7 +62,7 @@ One JavaScript file (bundle libraries such as an HTML parser into it). It runs i
 globalThis.plugin = {
   manifest: { /* see below */ },
   async metadata({ query, format }, ctx) { return [/* Book */] },
-  async search({ query, category, book }, ctx) { return [/* Result */] },
+  async search({ query, category, book, title }, ctx) { return [/* Result */] },
   async resolve({ id }, ctx) { return { url, headers, fileName, size } },
 }
 ```
@@ -123,6 +123,23 @@ manifest: {
 ```
 
 Only `id` and `title` are required. `cover` and `link` are https URLs; `description` is plain text or simple HTML.
+
+When `search` is asked (`query` is always the words to search with):
+
+| Category | Asked | `book` / `title` |
+|---|---|---|
+| `books`, `audiobooks` | on the screen of a book picked from the metadata search; from the search field only when no book is found or the user taps "Search releases" | `book` once picked |
+| `media` | on a movie's or episode's source list (also season and series packs); from the search field only when no title is found | `title` |
+| `music`, `software`, `adult`, `all` | from the search field, beside the indexers' releases | — |
+
+`book` (to `search`): `{ title, authors: ["…"], year }`. `title` (to `search`):
+
+```js
+{ name, type: "movie" | "series", year, imdb: "tt…", tmdb: "603", season, episode }
+```
+
+Only `name` and `type` are always there; `season` alone means a season pack, neither a whole series. `query`
+is then "Name 1999", "Name S01E02" or "Name S01".
 
 `Result` (from `search`):
 

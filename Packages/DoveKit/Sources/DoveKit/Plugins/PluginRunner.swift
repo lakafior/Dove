@@ -68,6 +68,64 @@ public struct PluginLink: Codable, Sendable, Hashable {
     }
 }
 
+/// The movie or series a plugin's `search` is for, once the user picked it (`docs/plugins.md`, `Title`):
+/// its name, year and IDs, and the episode or season when the sources are for one.
+public struct PluginTitle: Sendable, Hashable {
+    public var name: String
+    public var type: MediaType
+    public var year: Int?
+    public var imdbID: String?
+    public var tmdbID: String?
+    public var season: Int?
+    public var episode: Int?
+
+    public init(name: String, type: MediaType, year: Int? = nil, imdbID: String? = nil, tmdbID: String? = nil, season: Int? = nil, episode: Int? = nil) {
+        self.name = name
+        self.type = type
+        self.year = year
+        self.imdbID = imdbID
+        self.tmdbID = tmdbID
+        self.season = season
+        self.episode = episode
+    }
+
+    /// From a source list: the stream ID (`tt…`, `tt…:1:2`, `tmdb:…`) gives the IDs and the episode; a pack
+    /// scope keeps only the season (or neither, for whole series).
+    public init(name: String, type: MediaType, streamID: String, media: MediaSummary? = nil, scope: PackScope? = nil) {
+        let parts = streamID.split(separator: ":").map(String.init)
+        let ids = [streamID, media?.id].compactMap { $0 }
+        self.init(
+            name: name,
+            type: type,
+            year: media?.releaseInfo.flatMap { Int($0.prefix(4)) },
+            imdbID: ids.lazy.compactMap { $0.split(separator: ":").first.map(String.init) }.first { $0.hasPrefix("tt") },
+            tmdbID: ids.first { $0.hasPrefix("tmdb:") }.map { String($0.split(separator: ":")[1]) }
+        )
+        guard type == .series else { return }
+        let numbers = parts.compactMap(Int.init)
+        let codes = parts.first?.hasPrefix("tt") == true && numbers.count >= 2 ? (numbers[numbers.count - 2], numbers[numbers.count - 1]) : nil
+        switch scope {
+        case .season(let number): season = number
+        case .series: break
+        case nil: (season, episode) = (codes?.0, codes?.1)
+        }
+    }
+
+    /// The words a plugin without its own title handling can search with: "Name 2019", "Name S01E02", "Name S01".
+    public var query: String {
+        switch (season, episode) {
+        case let (season?, episode?): String(format: "%@ S%02dE%02d", name, season, episode)
+        case let (season?, nil): String(format: "%@ S%02d", name, season)
+        default: [name, year.map(String.init)].compactMap { $0 }.joined(separator: " ")
+        }
+    }
+
+    var argument: [String: Any] {
+        let optional: [String: Any?] = ["year": year, "imdb": imdbID, "tmdb": tmdbID, "season": season, "episode": episode]
+        return optional.compactMapValues { $0 }.merging(["name": name, "type": type.rawValue]) { $1 }
+    }
+}
+
 /// Runs plugin calls: one new JavaScript context each (`PluginSandbox`), the script's hosts as the network
 /// policy, the user's settings and the device's locale as `ctx`.
 public struct PluginRunner: Sendable {
@@ -102,12 +160,14 @@ public struct PluginRunner: Sendable {
 
     public func search(
         _ plugin: PluginManifest, script: String, settings: [String: SettingValue],
-        query: String, category: SearchCategory, book: BookSummary? = nil
+        query: String, category: SearchCategory, book: BookSummary? = nil, title: PluginTitle? = nil
     ) async throws -> [PluginResult] {
         var argument: [String: Any] = ["query": query, "category": category.rawValue]
         if let book {
-            argument["book"] = ["title": book.title, "authors": book.authors, "year": book.year as Any].compactMapValues { $0 }
+            let year: [String: Any?] = ["year": book.year]
+            argument["book"] = year.compactMapValues { $0 }.merging(["title": book.title, "authors": book.authors]) { $1 }
         }
+        if let title { argument["title"] = title.argument }
         let json = try await call(plugin, script: script, settings: settings, function: "search", argument: argument)
         return try decodeList(PluginResult.self, json)
     }

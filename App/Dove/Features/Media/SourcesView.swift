@@ -30,6 +30,9 @@ struct SourcesView: View {
     @State private var isCheckingCache = false
     /// Usenet jobs added by Play, so tapping it again reuses the job (and its service, after a fallback).
     @State private var usenetJobs: [StreamGroup.ID: UsenetJob] = [:]
+    /// Plugins that search Movies & TV, asked for this title (not when looking for an upgrade: their rows have no traits).
+    @State private var pluginSearch = PluginSearch()
+    @State private var tab = ResultsTab.sources
 
     struct UsenetJob: Equatable {
         let backend: BackendID
@@ -84,7 +87,9 @@ struct SourcesView: View {
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }
-            if let groups {
+            if tab == .plugins {
+                PluginResultsSections(search: pluginSearch, showsState: true)
+            } else if let groups {
                 if !groups.isEmpty, !groups.contains(where: { $0.librarySource != nil }),
                    model.addonEntries.contains(where: \.isAIOStreams), model.aioStreamsPassword.isEmpty {
                     Label(
@@ -136,6 +141,7 @@ struct SourcesView: View {
                 HStack { Spacer(); ProgressView("Asking your sources…"); Spacer() }
             }
         }
+        .resultsTabs($tab, sources: "Sources", count: groups.map { _ in visible.count }, plugins: pluginSearch)
         .navigationTitle(title)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -251,6 +257,7 @@ struct SourcesView: View {
     /// Addons and Dove's own indexers in parallel, only those picked in Sources for Movies & TV; addon results
     /// first, then the indexers'.
     private func load() async {
+        searchPlugins()
         let newznab = model.newznab
         let indexers = model.indexerIDs(for: .media)
         let query = indexers.isEmpty ? nil : NewznabQuery(type: type, id: id, title: searchTitle, wholeSeason: scope != nil)
@@ -267,6 +274,12 @@ struct SourcesView: View {
         isCheckingCache = true
         groups = await CacheChecker.annotate(shown, using: checkers)
         isCheckingCache = false
+    }
+
+    private func searchPlugins() {
+        guard upgradeOver == nil else { return }
+        let title = PluginTitle(name: searchTitle ?? media?.name ?? self.title, type: type, streamID: id, media: media, scope: scope)
+        pluginSearch.search(title.query, category: .media, title: title, media: media, calls: model.plugins.calls(.search, category: .media))
     }
 
     private static func search(_ newznab: NewznabSearch, _ query: NewznabQuery?, only: Set<String>) async -> NewznabSearch.Results? {

@@ -105,6 +105,30 @@ struct PluginTests {
         }
     }
 
+    @Test func titlesFromSourceLists() async throws {
+        let movie = MediaSummary(id: "tmdb:603", type: .movie, name: "The Matrix", releaseInfo: "1999")
+        let fromMovie = PluginTitle(name: "The Matrix", type: .movie, streamID: "tt0133093", media: movie)
+        #expect(fromMovie == PluginTitle(name: "The Matrix", type: .movie, year: 1999, imdbID: "tt0133093", tmdbID: "603"))
+        #expect(fromMovie.query == "The Matrix 1999")
+
+        let episode = PluginTitle(name: "Lost", type: .series, streamID: "tt0411008:1:2")
+        #expect(episode.imdbID == "tt0411008" && episode.season == 1 && episode.episode == 2 && episode.query == "Lost S01E02")
+        let season = PluginTitle(name: "Lost", type: .series, streamID: "tt0411008:3:1", scope: .season(3))
+        #expect(season.season == 3 && season.episode == nil && season.query == "Lost S03")
+        let series = PluginTitle(name: "Lost", type: .series, streamID: "tt0411008:1:1", scope: .series)
+        #expect(series.season == nil && series.query == "Lost")
+
+        let script = #"""
+        globalThis.plugin = { manifest: { id: "x" }, async search({ query, title, book }) {
+          return [{ id: 1, title: [query, title.name, title.type, title.year, title.imdb, title.tmdb, title.season, title.episode, typeof book].join("|") }]
+        } }
+        """#
+        let runner = PluginRunner(transport: MockTransport())
+        let manifest = try await runner.manifest(of: script)
+        let rows = try await runner.search(manifest, script: script, settings: [:], query: episode.query, category: .media, title: episode)
+        #expect(rows.first?.title == "Lost S01E02|Lost|series||tt0411008||1|2|undefined", "missing values are left out")
+    }
+
     @Test func slowCallsAreAbandoned() async throws {
         let script = #"globalThis.plugin = { manifest: { id: "x" }, async search() { while (true) { await dove.sleep(5000) } } }"#
         let runner = PluginRunner(transport: MockTransport(), timeout: .milliseconds(200))
