@@ -15,6 +15,7 @@ struct BookReleasesView: View {
     @State private var releases: ReleaseList
     @State private var expanded = false
     @State private var directSearch: BrowserRequest?
+    @State private var pluginSearch = PluginSearch()
 
     init(route: BookSearchRoute) {
         self.route = route
@@ -27,6 +28,12 @@ struct BookReleasesView: View {
         List {
             Section {
                 header
+                ForEach(model.plugins.browsers(for: route.category), id: \.id) { call in
+                    let words = ([route.book.authors.first, route.book.searchTitle].compactMap { $0 }).joined(separator: " ")
+                    if let url = call.browseURL(for: words) {
+                        Button("Search on \(call.manifest.name)", systemImage: "safari") { directSearch = BrowserRequest(url: url) }
+                    }
+                }
                 ForEach(model.directSources(for: route.category)) { source in
                     Button("Search on \(source.url.host() ?? source.name)", systemImage: "safari") {
                         let words = ([route.book.authors.first, route.book.searchTitle].compactMap { $0 }).joined(separator: " ")
@@ -41,6 +48,7 @@ struct BookReleasesView: View {
             if let message = releases.message {
                 Section { Text(message).font(.footnote).foregroundStyle(.secondary) }
             }
+            PluginResultsSections(search: pluginSearch)
             if !releases.isEmpty {
                 ReleaseListSection(list: releases, title: "Releases")
             }
@@ -89,5 +97,7 @@ struct BookReleasesView: View {
         guard let category = route.category.newznabCategory else { return }
         let query = NewznabQuery.book(title: route.book.searchTitle, author: route.book.authors.first, category: category)
         releases.search(query, in: route.category, model: model)
+        let words = ([route.book.authors.first, route.book.searchTitle].compactMap { $0 }).joined(separator: " ")
+        pluginSearch.search(words, category: route.category, book: route.book, calls: model.plugins.calls(.search, category: route.category))
     }
 }

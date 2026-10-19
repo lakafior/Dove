@@ -25,6 +25,12 @@ public enum CredentialKey: String, Sendable, CaseIterable {
     case bookProviders
     /// JSON array of `DirectSource` (direct-download sites: address and member key).
     case directSources
+    /// JSON array of plugin repository index URLs. Not a secret; synced like `preferences`.
+    case pluginRepositories
+    /// JSON array of `InstalledPlugin` (manifests, no secrets): another device reinstalls the pinned scripts.
+    case plugins
+    /// JSON `[plugin id: [setting key: SettingValue]]`: the user's plugin settings, secrets included.
+    case pluginSettings
     /// JSON array of Stremio addon manifest URLs, in the user's order (they embed tokens).
     case stremioAddons
     /// Password of the user's AIOStreams configuration, for its Search API.

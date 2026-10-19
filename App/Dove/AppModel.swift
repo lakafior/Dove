@@ -11,6 +11,11 @@ final class AppModel {
     /// Shared with the share extension through the `keychain-access-groups` entitlement.
     let keychain = SharedConfiguration.keychain()
     let library = LibraryModel()
+    /// Plugin repositories and installed plugins (`docs/plugins.md`).
+    let plugins = PluginsModel(store: PluginStore(
+        keychain: SharedConfiguration.keychain(),
+        scriptsDirectory: URL.applicationSupportDirectory.appending(path: "Dove/Plugins")
+    ))
     /// New and missing episodes, and releases worth replacing.
     let review = LibraryReviewModel()
     /// Movies and series saved for later.
@@ -174,6 +179,8 @@ final class AppModel {
         didSet {
             guard showAdult != oldValue else { return }
             library.showAdult = showAdult
+            plugins.showAdult = showAdult
+            reloadBookMetadata()
             savePreferences()
             // The Files extension re-reads the preference when the working set is signalled.
             FilesLocation.libraryChanged()
@@ -284,6 +291,10 @@ final class AppModel {
         reloadNewznab()
         reloadBookMetadata()
         Task { await resolveICloud() }
+        plugins.showAdult = showAdult
+        plugins.onChange = { [weak self] in self?.reloadBookMetadata() }
+        reloadBookMetadata()
+        Task { await plugins.refreshIndexes() }
         // Signing in or out of iCloud, or turning iCloud Drive off for Dove.
         NotificationCenter.default.addObserver(forName: .NSUbiquityIdentityDidChange, object: nil, queue: .main) { [weak self] _ in
             Task { @MainActor in await self?.resolveICloud() }
@@ -292,6 +303,7 @@ final class AppModel {
         downloads.requestProvider = { [weak self] record in
             guard let self else { throw CancellationError() }
             if let direct = record.direct {
+                if direct.sourceID.hasPrefix("plugin:") { return try await pluginRequest(for: direct) }
                 return URLRequest(url: try await directLink(for: direct).url)
             }
             guard let id = record.backend, let backend = backend(id) else {
@@ -409,6 +421,7 @@ final class AppModel {
         playback.reloadKodi()
         audiobook.reloadPositions()
         watchlist.reload()
+        plugins.load()
         reloadBackends()
         reloadNewznab()
         reloadBookMetadata()
@@ -808,6 +821,78 @@ final class AppModel {
         }
     }
 
+    // MARK: - Files from plugins
+
+    /// Asks a plugin for a search row's or file page's file(s) and sends them to a place: downloaded (to iCloud
+    /// Drive filed by `LibraryFolderLayout`), or handed to a service when the links need no headers.
+    func getFile(
+        from call: PluginCall, id: String, title: String? = nil, kind: ContentKind, book: BookSummary? = nil, to place: FilePlace? = nil
+    ) async -> String {
+        let place = place ?? self.place(for: kind)
+        do {
+            let links = try await PluginRunner().resolve(call.manifest, script: call.script, settings: call.settings, id: id)
+            switch place {
+            case .service(let serviceID):
+                guard links.allSatisfy(\.isPlain) else {
+                    throw PluginError("Only Dove can download this file (\(call.manifest.name) needs extra headers): pick This iPhone or iCloud Drive.")
+                }
+                guard let backend = backend(serviceID), backend.acceptsDirectLinks else {
+                    throw BackendError.api(message: "\(serviceID.displayName) is not set up, or does not fetch direct links.")
+                }
+                var itemIDs: [LibraryItem.ID] = []
+                for link in links {
+                    itemIDs += try await backend.addAll(.hosterURL(link.url), category: nil, privateTracker: false)
+                }
+                library.recordAdded(AddedHint(releaseName: title ?? links.first?.name, book: book), backend: serviceID, itemIDs: itemIDs, infoHash: nil)
+                if kind == .books || kind == .audiobooks {
+                    for itemID in itemIDs { library.setKind(kind, backend: serviceID, itemID: itemID) }
+                }
+                Task { await library.refresh(using: self, afterChange: true) }
+                return "Sent to \(serviceID.displayName). It fetches the file into its cloud."
+            case .download(let destination):
+                let single = links.count == 1
+                var rememberedPlace: LibraryFolderLayout.Placement?
+                for (index, link) in links.enumerated() {
+                    var name = link.name
+                    var subfolder: String?
+                    if destination == .iCloud {
+                        let place = LibraryFolderLayout.placement(
+                            kind: kind, book: book, itemName: title ?? link.name, fileName: link.name, singleFile: single
+                        )
+                        name = place.fileName
+                        subfolder = place.folder
+                        rememberedPlace = rememberedPlace ?? place
+                    }
+                    let ref = DirectDownloadRef(sourceID: "plugin:\(call.id)", md5: single ? id : "\(id)#\(index)")
+                    try downloads.start(Self.request(for: link), direct: ref, name: name, size: link.size, destination: destination, subfolder: subfolder)
+                }
+                if let rememberedPlace { rememberICloud(rememberedPlace, book: book, kind: kind) }
+                return single ? "Downloading to \(destination.displayName)." : "Downloading \(links.count) files to \(destination.displayName)."
+            }
+        } catch {
+            return error.localizedDescription
+        }
+    }
+
+    /// A fresh link for a retried plugin download (`plugin:<id>`, the item id with `#<index>` for one of several files).
+    private func pluginRequest(for ref: DirectDownloadRef) async throws -> URLRequest {
+        let pluginID = String(ref.sourceID.dropFirst("plugin:".count))
+        guard let call = plugins.calls(.resolve).first(where: { $0.id == pluginID }) else {
+            throw BackendError.api(message: "The plugin that found this file is off or removed.")
+        }
+        let parts = ref.md5.split(separator: "#", maxSplits: 1).map(String.init)
+        let links = try await PluginRunner().resolve(call.manifest, script: call.script, settings: call.settings, id: parts[0])
+        let index = parts.count > 1 ? Int(parts[1]) ?? 0 : 0
+        guard links.indices.contains(index) else { throw PluginError("The plugin no longer lists this file.") }
+        return Self.request(for: links[index])
+    }
+
+    private static func request(for link: PluginLink) -> URLRequest {
+        var request = URLRequest(url: link.url)
+        for (field, value) in link.headers { request.setValue(value, forHTTPHeaderField: field) }
+        return request
+    }
+
     /// Hands a direct link to a service that fetches it into its cloud (`acceptsDirectLinks`); the Library then
     /// lists it like anything added there, matched to the book it was found for.
     private func sendToService(
@@ -837,9 +922,9 @@ final class AppModel {
         return (try? JSONDecoder().decode([BookProvider].self, from: Data(json.utf8))) ?? []
     }
 
-    /// The book metadata sources for this device's region, with the user's keys and providers.
+    /// The book metadata sources for this device's region, with the user's keys, providers and plugins.
     var bookMetadataConfiguration: BookMetadata.Configuration {
-        .device(googleBooksKey: googleBooksKey, hardcoverToken: hardcoverToken, providers: bookProviders)
+        .device(googleBooksKey: googleBooksKey, hardcoverToken: hardcoverToken, providers: bookProviders, plugins: plugins.calls(.metadata))
     }
 
     /// Checks a new or changed provider (when it is on) with one search before keeping the list.

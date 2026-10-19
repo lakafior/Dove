@@ -17,7 +17,12 @@ struct DirectBrowserView: View {
     @State private var message: String?
     @State private var isStarting = false
 
-    private var md5: String? { page.url.flatMap(DirectSource.md5(in:)) }
+    /// A file page here: a plugin's (`links`), else a direct-download site's `/md5/` page.
+    private var md5: String? {
+        guard let url = page.url else { return nil }
+        if let link = model.plugins.link(for: url) { return "plugin:\(link.call.id):\(link.id)" }
+        return model.directSource == nil ? nil : DirectSource.md5(in: url)
+    }
 
     var body: some View {
         NavigationStack {
@@ -75,7 +80,11 @@ struct DirectBrowserView: View {
     private func download(_ md5: String, to place: FilePlace) {
         isStarting = true
         Task {
-            message = await model.startDirectDownload(md5: md5, to: place, kind: category.contentKind, book: book)
+            if md5.hasPrefix("plugin:"), let url = page.url, let link = model.plugins.link(for: url) {
+                message = await model.getFile(from: link.call, id: link.id, kind: category.contentKind, book: book, to: place)
+            } else {
+                message = await model.startDirectDownload(md5: md5, to: place, kind: category.contentKind, book: book)
+            }
             isStarting = false
         }
     }

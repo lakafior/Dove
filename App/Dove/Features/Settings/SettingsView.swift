@@ -88,6 +88,14 @@ struct SettingsView: View {
                         SettingsRow("Book metadata", symbol: "books.vertical.fill", color: .brown)
                     }
                     NavigationLink {
+                        PluginsSettingsView()
+                    } label: {
+                        SettingsRow("Plugins", symbol: "puzzlepiece.fill", color: .mint,
+                                    value: model.plugins.updatesAvailable > 0
+                                        ? "\(model.plugins.updatesAvailable) to update"
+                                        : model.plugins.installed.isEmpty ? "None" : "\(model.plugins.installed.count)")
+                    }
+                    NavigationLink {
                         DirectDownloadsSettingsView()
                     } label: {
                         SettingsRow("Direct downloads", symbol: "arrow.down.doc.fill", color: .green,

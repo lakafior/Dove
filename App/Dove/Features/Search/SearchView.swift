@@ -19,6 +19,8 @@ struct SearchView: View {
     @State private var releases = ReleaseList()
     /// Books and Audiobooks: the metadata services' answer, before any indexer is asked.
     @State private var books: [BookSummary] = []
+    /// Rows from the plugins that serve the picked category.
+    @State private var pluginSearch = PluginSearch()
     @State private var searchedBooks: String?
     /// The direct-download site's search page, in Dove's browser.
     @State private var directSearch: BrowserRequest?
@@ -58,7 +60,8 @@ struct SearchView: View {
     /// Results (or a search on its way, or why there are none) replace the home screen; clearing the field
     /// brings it back.
     private var showsResults: Bool {
-        isSearching || releases.isSearching || !results.isEmpty || !releases.isEmpty || !books.isEmpty
+        isSearching || releases.isSearching || pluginSearch.isSearching || !pluginSearch.answers.isEmpty
+            || !results.isEmpty || !releases.isEmpty || !books.isEmpty
             || ((message != nil || releases.message != nil) && !text.isEmpty)
     }
 
@@ -173,6 +176,7 @@ struct SearchView: View {
             if !activeCategory.usesAddons, !releases.isEmpty {
                 ReleaseListSection(list: releases, title: books.isEmpty ? nil : "Releases")
             }
+            PluginResultsSections(search: pluginSearch)
             directSearchSection
             if activeCategory == .media, !results.isEmpty {
                 Section {
@@ -228,6 +232,7 @@ struct SearchView: View {
     private func clearResults() {
         results = []
         releases.clear()
+        pluginSearch.clear()
         books = []
         searchedBooks = nil
         message = nil
@@ -270,9 +275,7 @@ struct SearchView: View {
         answeredChange = pasteboardChange
         let trimmed = pasted.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
-        if model.directSource != nil, let url = URL(string: trimmed), url.scheme?.hasPrefix("http") == true,
-           let md5 = DirectSource.md5(in: url) {
-            Task { message = await model.startDirectDownload(md5: md5) }
+        if let url = URL(string: trimmed), url.scheme?.hasPrefix("http") == true, openFilePage(url) {
             return
         }
         let sources = SourceDetector.sources(in: trimmed)
@@ -285,6 +288,20 @@ struct SearchView: View {
         }
     }
 
+    /// A file page a plugin knows (`links`) or a direct-download site's `/md5/` page: starts the download and
+    /// answers true.
+    private func openFilePage(_ url: URL) -> Bool {
+        if let link = model.plugins.link(for: url) {
+            Task { message = await model.getFile(from: link.call, id: link.id, kind: activeCategory.contentKind) }
+            return true
+        }
+        if model.directSource != nil, let md5 = DirectSource.md5(in: url) {
+            Task { message = await model.startDirectDownload(md5: md5) }
+            return true
+        }
+        return false
+    }
+
     private func handleSubmit() {
         message = nil
         // A movie's or series' page (IMDb, Apple TV, Letterboxd…): open that title.
@@ -292,10 +309,9 @@ struct SearchView: View {
             Task { await model.openTitle(link) }
             return
         }
-        // A direct-download site's file page (…/md5/<md5>): fetch it with the user's key.
-        if model.directSource != nil, let url = URL(string: text.trimmingCharacters(in: .whitespacesAndNewlines)),
-           url.scheme?.hasPrefix("http") == true, let md5 = DirectSource.md5(in: url) {
-            Task { message = await model.startDirectDownload(md5: md5) }
+        // A plugin's or a direct-download site's file page: fetch it.
+        if let url = URL(string: text.trimmingCharacters(in: .whitespacesAndNewlines)), url.scheme?.hasPrefix("http") == true,
+           openFilePage(url) {
             return
         }
         let sources = SourceDetector.sources(in: text)
@@ -309,6 +325,7 @@ struct SearchView: View {
         let category = activeCategory
         home.remember(query, category: category)
         SiriSuggestions.searched(query)
+        pluginSearch.search(query, category: category, calls: model.plugins.calls(.search, category: category))
         if let format = category.bookFormat { return searchBooks(query, format: format) }
         if category.newznabCategory != nil { return searchReleases() }
         guard model.addonSet.canSearch else {
@@ -356,9 +373,16 @@ extension SearchView {
     var directSearchSection: some View {
         let query = text.trimmingCharacters(in: .whitespacesAndNewlines)
         let sources = model.directSources(for: activeCategory)
+        let browsers = model.plugins.browsers(for: activeCategory)
         let searched = !results.isEmpty || !releases.isEmpty || !books.isEmpty || message != nil || releases.message != nil
-        if !query.isEmpty, !sources.isEmpty, searched, !isSearching, !releases.isSearching {
+            || !pluginSearch.answers.isEmpty
+        if !query.isEmpty, !sources.isEmpty || !browsers.isEmpty, searched, !isSearching, !releases.isSearching {
             Section {
+                ForEach(browsers, id: \.id) { call in
+                    if let url = call.browseURL(for: query) {
+                        Button("Search on \(call.manifest.name)", systemImage: "safari") { directSearch = BrowserRequest(url: url) }
+                    }
+                }
                 ForEach(sources) { source in
                     Button("Search on \(source.url.host() ?? source.name)", systemImage: "safari") {
                         directSearch = BrowserRequest(url: source.searchURL(query, extensions: []))

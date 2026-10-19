@@ -73,6 +73,14 @@ final class ShareModel {
 
     func read(_ items: [NSExtensionItem]) async {
         let providers = items.flatMap { $0.attachments ?? [] }
+        // A file page an installed plugin knows: Dove fetches it through the plugin.
+        if let url = await Self.pluginLink(from: providers) {
+            state = .direct
+            var components = URLComponents(string: "dove://plugin-link")!
+            components.queryItems = [URLQueryItem(name: "url", value: url.absoluteString)]
+            open(components.url!)
+            return
+        }
         // A direct-download site's file page, with a site set up: Dove fetches it with the user's key.
         if (try? SharedConfiguration.keychain().get(.directSources)) != nil, let md5 = await Self.directMD5(from: providers) {
             state = .direct
@@ -124,6 +132,16 @@ final class ShareModel {
         }
         var seen = Set<String>()
         return found.filter { seen.insert($0.id).inserted }
+    }
+
+    /// A shared address an installed plugin reads as a file page (no scripts here: the manifests' `links`).
+    private static func pluginLink(from providers: [NSItemProvider]) async -> URL? {
+        let store = PluginStore(keychain: SharedConfiguration.keychain(), scriptsDirectory: FileManager.default.temporaryDirectory)
+        guard !store.installed().isEmpty else { return nil }
+        for provider in providers where provider.hasItemConformingToTypeIdentifier(UTType.url.identifier) {
+            if let url = try? await url(from: provider), url.scheme?.hasPrefix("http") == true, store.knowsLink(url) { return url }
+        }
+        return nil
     }
 
     /// The md5 of a shared direct-download file page (`…/md5/<md5>`).

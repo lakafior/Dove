@@ -53,6 +53,8 @@ public struct BookMetadata: Sendable {
         case appleAudiobooks(country: String = "US")
         /// One of the user's Audiobookshelf metadata providers.
         case provider(BookProvider)
+        /// One of the user's Dove plugins with `metadata` (`docs/plugins.md`).
+        case plugin(PluginCall)
         case googleBooks
         case hardcover
     }
@@ -65,30 +67,36 @@ public struct BookMetadata: Sendable {
         public var hardcoverToken: String?
         /// The user's Audiobookshelf metadata providers; only enabled ones are asked.
         public var providers: [BookProvider]
+        /// Installed plugins that give book metadata (`metadata` capability).
+        public var plugins: [PluginCall]
 
         public init(
             region: String? = nil,
             googleBooksKey: String? = nil,
             hardcoverToken: String? = nil,
-            providers: [BookProvider] = []
+            providers: [BookProvider] = [],
+            plugins: [PluginCall] = []
         ) {
             self.region = region?.uppercased()
             self.googleBooksKey = googleBooksKey.flatMap { $0.isEmpty ? nil : $0 }
             self.hardcoverToken = hardcoverToken.flatMap { $0.isEmpty ? nil : $0 }
             self.providers = providers.filter(\.enabled)
+            self.plugins = plugins.filter { $0.manifest.can(.metadata) }
         }
 
-        /// The device's region, with the user's keys and providers.
+        /// The device's region, with the user's keys, providers and plugins.
         public static func device(
             googleBooksKey: String? = nil,
             hardcoverToken: String? = nil,
-            providers: [BookProvider] = []
+            providers: [BookProvider] = [],
+            plugins: [PluginCall] = []
         ) -> Configuration {
             Configuration(
                 region: Locale.current.region?.identifier,
                 googleBooksKey: googleBooksKey,
                 hardcoverToken: hardcoverToken,
-                providers: providers
+                providers: providers,
+                plugins: plugins
             )
         }
 
@@ -119,7 +127,13 @@ public struct BookMetadata: Sendable {
     /// built-in sources miss.
     public func sources(for format: BookFormat) -> [Source] {
         let config = configuration
-        var sources: [Source] = config.providers.map { .provider($0) }
+        // The user's plugins and providers first: they were added for books the built-in sources miss. A plugin
+        // that names its categories serves only those.
+        let category: SearchCategory = format == .audiobook ? .audiobooks : .books
+        var sources: [Source] = config.plugins
+            .filter { $0.manifest.categories.isEmpty || $0.manifest.categories.contains(category) }
+            .map { .plugin($0) }
+        sources += config.providers.map { .provider($0) }
         switch format {
         case .ebook:
             sources.append(.openLibrary)
@@ -202,6 +216,11 @@ public struct BookMetadata: Sendable {
                 "query": query, "mediaType": "book", "format": format == .audiobook ? "audiobook" : "ebook",
             ], headers: headers)
             return page.matches.filter { $0.fits(format) }.prefix(Self.limit).compactMap { $0.summary(provider: provider) }
+        case .plugin(let plugin):
+            let books = try await PluginRunner(transport: transport).metadata(
+                plugin.manifest, script: plugin.script, settings: plugin.settings, query: query, format: format
+            )
+            return Array(books.prefix(Self.limit))
         case .googleBooks:
             guard let key = configuration.googleBooksKey else { return [] }
             let page = try await get(GoogleBooksPage.self, Self.googleBooksURL, [
