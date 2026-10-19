@@ -9,6 +9,10 @@ struct DirectBrowserView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
     let start: URL
+    /// What the page was opened for: picks the default place for downloads (Settings › Downloads).
+    var category: SearchCategory = .books
+    /// The book the page was opened for: files it fetches into iCloud Drive are filed and matched as this book.
+    var book: BookSummary?
     @State private var page = DirectBrowserPage()
     @State private var message: String?
     @State private var isStarting = false
@@ -44,10 +48,20 @@ struct DirectBrowserView: View {
                             .disabled(!page.canGoForward)
                         Spacer()
                         if let md5 {
-                            Button {
-                                download(md5)
+                            // A tap goes to the kind's default place; a long press offers the others.
+                            let standard = model.downloadDestination(for: category.contentKind)
+                            Menu {
+                                ForEach(places, id: \.self) { place in
+                                    Button(place.displayName, systemImage: place.symbol) { download(md5, to: place) }
+                                }
                             } label: {
-                                if isStarting { ProgressView() } else { Label("Download", systemImage: "arrow.down.circle.fill") }
+                                if isStarting {
+                                    ProgressView()
+                                } else {
+                                    Label("Download", systemImage: standard.symbol)
+                                }
+                            } primaryAction: {
+                                download(md5, to: standard)
                             }
                             .labelStyle(.titleAndIcon)
                             .buttonStyle(.borderedProminent)
@@ -58,10 +72,15 @@ struct DirectBrowserView: View {
         }
     }
 
-    private func download(_ md5: String) {
+    /// Places this device can save to (iCloud Drive only when available).
+    private var places: [DownloadDestination] {
+        DownloadDestination.allCases.filter { $0 != .iCloud || model.iCloudFolder != nil }
+    }
+
+    private func download(_ md5: String, to place: DownloadDestination) {
         isStarting = true
         Task {
-            message = await model.startDirectDownload(md5: md5)
+            message = await model.startDirectDownload(md5: md5, to: place, kind: category.contentKind, book: book)
             isStarting = false
         }
     }

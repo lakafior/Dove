@@ -26,6 +26,7 @@ extension BackendID {
         case .premiumize: "PM"
         case .allDebrid: "AD"
         case .nzbdav: "ND"
+        case .iCloudDrive: "iC"
         }
     }
 
@@ -38,6 +39,16 @@ extension BackendID {
         case .premiumize: .red
         case .allDebrid: .yellow
         case .nzbdav: .orange
+        case .iCloudDrive: .cyan
+        }
+    }
+}
+
+extension DownloadDestination {
+    var symbol: String {
+        switch self {
+        case .device: "iphone"
+        case .iCloud: "icloud"
         }
     }
 }

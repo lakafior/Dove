@@ -49,6 +49,7 @@ extension BackendID {
         case .premiumize: "premiumize"
         case .allDebrid: "alldebrid"
         case .nzbdav: "nzbdav"
+        case .iCloudDrive: "icloud"
         }
     }
 

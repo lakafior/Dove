@@ -135,13 +135,16 @@ final class ReleaseList {
                 // A Torznab result's .torrent link carries the indexer's key: fetch it here, never hand it over.
                 // A private release a service has cached goes there as a magnet (`AddRoute`).
                 let result = try await route.router.add(try await IndexerTorrent.prepare(route.source), category: category)
+                // From a book's screen: the book it was found for, so the Library shows it without a search.
                 model.library.recordAdded(
-                    AddedHint(releaseName: group.releaseName),
+                    AddedHint(releaseName: group.releaseName, book: book?.summary),
                     backend: result.backend, itemIDs: result.itemIDs, infoHash: group.infoHash
                 )
                 // The indexer knows better than the name: adult releases are often unmarked, audiobooks are
-                // often bare "Author - Title" folders of mp3s.
-                if kind == .adult || kind == .audiobooks {
+                // often bare "Author - Title" folders of mp3s. A book's screen knows which format it searched.
+                if let book {
+                    model.library.setKind(book.format == .audiobook ? .audiobooks : .books, backend: result.backend, itemID: result.itemID)
+                } else if kind == .adult || kind == .audiobooks {
                     model.library.setKind(kind, backend: result.backend, itemID: result.itemID)
                 }
                 message = model.downloadOnly

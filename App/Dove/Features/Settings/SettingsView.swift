@@ -106,6 +106,12 @@ struct SettingsView: View {
                         SettingsRow("Notifications", symbol: "bell.badge.fill", color: .red)
                     }
                     NavigationLink {
+                        DownloadSettingsView()
+                    } label: {
+                        SettingsRow("Downloads", symbol: "arrow.down.circle.fill", color: .indigo,
+                                    value: model.iCloudFolder == nil ? "This iPhone" : "iCloud Drive")
+                    }
+                    NavigationLink {
                         PlaybackSettingsView()
                     } label: {
                         SettingsRow("Playback", symbol: "play.fill", color: .pink, value: model.playback.player.displayName)
@@ -250,6 +256,7 @@ extension BackendID {
         case .premiumize: "crown.fill"
         case .allDebrid: "a.circle.fill"
         case .nzbdav: "server.rack"
+        case .iCloudDrive: "icloud.fill"
         }
     }
 
@@ -262,6 +269,7 @@ extension BackendID {
         case .premiumize: .red
         case .allDebrid: .yellow
         case .nzbdav: .orange
+        case .iCloudDrive: .cyan
         }
     }
 
@@ -274,7 +282,7 @@ extension BackendID {
         case .debridLink: "debrid-link.com › My account › API key. Debrid-Link seeds, so torrents from private trackers can go here."
         case .premiumize: "premiumize.me › Account › API key. Every plan includes Usenet."
         case .allDebrid: "alldebrid.com › Account › API keys (alldebrid.com/apikeys). A new key may need confirming from the e-mail AllDebrid sends."
-        case .nzbdav: ""
+        case .nzbdav, .iCloudDrive: ""
         }
     }
 }
@@ -296,6 +304,8 @@ private struct DebridKeyView: View {
         case .premiumize: .premiumizeAPIKey
         case .allDebrid: .allDebridAPIKey
         case .nzbdav: .nzbdavAPIKey
+        // Never shown for iCloud Drive: this screen is only for `SharedConfiguration.debrids`.
+        case .iCloudDrive: preconditionFailure("iCloud Drive has no key")
         }
     }
 

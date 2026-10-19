@@ -83,6 +83,13 @@ targets:
           - UIApplicationShortcutItemType: net.smigi.dove.downloads
             UIApplicationShortcutItemTitle: Downloads
             UIApplicationShortcutItemIconSymbolName: arrow.down.circle
+        # iCloud Drive › Dove: downloads kept in iCloud (DownloadDestination.iCloud), listed in the Library as a
+        # place (FolderBackend). Public, so the folder shows in Files and in iCloud Drive on a Mac.
+        NSUbiquitousContainers:
+          iCloud.net.smigi.dove:
+            NSUbiquitousContainerIsDocumentScopePublic: true
+            NSUbiquitousContainerName: Dove
+            NSUbiquitousContainerSupportedFolderLevels: Any
         # Downloaded files (Documents) show in Files under On My iPhone › Dove.
         UIFileSharingEnabled: true
         LSSupportsOpeningDocumentsInPlace: true
@@ -106,6 +113,11 @@ targets:
         keychain-access-groups: [$(AppIdentifierPrefix)net.smigi.dove.shared]
         # The File Provider extension requires an App Group (NSExtensionFileProviderDocumentGroup).
         com.apple.security.application-groups: [group.net.smigi.dove]
+        # iCloud Drive › Dove (iCloud Documents). Builds re-signed without it (sideloading with another Apple ID)
+        # keep every download on the device.
+        com.apple.developer.icloud-container-identifiers: [iCloud.net.smigi.dove]
+        com.apple.developer.ubiquity-container-identifiers: [iCloud.net.smigi.dove]
+        com.apple.developer.icloud-services: [CloudDocuments]
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: net.smigi.dove

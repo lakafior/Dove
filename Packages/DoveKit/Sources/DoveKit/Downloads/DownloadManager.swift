@@ -24,6 +24,9 @@ public final class DownloadManager: NSObject {
     @ObservationIgnored public var backgroundEventsCompletion: (() -> Void)?
 
     public let directory: URL
+    /// iCloud Drive › Dove's folder, when this device has iCloud Drive for Dove (set by the app; resolving it
+    /// must not happen on the main thread). Downloads meant for iCloud go to `directory` while it is nil.
+    @ObservationIgnored public var iCloudDirectory: URL?
     @ObservationIgnored private let store: DownloadStore
     @ObservationIgnored private var session: URLSession!
     @ObservationIgnored private var tasks: [DownloadRecord.ID: URLSessionDownloadTask] = [:]
@@ -65,16 +68,23 @@ public final class DownloadManager: NSObject {
         _ request: URLRequest,
         backend: BackendID,
         itemID: LibraryItem.ID,
-        file: LibraryFile
+        file: LibraryFile,
+        destination: DownloadDestination = .device,
+        placement: LibraryFolderLayout.Placement? = nil
     ) throws -> DownloadRecord.ID {
-        if let existing = records.first(where: { $0.isSameFile(backend: backend, itemID: itemID, fileID: file.id) }) {
+        if let existing = records.first(where: {
+            $0.isSameFile(backend: backend, itemID: itemID, fileID: file.id) && $0.destination == destination
+        }) {
             switch existing.state {
             case .downloading, .finished: return existing.id
             case .paused, .failed: remove(existing.id)
             }
         }
         if let size = file.size { try checkSpace(for: size) }
-        let record = DownloadRecord(backend: backend, itemID: itemID, fileID: file.id, name: file.name, totalBytes: file.size)
+        let record = DownloadRecord(
+            backend: backend, itemID: itemID, fileID: file.id, name: placement?.fileName ?? file.name, totalBytes: file.size,
+            destination: destination, subfolder: placement?.folder
+        )
         records.insert(record, at: 0)
         run(session.downloadTask(with: request), for: record.id)
         return record.id
@@ -83,8 +93,15 @@ public final class DownloadManager: NSObject {
     /// Starts a direct download (a link from a direct-download site), or returns the record already downloading
     /// or holding that file.
     @discardableResult
-    public func start(_ request: URLRequest, direct: DirectDownloadRef, name: String, size: Int64? = nil) throws -> DownloadRecord.ID {
-        if let existing = records.first(where: { $0.direct == direct }) {
+    public func start(
+        _ request: URLRequest,
+        direct: DirectDownloadRef,
+        name: String,
+        size: Int64? = nil,
+        destination: DownloadDestination = .device,
+        subfolder: String? = nil
+    ) throws -> DownloadRecord.ID {
+        if let existing = records.first(where: { $0.direct == direct && $0.destination == destination }) {
             switch existing.state {
             case .downloading, .finished: return existing.id
             case .paused, .failed: remove(existing.id)
@@ -92,7 +109,8 @@ public final class DownloadManager: NSObject {
         }
         if let size { try checkSpace(for: size) }
         let record = DownloadRecord(
-            backend: nil, direct: direct, itemID: "direct:\(direct.md5)", fileID: direct.md5, name: name, totalBytes: size
+            backend: nil, direct: direct, itemID: "direct:\(direct.md5)", fileID: direct.md5, name: name, totalBytes: size,
+            destination: destination, subfolder: subfolder
         )
         records.insert(record, at: 0)
         run(session.downloadTask(with: request), for: record.id)
@@ -140,7 +158,7 @@ public final class DownloadManager: NSObject {
     /// The downloaded file, once finished and still on disk.
     public func fileURL(for record: DownloadRecord) -> URL? {
         guard record.state == .finished, let localName = record.localName else { return nil }
-        let url = directory.appending(path: localName)
+        let url = folder(for: record).appending(path: localName)
         return FileManager.default.fileExists(atPath: url.path) ? url : nil
     }
 
@@ -204,20 +222,33 @@ public final class DownloadManager: NSObject {
             settled(id)
             return
         }
+        // Without iCloud Drive (signed out, or a sideloaded build without the entitlement) the file stays here.
+        let place: DownloadDestination = record.destination == .iCloud && iCloudDirectory == nil ? .device : record.destination
+        let folder = folder(for: place, subfolder: record.subfolder)
         do {
-            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-            let name = DownloadNaming.unique(DownloadNaming.sanitized(record.name)) {
-                FileManager.default.fileExists(atPath: self.directory.appending(path: $0).path)
+            try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+            // A placed name (`subfolder` set) may hold a path inside its item (`CD1/01.mp3`): its folders go under
+            // `folder`. Otherwise only the file's own name counts, as services name files with their paths.
+            let parts = record.subfolder == nil ? [record.name] : record.name.split(separator: "/").map(String.init)
+            let folder = parts.dropLast().reduce(folder) { $0.appending(path: DownloadNaming.sanitized($1)) }
+            try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+            let leaf = DownloadNaming.unique(DownloadNaming.sanitized(parts.last ?? record.name)) {
+                FileManager.default.fileExists(atPath: folder.appending(path: $0).path)
+                    || FileManager.default.fileExists(atPath: folder.appending(path: ".\($0).icloud").path)
             }
-            var destination = directory.appending(path: name)
+            let name = (parts.dropLast().map(DownloadNaming.sanitized) + [leaf]).joined(separator: "/")
+            var destination = folder.appending(path: leaf)
             try FileManager.default.moveItem(at: location, to: destination)
-            var values = URLResourceValues()
-            values.isExcludedFromBackup = true
-            try? destination.setResourceValues(values)
+            if place == .device {
+                var values = URLResourceValues()
+                values.isExcludedFromBackup = true
+                try? destination.setResourceValues(values)
+            }
             let size = (try? destination.resourceValues(forKeys: [.fileSizeKey]).fileSize).map(Int64.init)
             update(id) {
                 $0.state = .finished
                 $0.localName = name
+                $0.destination = place
                 if let size {
                     $0.bytesWritten = size
                     $0.totalBytes = size
@@ -229,9 +260,27 @@ public final class DownloadManager: NSObject {
         settled(id)
     }
 
+    private func folder(for destination: DownloadDestination, subfolder: String? = nil) -> URL {
+        let root = destination == .iCloud ? (iCloudDirectory ?? directory) : directory
+        guard let subfolder, !subfolder.isEmpty else { return root }
+        return subfolder.split(separator: "/").reduce(root) { $0.appending(path: DownloadNaming.sanitized(String($1))) }
+    }
+
+    private func folder(for record: DownloadRecord) -> URL {
+        folder(for: record.destination, subfolder: record.subfolder)
+    }
+
     private func settled(_ id: DownloadRecord.ID) {
         save()
         guard let record = self[id] else { return }
+        defer {
+            // A file kept in iCloud Drive belongs to the Library's iCloud place, not to this device's
+            // downloads: the record goes once everyone has heard about it (failures stay, to retry).
+            if record.state == .finished, record.destination == .iCloud {
+                records.removeAll { $0.id == id }
+                save()
+            }
+        }
         for handler in settledHandlers { handler(record) }
     }
 

@@ -30,7 +30,7 @@ public struct ShelfItem: Identifiable, Sendable, Hashable {
         }
         self.guess = guess
         let classified = ContentClassifier.classify(name: name, files: item.files)
-        self.kind = kind ?? (hint?.media != nil && classified == .other ? .video : classified)
+        self.kind = kind ?? item.kindHint ?? (hint?.media != nil && classified == .other ? .video : classified)
     }
 }
 

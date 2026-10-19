@@ -222,7 +222,7 @@ public enum SharedConfiguration {
         )
     }
 
-    public static let debrids = BackendID.allCases.filter { !$0.isUsenet }
+    public static let debrids = BackendID.allCases.filter { !$0.isUsenet && !$0.isStorage }
 
     public static func torBoxPlan(from keychain: KeychainStore) -> TorBoxPlanSetting {
         (try? keychain.get(.torBoxPlan))

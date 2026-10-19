@@ -8,15 +8,18 @@ public struct AddedHint: Codable, Sendable, Hashable {
     public var releaseName: String?
     /// The movie or series the user was looking at when adding, if any.
     public var media: MediaSummary?
+    /// The book or audiobook the user was looking at when adding or downloading, if any.
+    public var book: BookSummary?
     public var addedAt: Date
 
-    public init(releaseName: String?, media: MediaSummary? = nil, addedAt: Date = .now) {
+    public init(releaseName: String?, media: MediaSummary? = nil, book: BookSummary? = nil, addedAt: Date = .now) {
         self.releaseName = releaseName.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.flatMap { $0.isEmpty ? nil : $0 }
         self.media = media
+        self.book = book
         self.addedAt = addedAt
     }
 
-    public var isEmpty: Bool { releaseName == nil && media == nil }
+    public var isEmpty: Bool { releaseName == nil && media == nil && book == nil }
 }
 
 /// Hints for items Dove added, keyed by `ShelfItem.id` and by info hash: Reinsert and Move give an item a new ID,

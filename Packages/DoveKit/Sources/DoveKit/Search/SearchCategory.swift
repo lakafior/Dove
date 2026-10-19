@@ -36,6 +36,19 @@ public enum SearchCategory: String, CaseIterable, Sendable, Hashable, Codable {
         }
     }
 
+    /// The kind of content the category finds, for defaults such as where downloads go.
+    public var contentKind: ContentKind {
+        switch self {
+        case .media: .video
+        case .books: .books
+        case .audiobooks: .audiobooks
+        case .music: .music
+        case .software: .software
+        case .adult: .adult
+        case .all: .other
+        }
+    }
+
     /// Only Movies & TV asks the Stremio addons.
     public var usesAddons: Bool { self == .media }
 

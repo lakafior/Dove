@@ -195,6 +195,11 @@ final class AppModel {
         didSet { savePreferences() }
     }
 
+    /// Where downloads of each kind go by default (synced).
+    var downloadDestinations = DownloadDestinations() {
+        didSet { savePreferences() }
+    }
+
     /// Kindle is offered only with an address to send to.
     var readingTargets: [ReadingTarget] {
         kindleAddress.isEmpty ? [.appleBooks] : ReadingTarget.allCases
@@ -210,6 +215,7 @@ final class AppModel {
         preferences.sourceSelection = sourceSelection
         preferences.readIn = readIn
         preferences.kindleAddress = kindleAddress
+        preferences.downloadDestinations = downloadDestinations
         SharedConfiguration.savePreferences(preferences, to: keychain)
     }
     static let debrids = SharedConfiguration.debrids
@@ -256,6 +262,7 @@ final class AppModel {
             sourceSelection = preferences.sourceSelection
             readIn = preferences.readIn
             kindleAddress = preferences.kindleAddress
+            downloadDestinations = preferences.downloadDestinations
         } else {
             // First launch of this build: bring the old UserDefaults values along, then save them synced.
             // A fresh install has none: it saves nothing, so it cannot overwrite preferences that iCloud
@@ -276,6 +283,11 @@ final class AppModel {
         reloadBackends()
         reloadNewznab()
         reloadBookMetadata()
+        Task { await resolveICloud() }
+        // Signing in or out of iCloud, or turning iCloud Drive off for Dove.
+        NotificationCenter.default.addObserver(forName: .NSUbiquityIdentityDidChange, object: nil, queue: .main) { [weak self] _ in
+            Task { @MainActor in await self?.resolveICloud() }
+        }
         addonEntries = storedAddonURLs().map { AddonEntry(url: $0) }
         downloads.requestProvider = { [weak self] record in
             guard let self else { throw CancellationError() }
@@ -307,6 +319,9 @@ final class AppModel {
             downloads: downloads
         ) { [weak self] id in self?.backend(id) }
         downloadAlerts = DownloadAlerts(downloads: downloads, jobs: downloadJobs)
+        downloads.onSettled { [weak self] record in
+            if record.state == .finished, record.destination == .iCloud { self?.iCloudFileArrived() }
+        }
     }
 
     /// After an add in "download only" mode: hand the item to `downloadJobs`. Returns the message to show.
@@ -321,12 +336,43 @@ final class AppModel {
         return "Added to \(backend.displayName). Dove downloads it to this iPhone, then removes it from \(backend.displayName)."
     }
 
-    /// Asks the service for a link and starts downloading the file to the device.
-    func download(_ file: LibraryFile, of item: LibraryItem) async throws {
+    /// Asks the service for a link and starts downloading the file to this device or iCloud Drive. In iCloud
+    /// the file is filed by kind (and author and title for books, from the item's match), and the Library's
+    /// iCloud place gets the same match.
+    func download(_ file: LibraryFile, of item: LibraryItem, to destination: DownloadDestination = .device) async throws {
         guard let backend = backend(item.backend) else { return }
         let request = try await backend.downloadRequest(itemID: item.id, fileID: file.id)
-        try downloads.start(request, backend: item.backend, itemID: item.id, file: file)
+        var placement: LibraryFolderLayout.Placement?
+        if destination == .iCloud {
+            let shelf = library.shelf(item)
+            let book = library.bookMatch(for: shelf)
+            let place = LibraryFolderLayout.placement(
+                kind: shelf.kind, book: book, itemName: shelf.name, fileName: file.name, singleFile: item.files.count <= 1
+            )
+            placement = place
+            rememberICloud(place, book: book, kind: shelf.kind)
+        }
+        try downloads.start(request, backend: item.backend, itemID: item.id, file: file, destination: destination, placement: placement)
     }
+
+    /// Tells the Library what a file arriving in iCloud Drive will be: the book it was found for.
+    private func rememberICloud(_ place: LibraryFolderLayout.Placement, book: BookSummary?, kind: ContentKind) {
+        guard let book else { return }
+        let itemPath = LibraryFolderLayout.byAuthor(kind) ? place.folder : "\(place.folder)/\(place.fileName)"
+        library.recordAdded(AddedHint(releaseName: nil, book: book), backend: .iCloudDrive, itemIDs: ["folder:\(itemPath)"], infoHash: nil)
+    }
+
+    /// Lists the Library again a moment after files land in iCloud Drive (once for a batch).
+    private func iCloudFileArrived() {
+        iCloudRefresh?.cancel()
+        iCloudRefresh = Task {
+            try? await Task.sleep(for: .seconds(3))
+            guard !Task.isCancelled else { return }
+            await library.refresh(using: self, afterChange: true)
+        }
+    }
+
+    @ObservationIgnored private var iCloudRefresh: Task<Void, Never>?
 
     // MARK: - Settings file
 
@@ -357,6 +403,7 @@ final class AppModel {
             sourceSelection = preferences.sourceSelection
             readIn = preferences.readIn
             kindleAddress = preferences.kindleAddress
+            downloadDestinations = preferences.downloadDestinations
         }
         library.showAdult = showAdult
         playback.reloadKodi()
@@ -373,9 +420,36 @@ final class AppModel {
 
     /// Rebuilds backends from the Keychain. Call after credentials change.
     func reloadBackends() {
-        backends = SharedConfiguration.backends(from: keychain)
-        let hasServices = !backends.isEmpty
+        backends = SharedConfiguration.backends(from: keychain) + (iCloudFolder.map { [FolderBackend(directory: $0)] } ?? [])
+        let hasServices = backends.contains { !$0.id.isStorage }
         Task { await FilesLocation.update(hasServices: hasServices) }
+    }
+
+    // MARK: - iCloud Drive
+
+    /// iCloud Drive › Dove on this device: nil until resolved, and when iCloud Drive is off, signed out, or the
+    /// build lacks the iCloud entitlement (a sideloaded build signed by another team).
+    private(set) var iCloudFolder: URL?
+    private(set) var iCloudChecked = false
+
+    /// Looks the container up off the main thread (the lookup may block), then lists it as a library place and
+    /// lets downloads go there.
+    func resolveICloud() async {
+        let folder = await Task.detached(priority: .utility) {
+            FileManager.default.url(forUbiquityContainerIdentifier: nil)?.appending(path: "Documents")
+        }.value
+        if let folder { try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true) }
+        iCloudChecked = true
+        guard folder != iCloudFolder else { return }
+        iCloudFolder = folder
+        downloads.iCloudDirectory = folder
+        reloadBackends()
+    }
+
+    /// Where a download of this kind goes: the user's default, or this device while iCloud Drive is unavailable.
+    func downloadDestination(for kind: ContentKind) -> DownloadDestination {
+        let chosen = downloadDestinations.destination(for: kind)
+        return chosen == .iCloud && iCloudFolder == nil ? .device : chosen
     }
 
     // MARK: - Newznab indexers
@@ -679,15 +753,29 @@ final class AppModel {
 
     /// Downloads a file by its md5 through the first enabled source, straight to Downloads (no service, no
     /// cache). Returns the message to show.
-    func startDirectDownload(md5: String) async -> String {
+    func startDirectDownload(
+        md5: String,
+        to destination: DownloadDestination? = nil,
+        kind: ContentKind = .books,
+        book: BookSummary? = nil
+    ) async -> String {
+        let destination = destination ?? downloadDestination(for: kind)
         guard let source = directSource else {
             return "Add a direct download site in Settings › Direct downloads first."
         }
         let ref = DirectDownloadRef(sourceID: source.id, md5: md5)
         do {
             let link = try await directLink(for: ref)
-            try downloads.start(URLRequest(url: link.url), direct: ref, name: link.fileName(md5: md5))
-            var message = "Downloading to Downloads."
+            var name = link.fileName(md5: md5)
+            var subfolder: String?
+            if destination == .iCloud {
+                let place = LibraryFolderLayout.placement(kind: kind, book: book, itemName: name, fileName: name, singleFile: true)
+                name = place.fileName
+                subfolder = place.folder
+                rememberICloud(place, book: book, kind: kind)
+            }
+            try downloads.start(URLRequest(url: link.url), direct: ref, name: name, destination: destination, subfolder: subfolder)
+            var message = "Downloading to \(destination.displayName)."
             if let left = link.quota?.left { message += " \(left) fast downloads left today." }
             return message
         } catch {

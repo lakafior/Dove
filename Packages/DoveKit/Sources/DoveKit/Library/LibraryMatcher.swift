@@ -109,6 +109,23 @@ public enum LibraryMatcher {
         return applied
     }
 
+    /// Books added or downloaded from a book's screen: the book they were found for, without a search. Like
+    /// `applyHints`, the user's own choice stays.
+    public static func applyBookHints(_ items: [ShelfItem], store: MetadataStore<BookSummary>) async -> [String: BookSummary] {
+        var applied: [String: BookSummary] = [:]
+        for item in items {
+            guard let book = item.hint?.book, let key = item.bookGuess?.key, applied[key] == nil else { continue }
+            switch await store.entry(for: key) {
+            case .manual: continue
+            case .matched(let current) where current.id == book.id: continue
+            default:
+                await store.set(.matched(book), for: key)
+                applied[key] = book
+            }
+        }
+        return applied
+    }
+
     /// Looks up every key the store has no fresh answer for, a few at a time, and records the results.
     /// `search` is TMDB or the search addon (`AddonSet.search(_:type:)`). Returns how many keys were looked up.
     /// `everything` re-matches automatic matches too (e.g. after adding a TMDB key); the user's own choices stay,

@@ -53,7 +53,7 @@ struct BookReleasesView: View {
         .task { if releases.isEmpty, releases.message == nil { search() } }
         .onChange(of: model.sourceSelection) { search() }
         .refreshable { search() }
-        .sheet(item: $directSearch) { DirectBrowserView(start: $0.url) }
+        .sheet(item: $directSearch) { DirectBrowserView(start: $0.url, category: route.category, book: route.book) }
     }
 
     private var header: some View {

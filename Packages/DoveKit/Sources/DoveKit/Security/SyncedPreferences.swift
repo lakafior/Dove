@@ -16,11 +16,14 @@ public struct SyncedPreferences: Codable, Sendable, Equatable {
     public var readIn: ReadingTarget?
     /// The user's Send to Kindle address (`name@kindle.com`); empty hides Kindle.
     public var kindleAddress = ""
+    /// Where downloads of each kind go unless the user picks another place.
+    public var downloadDestinations = DownloadDestinations()
 
     public init() {}
 
     enum CodingKeys: String, CodingKey {
         case downloadOnly, sourceFilter, aioStreamsVariant, showAdult, sourceSelection, readIn, kindleAddress
+        case downloadDestinations
     }
 
     public init(from decoder: any Decoder) throws {
@@ -32,6 +35,8 @@ public struct SyncedPreferences: Codable, Sendable, Equatable {
         sourceSelection = (try? c.decodeIfPresent(SourceSelection.self, forKey: .sourceSelection)) ?? SourceSelection()
         readIn = try? c.decodeIfPresent(ReadingTarget.self, forKey: .readIn)
         kindleAddress = (try? c.decodeIfPresent(String.self, forKey: .kindleAddress)) ?? ""
+        downloadDestinations = (try? c.decodeIfPresent(DownloadDestinations.self, forKey: .downloadDestinations))
+            ?? DownloadDestinations()
     }
 }
 

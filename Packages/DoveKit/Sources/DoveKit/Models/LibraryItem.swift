@@ -9,6 +9,8 @@ public enum BackendID: String, Sendable, Codable, CaseIterable, Identifiable {
     case premiumize
     case allDebrid
     case nzbdav
+    /// The user's own iCloud Drive › Dove folder: a place files are kept, not a service. Adds never go there.
+    case iCloudDrive
 
     public var id: String { rawValue }
 
@@ -21,11 +23,15 @@ public enum BackendID: String, Sendable, Codable, CaseIterable, Identifiable {
         case .premiumize: "Premiumize"
         case .allDebrid: "AllDebrid"
         case .nzbdav: "nzbdav"
+        case .iCloudDrive: "iCloud Drive"
         }
     }
 
     /// Usenet backends get their own segment in the Library tab, because their statuses mean different things.
     public var isUsenet: Bool { self == .nzbdav }
+
+    /// A storage place of the user's (iCloud Drive), not a debrid or Usenet service: no key, no adds, no account.
+    public var isStorage: Bool { self == .iCloudDrive }
 }
 
 /// One entry in a backend's library: a torrent, a hoster download or an NZB job.
@@ -55,6 +61,8 @@ public struct LibraryItem: Identifiable, Sendable, Hashable, Codable {
     public var nzbBlobID: String?
     /// Services that seed (Debrid-Link, TorBox) say how much the torrent gave back.
     public var seeding: Seeding?
+    /// What the place says the item is (iCloud Drive › Dove › Books/…): beats classifying the name.
+    public var kindHint: ContentKind?
 
     /// Upload side of a torrent on a service that keeps seeding it.
     public struct Seeding: Sendable, Hashable, Codable {
@@ -84,8 +92,10 @@ public struct LibraryItem: Identifiable, Sendable, Hashable, Codable {
         addedAt: Date? = nil,
         infoHash: String? = nil,
         nzbBlobID: String? = nil,
-        seeding: Seeding? = nil
+        seeding: Seeding? = nil,
+        kindHint: ContentKind? = nil
     ) {
+        self.kindHint = kindHint
         self.id = id
         self.backend = backend
         self.name = name

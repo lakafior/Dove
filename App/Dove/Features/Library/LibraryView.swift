@@ -713,9 +713,12 @@ struct LibraryItemView: View {
                     Text(size.formatted(.byteCount(style: .file))).font(.caption).foregroundStyle(.secondary)
                 }
                 Spacer()
-                Button { copyLink(file) } label: { Image(systemName: "link") }
-                    .accessibilityLabel("Copy link")
-                downloadButton(file)
+                // Files already in iCloud Drive › Dove are the user's own: nothing to fetch or link.
+                if !item.backend.isStorage {
+                    Button { copyLink(file) } label: { Image(systemName: "link") }
+                        .accessibilityLabel("Copy link")
+                    downloadButton(file)
+                }
                 // Players take video; other files are for the link or the phone.
                 if FileKind.isVideo(file.name) {
                     Button { play(file) } label: { Image(systemName: "play.fill") }
@@ -731,8 +734,13 @@ struct LibraryItemView: View {
                 Button(model.playback.playLabel, systemImage: "play") { play(file) }
                 PlayInMenu { play(file, in: $0) }
             }
-            Button("Copy link", systemImage: "link") { copyLink(file) }
-            Button("Download to phone", systemImage: "arrow.down.circle") { download(file) }
+            if !item.backend.isStorage {
+                Button("Copy link", systemImage: "link") { copyLink(file) }
+                Button("Download to phone", systemImage: "arrow.down.circle") { download(file) }
+                if model.iCloudFolder != nil {
+                    Button("Save to iCloud Drive", systemImage: "icloud.and.arrow.down") { download(file, to: .iCloud) }
+                }
+            }
         }
     }
 
@@ -987,11 +995,11 @@ struct LibraryItemView: View {
         }
     }
 
-    private func download(_ file: LibraryFile) {
+    private func download(_ file: LibraryFile, to destination: DownloadDestination = .device) {
         Task {
             do {
-                try await model.download(file, of: detail ?? item)
-                message = "Downloading \(file.name). Progress is in the Downloads tab."
+                try await model.download(file, of: detail ?? item, to: destination)
+                message = "Downloading \(file.name) to \(destination.displayName). Progress is in the Downloads tab."
             } catch {
                 message = error.localizedDescription
             }

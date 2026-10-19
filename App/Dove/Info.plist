@@ -90,6 +90,18 @@
 	<string>Dove talks to servers you add on your home network, such as Jackett, Prowlarr or nzbdav.</string>
 	<key>NSSupportsLiveActivities</key>
 	<true/>
+	<key>NSUbiquitousContainers</key>
+	<dict>
+		<key>iCloud.net.smigi.dove</key>
+		<dict>
+			<key>NSUbiquitousContainerIsDocumentScopePublic</key>
+			<true/>
+			<key>NSUbiquitousContainerName</key>
+			<string>Dove</string>
+			<key>NSUbiquitousContainerSupportedFolderLevels</key>
+			<string>Any</string>
+		</dict>
+	</dict>
 	<key>NSUserActivityTypes</key>
 	<array>
 		<string>net.smigi.dove.view</string>

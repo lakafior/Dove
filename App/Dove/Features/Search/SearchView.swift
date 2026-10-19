@@ -139,7 +139,7 @@ struct SearchView: View {
             .onAppear(perform: checkPasteboard)
             .onChange(of: scenePhase) { if scenePhase == .active { checkPasteboard() } }
             .onReceive(NotificationCenter.default.publisher(for: UIPasteboard.changedNotification)) { _ in checkPasteboard() }
-            .sheet(item: $directSearch) { DirectBrowserView(start: $0.url) }
+            .sheet(item: $directSearch) { DirectBrowserView(start: $0.url, category: activeCategory) }
             .sheet(item: $pendingSources) { batch in
                 AddSourceSheet(sources: batch.sources) { result in
                     pendingSources = nil

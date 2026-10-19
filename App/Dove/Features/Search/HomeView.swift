@@ -255,7 +255,7 @@ struct HomeView: View {
     /// One chip per configured service: a light (online, worth a look, offline) and days of premium left.
     @ViewBuilder
     private var servicesStrip: some View {
-        let configured = BackendID.allCases.filter(model.isConfigured)
+        let configured = BackendID.allCases.filter { !$0.isStorage && model.isConfigured($0) }
         if !configured.isEmpty {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {

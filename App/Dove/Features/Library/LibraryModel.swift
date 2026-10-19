@@ -123,6 +123,16 @@ final class LibraryModel {
         kinds.shelfItem(item, hint: hints.hint(for: item))
     }
 
+    /// How the Library sees an item (kind, readable name), for callers outside the library list.
+    func shelf(_ item: LibraryItem) -> ShelfItem {
+        shelfItem(item)
+    }
+
+    /// The book an item was matched to, if any.
+    func bookMatch(for item: ShelfItem) -> BookSummary? {
+        item.bookGuess.flatMap { bookMatches[$0.key] }
+    }
+
     /// Remembers what the search knew about a release Dove just added: its name, and the title it was found for.
     func recordAdded(_ hint: AddedHint, backend: BackendID, itemIDs: [LibraryItem.ID], infoHash: String?) {
         hints.record(hint, backend: backend, itemIDs: itemIDs, infoHash: infoHash)
@@ -230,6 +240,8 @@ final class LibraryModel {
     /// Covers for books and audiobooks from Open Library and Apple Books (no key). Two at a time: Apple allows
     /// about 20 searches a minute, and a refused search is simply tried again on the next refresh.
     private func matchMissingBooks(everything: Bool = false) async {
+        // Books added or downloaded from a book's screen need no search.
+        for (key, book) in await LibraryMatcher.applyBookHints(items, store: bookStore) { bookMatches[key] = book }
         var guesses: [String: BookGuess] = [:]
         for item in items {
             if let guess = item.bookGuess, guesses[guess.key] == nil { guesses[guess.key] = guess }
