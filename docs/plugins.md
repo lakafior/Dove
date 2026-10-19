@@ -102,6 +102,11 @@ manifest: {
 - `browse`: optional URL template; `{query}` is the search words (URL-encoded), other `{name}`s are settings.
 - `links`: optional regular expressions (JavaScript syntax, `{name}`s replaced with escaped setting values) over
   a full URL; the named group `id` is passed to `resolve`.
+- `harvest`: optional JavaScript expression, evaluated in the browser about once a second on a page `links`
+  recognise, while it is open. A file URL it returns (a string, or nothing while the page has no file) is
+  resolved — `links` over it, so the plugin can hand it back with headers and a name — and downloaded instead
+  of `resolve` being asked for the page's id. For sites whose checks a scripted request does not pass: the
+  page's own viewer fetches the file (a captcha is solved in the page), the expression picks its address out.
 
 ### Context (`ctx`)
 
@@ -141,7 +146,7 @@ service that fetches plain links (Offcloud, TorBox, Premiumize).
 
 | Function | Does |
 |---|---|
-| `await dove.fetch(url, { method, headers, body })` | HTTPS request to an allowed host. Resolves to `{ status, url, headers, body, text(), json() }` (`body` is the text, UTF-8). Rejects for a host outside `hosts`, a redirect to one, a network error, or more than 10 MB. Does not reject for HTTP errors: check `status`. No cookies are kept between calls. |
+| `await dove.fetch(url, { method, headers, body })` | HTTPS request to an allowed host. Resolves to `{ status, url, headers, body, text(), json() }` (`body` is the text, UTF-8). Rejects for a host outside `hosts`, a redirect to one, a network error, or more than 10 MB. Does not reject for HTTP errors: check `status`. No cookies are kept between calls; the browser's cookies for the host are sent, so a login or a captcha solved in Dove's browser reaches the plugin. |
 | `await dove.sleep(ms)` | Waits up to 5000 ms (rate limits). |
 | `dove.log(...values)` | Debug output (Dove's log; never shown to the user). |
 

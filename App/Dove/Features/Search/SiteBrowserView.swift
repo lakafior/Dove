@@ -22,10 +22,32 @@ struct SiteBrowserView: View {
         page.url.flatMap { model.plugins.link(for: $0) }
     }
 
+    /// The plugin's `harvest` expression, evaluated in the page while it is open.
+    private var harvest: String? { file?.call.manifest.harvest }
+
     var body: some View {
         NavigationStack {
             SiteWebView(start: start, page: page)
                 .ignoresSafeArea(edges: .bottom)
+                // The page's own file address, read out of it while it is open: the page's requests passed
+                // the site's checks, so its viewer holds the file's direct address by the time it is asked for.
+                .task(id: harvest) {
+                    page.harvestedFileURL = nil
+                    guard let harvest, let webView = page.webView else { return }
+                    while !Task.isCancelled {
+                        do {
+                            if let found = try await webView.evaluateJavaScript(harvest) as? String,
+                               let url = URL(string: found.trimmingCharacters(in: .whitespacesAndNewlines)),
+                               url.scheme?.hasPrefix("http") == true, url.host() != nil {
+                                page.harvestedFileURL = url
+                                break
+                            }
+                        } catch {
+                            // The page does not have the file yet (or the expression does not fit it).
+                        }
+                        try? await Task.sleep(for: .seconds(1.5))
+                    }
+                }
                 .overlay(alignment: .top) {
                     if page.isLoading { ProgressView(value: page.progress).progressViewStyle(.linear) }
                 }
@@ -78,7 +100,10 @@ struct SiteBrowserView: View {
     private func download(_ file: (call: PluginCall, id: String), to place: FilePlace) {
         isStarting = true
         Task {
-            message = await model.getFile(from: file.call, id: file.id, kind: category.contentKind, book: book, to: place)
+            // The address the page itself fetched comes first (a plugin's `links` recognise it, so the plugin
+            // hands it back with the headers it needs); without one, the plugin resolves the page.
+            let target = page.harvestedFileURL.flatMap { model.plugins.link(for: $0) } ?? file
+            message = await model.getFile(from: target.call, id: target.id, kind: category.contentKind, book: book, to: place)
             isStarting = false
         }
     }
@@ -98,6 +123,8 @@ final class SiteBrowserPage {
     var progress = 0.0
     var canGoBack = false
     var canGoForward = false
+    /// The file address the page itself fetched, read out of it by the plugin's `harvest` expression.
+    var harvestedFileURL: URL?
     @ObservationIgnored weak var webView: WKWebView?
 }
 

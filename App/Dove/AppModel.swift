@@ -739,7 +739,8 @@ final class AppModel {
     ) async -> String {
         let place = place ?? self.place(for: kind)
         do {
-            let links = try await PluginRunner().resolve(call.manifest, script: call.script, settings: call.settings, id: id)
+            // The browser's cookies ride along: a login or a captcha solved in the site's pages reaches the plugin.
+            let links = try await PluginRunner(transport: BrowserCookieTransport()).resolve(call.manifest, script: call.script, settings: call.settings, id: id)
             switch place {
             case .service(let serviceID):
                 guard links.allSatisfy(\.isPlain) else {
@@ -789,7 +790,7 @@ final class AppModel {
             throw BackendError.api(message: "The plugin that found this file is off or removed.")
         }
         let parts = ref.fileID.split(separator: "#", maxSplits: 1).map(String.init)
-        let links = try await PluginRunner().resolve(call.manifest, script: call.script, settings: call.settings, id: parts[0])
+        let links = try await PluginRunner(transport: BrowserCookieTransport()).resolve(call.manifest, script: call.script, settings: call.settings, id: parts[0])
         let index = parts.count > 1 ? Int(parts[1]) ?? 0 : 0
         guard links.indices.contains(index) else { throw PluginError("The plugin no longer lists this file.") }
         return Self.request(for: links[index])

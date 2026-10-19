@@ -66,6 +66,10 @@ public struct PluginManifest: Codable, Sendable, Hashable {
     public var browse: String?
     /// Regular expressions over a full URL with a named group `id`; settings as `{name}`.
     public var links: [String]
+    /// A JavaScript expression evaluated in the browser on a page `links` recognise, about once a second
+    /// while it is open. A file URL it returns is resolved (`links` over it) and downloaded instead of asking
+    /// `resolve` for the page's id: the page's own requests already passed the site's checks.
+    public var harvest: String?
     public var adult: Bool
 
     public struct Setting: Codable, Sendable, Hashable, Identifiable {
@@ -105,7 +109,7 @@ public struct PluginManifest: Codable, Sendable, Hashable {
     }
 
     enum CodingKeys: String, CodingKey {
-        case id, name, version, api, capabilities, categories, hosts, settings, browse, links, adult
+        case id, name, version, api, capabilities, categories, hosts, settings, browse, links, harvest, adult
     }
 
     public init(from decoder: any Decoder) throws {
@@ -121,6 +125,7 @@ public struct PluginManifest: Codable, Sendable, Hashable {
         settings = try c.decodeIfPresent([Setting].self, forKey: .settings) ?? []
         browse = try c.decodeIfPresent(String.self, forKey: .browse)
         links = try c.decodeIfPresent([String].self, forKey: .links) ?? []
+        harvest = try c.decodeIfPresent(String.self, forKey: .harvest)
         adult = try c.decodeIfPresent(Bool.self, forKey: .adult) ?? false
     }
 
