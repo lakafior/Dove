@@ -268,6 +268,16 @@ struct LibraryView: View {
                     Text("Music").font(.title3.bold())
                     let albums = artists.reduce(0) { $0 + $1.albums.count }
                     Text(albums == 1 ? "1 album" : "\(albums) albums").font(.subheadline).foregroundStyle(.secondary)
+                    Spacer()
+                    // Every album shown (the filters apply), in random order.
+                    Button("Shuffle all", systemImage: "shuffle") {
+                        Task {
+                            if let message = await model.playMusic(artists.flatMap(\.albums), title: "All music", shuffled: true) {
+                                notice = message
+                            }
+                        }
+                    }
+                    .font(.subheadline)
                 }
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 120), spacing: 12)], alignment: .leading, spacing: 16) {
                     ForEach(artists) { artist in

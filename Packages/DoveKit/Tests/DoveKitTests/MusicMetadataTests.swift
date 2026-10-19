@@ -205,3 +205,22 @@ struct AlbumLibraryTests {
         #expect(filter.apply(to: albums).isEmpty)
     }
 }
+
+struct MusicTrackNameTests {
+    @Test func titlesFromFileNames() {
+        #expect(MusicTracks.title(of: "Dookie/01 - Burnout.flac") == "Burnout")
+        #expect(MusicTracks.title(of: "CD1/03. Having a Blast.mp3") == "Having a Blast")
+        #expect(MusicTracks.title(of: "1-04 Pulling Teeth.flac") == "Pulling Teeth")
+        #expect(MusicTracks.title(of: "Green Day - 07 - Basket Case.mp3", artist: "Green Day") == "Basket Case")
+        #expect(MusicTracks.title(of: "07 - Green Day - Basket Case.mp3", artist: "Green Day") == "Basket Case")
+        #expect(MusicTracks.title(of: "1979.flac") == "1979", "a title that is a number stays")
+        #expect(MusicTracks.title(of: "Intro.m4a") == "Intro")
+
+        let files = ["01 - Burnout.flac", "02 - Having a Blast.flac", "03 - Chump.flac"].enumerated().map {
+            AudiobookTrack(fileID: "\($0.offset)", path: $0.element)
+        }
+        #expect(MusicTracks.index(of: AlbumTrack(id: "x", position: 9, title: "Chump"), in: files) == 2, "by title first")
+        #expect(MusicTracks.index(of: AlbumTrack(id: "y", position: 2, title: "Having A Blast (Remastered)"), in: files) == 1, "else by position")
+        #expect(MusicTracks.index(of: AlbumTrack(id: "z", position: 9, title: "Nope"), in: files) == nil)
+    }
+}

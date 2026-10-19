@@ -150,3 +150,32 @@ extension ShelfItem {
         kind == .music ? AlbumGuess(releaseName: name) : nil
     }
 }
+
+/// Track names for the music player, from file names.
+public enum MusicTracks {
+    /// "CD1/01 - Basket Case.flac" → "Basket Case"; "Green Day - 03 - Welcome to Paradise.mp3" → "Welcome to
+    /// Paradise"; "1-04 Pulling Teeth.flac" → "Pulling Teeth". A name that is only a number stays.
+    public static func title(of path: String, artist: String? = nil) -> String {
+        var name = ((path as NSString).lastPathComponent as NSString).deletingPathExtension.replacingOccurrences(of: "_", with: " ")
+        if let artist, !artist.isEmpty, let range = name.range(of: artist + " - ", options: [.caseInsensitive, .anchored]) {
+            name.removeSubrange(range)
+        }
+        let stripped = name.replacingOccurrences(
+            of: #"^\s*(\d{1,2}[\-\.]\s?)?\d{1,3}(\s*[\-\.\)]\s*|\s+)"#, with: "", options: .regularExpression
+        ).trimmingCharacters(in: .whitespaces)
+        if let artist, !artist.isEmpty, let range = stripped.range(of: artist + " - ", options: [.caseInsensitive, .anchored]) {
+            return String(stripped[range.upperBound...]).trimmingCharacters(in: .whitespaces)
+        }
+        return stripped.isEmpty ? name : stripped
+    }
+
+    /// The index of the file that is a metadata track: the same title, else the track at that position.
+    public static func index(of track: AlbumTrack, in tracks: [AudiobookTrack], artist: String? = nil) -> Int? {
+        let wanted = MediaGuess.normalize(track.title)
+        if let exact = tracks.firstIndex(where: { MediaGuess.normalize(title(of: $0.path, artist: artist)) == wanted }) {
+            return exact
+        }
+        let position = track.position - 1
+        return tracks.indices.contains(position) ? position : nil
+    }
+}

@@ -15,7 +15,8 @@ extension AppModel {
     /// The audiobook listened to last that is still in the library, from its saved place (Siri, Shortcuts, the
     /// app icon's Quick Action). Plays on if it is already loaded.
     func continueAudiobook() async -> ContinueResult {
-        if let session = audiobook.session {
+        // A book that is loaded; music in the player gives way to the last book.
+        if let session = audiobook.session, !session.isMusic {
             if !audiobook.isPlaying { audiobook.play() }
             return .playing(session.title)
         }

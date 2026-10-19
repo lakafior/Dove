@@ -69,7 +69,8 @@ enum WidgetSnapshotWriter {
 
         var listening: WidgetSnapshot.Listening?
         let player = app.audiobook
-        if let session = player.session {
+        // Music is not "listening": the widget's Play continues a book.
+        if let session = player.session, !session.isMusic {
             var progress: Double?
             if let duration = player.duration, duration > 0, !session.tracks.isEmpty {
                 progress = (Double(player.trackIndex) + min(player.elapsed / duration, 1)) / Double(session.tracks.count)

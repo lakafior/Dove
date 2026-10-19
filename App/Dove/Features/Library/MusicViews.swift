@@ -9,6 +9,48 @@ struct LibraryAlbumRoute: Hashable {
     let id: String
 }
 
+/// Play and Shuffle for some albums in Dove's player, with what went wrong under them.
+struct MusicPlayButtons: View {
+    @Environment(AppModel.self) private var model
+    let albums: [AlbumTitle]
+    let title: String
+    var cover: URL?
+    @State private var preparing: Bool?
+    @State private var message: String?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 12) {
+                button("Play", systemImage: "play.fill", shuffled: false)
+                button("Shuffle", systemImage: "shuffle", shuffled: true)
+            }
+            if let message {
+                Text(message).font(.footnote).foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    private func button(_ label: String, systemImage: String, shuffled: Bool) -> some View {
+        Button {
+            preparing = shuffled
+            message = nil
+            Task {
+                message = await model.playMusic(albums, title: title, cover: cover, shuffled: shuffled)
+                preparing = nil
+            }
+        } label: {
+            HStack {
+                if preparing == shuffled { ProgressView() } else { Image(systemName: systemImage) }
+                Text(label)
+            }
+            .font(.body.weight(.semibold))
+            .frame(maxWidth: .infinity)
+        }
+        .buttonStyle(.bordered)
+        .disabled(preparing != nil)
+    }
+}
+
 /// Square artwork for an album; until it loads, or when there is none, a tile made from the title.
 struct AlbumCover: View {
     let title: String
@@ -91,6 +133,8 @@ struct ArtistView: View {
     var body: some View {
         ScrollView {
             if let artist {
+                MusicPlayButtons(albums: artist.albums, title: artist.name, cover: artist.cover)
+                    .padding([.horizontal, .top])
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 140), spacing: 12)], alignment: .leading, spacing: 16) {
                     ForEach(artist.albums) { album in
                         NavigationLink(value: LibraryAlbumRoute(id: album.id)) {
@@ -120,6 +164,7 @@ struct LibraryAlbumView: View {
     @State private var isFixingMatch = false
     @State private var tracks: [AlbumTrack]?
     @State private var showTracks = false
+    @State private var trackMessage: String?
 
     private var album: AlbumTitle? { model.library.album(id: albumID) }
 
@@ -128,21 +173,30 @@ struct LibraryAlbumView: View {
             if let album {
                 Section {
                     header(album)
+                    MusicPlayButtons(albums: [album], title: album.name, cover: album.album?.cover)
                     if let tracks, !tracks.isEmpty {
                         DisclosureGroup("\(tracks.count) tracks", isExpanded: $showTracks) {
                             ForEach(tracks) { track in
-                                HStack(alignment: .firstTextBaseline) {
-                                    Text("\(track.position)").monospacedDigit().foregroundStyle(.secondary).frame(minWidth: 24, alignment: .trailing)
-                                    Text(track.title)
-                                    Spacer()
-                                    if let duration = track.duration {
-                                        Text(Duration.seconds(duration).formatted(.time(pattern: .minuteSecond)))
-                                            .monospacedDigit()
-                                            .foregroundStyle(.secondary)
+                                // A tap plays the album from this track (its file found by title, else position).
+                                Button {
+                                    trackMessage = nil
+                                    Task { trackMessage = await model.playMusic([album], title: album.name, cover: album.album?.cover, start: .track(track)) }
+                                } label: {
+                                    HStack(alignment: .firstTextBaseline) {
+                                        Text("\(track.position)").monospacedDigit().foregroundStyle(.secondary).frame(minWidth: 24, alignment: .trailing)
+                                        Text(track.title)
+                                        Spacer()
+                                        if let duration = track.duration {
+                                            Text(Duration.seconds(duration).formatted(.time(pattern: .minuteSecond)))
+                                                .monospacedDigit()
+                                                .foregroundStyle(.secondary)
+                                        }
                                     }
+                                    .font(.subheadline)
                                 }
-                                .font(.subheadline)
+                                .tint(.primary)
                             }
+                            if let trackMessage { Text(trackMessage).font(.footnote).foregroundStyle(.secondary) }
                         }
                     }
                     if let summary = album.album {

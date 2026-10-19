@@ -104,13 +104,15 @@ struct AudiobookMiniPlayer: View {
     var body: some View {
         let player = model.audiobook
         if let session = player.session {
+            let entry = player.currentEntry
             HStack(spacing: 12) {
-                CachedImage(url: session.cover) { Rectangle().fill(.quaternary) }
+                CachedImage(url: session.isMusic ? entry?.cover : session.cover) { Rectangle().fill(.quaternary) }
                     .frame(width: 40, height: 40)
                     .clipShape(RoundedRectangle(cornerRadius: 6))
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(session.title).font(.subheadline.weight(.semibold)).lineLimit(1)
-                    Text(player.currentChapter?.title ?? session.author ?? "")
+                    Text(session.isMusic ? entry?.title ?? session.title : session.title)
+                        .font(.subheadline.weight(.semibold)).lineLimit(1)
+                    Text(session.isMusic ? entry?.artist ?? "" : player.currentChapter?.title ?? session.author ?? "")
                         .font(.caption).foregroundStyle(.secondary).lineLimit(1)
                 }
                 Spacer(minLength: 4)
@@ -122,8 +124,13 @@ struct AudiobookMiniPlayer: View {
                     }
                     .accessibilityLabel(player.isPlaying ? "Pause" : "Play")
                 }
-                Button { player.skip(by: 30) } label: { Image(systemName: "goforward.30").font(.title3) }
-                    .accessibilityLabel("Forward 30 seconds")
+                if session.isMusic {
+                    Button { player.nextTrack() } label: { Image(systemName: "forward.fill").font(.title3) }
+                        .accessibilityLabel("Next track")
+                } else {
+                    Button { player.skip(by: 30) } label: { Image(systemName: "goforward.30").font(.title3) }
+                        .accessibilityLabel("Forward 30 seconds")
+                }
             }
             .buttonStyle(.plain)
             .padding(.horizontal, 12)
@@ -150,11 +157,14 @@ struct AudiobookPlayerView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var scrubbing: Double?
     @State private var showsChapters = false
+    @State private var showsQueue = false
 
     var body: some View {
         let player = model.audiobook
         NavigationStack {
-            if let session = player.session {
+            if let session = player.session, session.isMusic {
+                musicPlayer(player, session)
+            } else if let session = player.session {
                 VStack(spacing: 18) {
                     CachedImage(url: session.cover) {
                         RoundedRectangle(cornerRadius: 12).fill(.quaternary)
@@ -235,6 +245,88 @@ struct AudiobookPlayerView: View {
         }
     }
 
+    /// Music: the track's cover and names, previous/next track, shuffle and the queue instead of speed and chapters.
+    private func musicPlayer(_ player: AudiobookPlayer, _ session: AudiobookPlayer.Session) -> some View {
+        let entry = player.currentEntry
+        return VStack(spacing: 18) {
+            CachedImage(url: entry?.cover ?? session.cover) {
+                RoundedRectangle(cornerRadius: 12).fill(.quaternary)
+                    .overlay { Image(systemName: "music.note").font(.largeTitle).foregroundStyle(.secondary) }
+            }
+            .aspectRatio(1, contentMode: .fit)
+            .clipShape(RoundedRectangle(cornerRadius: 12))
+            .shadow(radius: 12, y: 6)
+            .padding(.horizontal, 24)
+            .frame(maxHeight: 340)
+
+            VStack(spacing: 4) {
+                Text(entry?.title ?? session.title).font(.title3.bold()).multilineTextAlignment(.center).lineLimit(2)
+                Text([entry?.artist, entry?.album].compactMap { $0 }.joined(separator: " — "))
+                    .foregroundStyle(.secondary).multilineTextAlignment(.center).lineLimit(2)
+                Text("\(player.trackIndex + 1) of \(session.queue.count) · \(session.title)")
+                    .font(.footnote).foregroundStyle(.secondary).lineLimit(1)
+            }
+
+            scrubber(player)
+
+            HStack(spacing: 44) {
+                Button { player.previousTrack() } label: { Image(systemName: "backward.fill") }
+                    .accessibilityLabel("Previous track")
+                Button { player.togglePlayPause() } label: {
+                    ZStack {
+                        Image(systemName: player.isPlaying ? "pause.circle.fill" : "play.circle.fill")
+                            .font(.system(size: 64))
+                            .opacity(player.isLoading ? 0.3 : 1)
+                        if player.isLoading { ProgressView() }
+                    }
+                }
+                .accessibilityLabel(player.isPlaying ? "Pause" : "Play")
+                Button { player.nextTrack() } label: { Image(systemName: "forward.fill") }
+                    .accessibilityLabel("Next track")
+                    .disabled(player.trackIndex + 1 >= session.queue.count)
+            }
+            .font(.title)
+            .buttonStyle(.plain)
+
+            if let error = player.error {
+                Text(error).font(.footnote).foregroundStyle(.red).multilineTextAlignment(.center)
+            }
+
+            HStack {
+                Button { player.setShuffle(!player.isShuffled) } label: {
+                    Image(systemName: "shuffle")
+                        .foregroundStyle(player.isShuffled ? Color.accentColor : .secondary)
+                }
+                .accessibilityLabel(player.isShuffled ? "Shuffle on" : "Shuffle off")
+                Spacer()
+                sleepMenu(player)
+                Spacer()
+                Button { showsQueue = true } label: {
+                    Label("Queue", systemImage: "list.bullet")
+                }
+                Spacer()
+                RoutePicker().frame(width: 34, height: 34)
+            }
+            .font(.subheadline)
+            .padding(.horizontal, 8)
+            Spacer(minLength: 0)
+        }
+        .padding()
+        .toolbar {
+            ToolbarItem(placement: .cancellationAction) {
+                Button("Close", systemImage: "chevron.down") { dismiss() }
+            }
+            ToolbarItem(placement: .primaryAction) {
+                Menu("More", systemImage: "ellipsis.circle") {
+                    Button("Stop and close", systemImage: "xmark.circle", role: .destructive) {
+                        player.stop()
+                    }
+                }
+            }
+        }
+        .sheet(isPresented: $showsQueue) { QueueList() }
+    }
+
     private func chapterLine(_ player: AudiobookPlayer, _ session: AudiobookPlayer.Session) -> String {
         let chapter = player.currentChapter?.title ?? ""
         guard session.tracks.count > 1 else { return chapter }
@@ -259,7 +351,7 @@ struct AudiobookPlayerView: View {
             HStack {
                 Text(time(shown))
                 Spacer()
-                if player.rate != 1, player.duration != nil {
+                if player.rate != 1, player.duration != nil, player.session?.isMusic != true {
                     Text("\(time((duration - shown) / Double(player.rate))) left at \(rateLabel(player.rate))")
                 }
                 Spacer()
@@ -306,6 +398,52 @@ struct AudiobookPlayerView: View {
     private func time(_ seconds: Double) -> String {
         let value = seconds.isFinite ? max(0, seconds) : 0
         return Duration.seconds(value).formatted(.time(pattern: value >= 3600 ? .hourMinuteSecond : .minuteSecond))
+    }
+}
+
+/// Music: what plays next, in queue order (shuffled when shuffle is on); a tap plays that track.
+private struct QueueList: View {
+    @Environment(AppModel.self) private var model
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        let player = model.audiobook
+        let queue = player.session?.queue ?? []
+        NavigationStack {
+            ScrollViewReader { proxy in
+                List(Array(queue.enumerated()), id: \.element.id) { index, entry in
+                    Button {
+                        player.playEntry(at: index)
+                        dismiss()
+                    } label: {
+                        HStack(spacing: 12) {
+                            CachedImage(url: entry.cover) { Rectangle().fill(.quaternary) }
+                                .frame(width: 40, height: 40)
+                                .clipShape(RoundedRectangle(cornerRadius: 4))
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(entry.title).lineLimit(1)
+                                Text([entry.artist, entry.album].compactMap { $0 }.joined(separator: " — "))
+                                    .font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                            }
+                            Spacer()
+                            if index == player.trackIndex {
+                                Image(systemName: player.isPlaying ? "speaker.wave.2.fill" : "speaker.fill")
+                                    .foregroundStyle(.tint)
+                            }
+                        }
+                    }
+                    .tint(.primary)
+                    .id(entry.id)
+                }
+                .onAppear { if let current = player.currentEntry { proxy.scrollTo(current.id, anchor: .center) } }
+            }
+            .navigationTitle("Queue")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } }
+            }
+        }
+        .presentationDetents([.medium, .large])
     }
 }
 
