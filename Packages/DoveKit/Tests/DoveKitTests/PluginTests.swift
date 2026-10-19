@@ -142,6 +142,9 @@ struct PluginTests {
         #expect(PluginTemplate.fill("https://{domain}/search?q={query}", values: ["domain": "a.test", "query": "Hail Mary & co"], encode: true)
             == "https://a.test/search?q=Hail%20Mary%20%26%20co")
         #expect(PluginTemplate.fill("https://{domain}/x", values: [:]) == nil, "an empty setting leaves no address")
+        #expect(PluginTemplate.fill("https://{domain}/search", values: ["domain": "https://Site.test/"]) == "https://Site.test/search",
+                "an address pasted whole gives its host after ://")
+        #expect(PluginTemplate.fillPattern("^https?://{domain}/md5/", values: ["domain": "https://a.test/"]) == #"^https?://a\.test/md5/"#)
         let pattern = PluginTemplate.fillPattern("^https://{domain}/md5/(?<id>[0-9a-f]{32})", values: ["domain": "a.test"])
         #expect(pattern == #"^https://a\.test/md5/(?<id>[0-9a-f]{32})"#)
 

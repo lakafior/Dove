@@ -181,7 +181,7 @@ public struct InstalledPlugin: Codable, Sendable, Hashable, Identifiable {
 public enum PluginTemplate {
     /// Replaces `{name}` with settings (and extra values such as `query`); `encode` URL-encodes the values.
     /// Nil when a placeholder has no value (a required setting left empty).
-    public static func fill(_ template: String, values: [String: String], encode: Bool = false) -> String? {
+    public static func fill(_ template: String, values: [String: String], encode: Bool = false, escape: Bool = false) -> String? {
         var result = ""
         var rest = template[...]
         while let open = rest.firstIndex(of: "{") {
@@ -194,16 +194,27 @@ public enum PluginTemplate {
                 rest = rest[rest.index(after: close)...]
                 continue
             }
-            guard let value = values[name], !value.isEmpty else { return nil }
+            guard var value = values[name], !value.isEmpty else { return nil }
+            // Right after "://" a value is a host: an address pasted whole ("https://site.org/") gives its host.
+            if result.hasSuffix("://") { value = Self.host(value) }
+            if escape { value = NSRegularExpression.escapedPattern(for: value) }
             result += encode ? (value.addingPercentEncoding(withAllowedCharacters: .urlQueryValueAllowed) ?? value) : value
             rest = rest[rest.index(after: close)...]
         }
         return result + rest
     }
 
+    /// "https://Site.org/path" → "Site.org"; a bare host stays as it is.
+    static func host(_ value: String) -> String {
+        var text = value.trimmingCharacters(in: .whitespaces)
+        if let range = text.range(of: "://") { text = String(text[range.upperBound...]) }
+        if let slash = text.firstIndex(of: "/") { text = String(text[..<slash]) }
+        return text
+    }
+
     /// For regular expressions: values escaped so they match literally.
     public static func fillPattern(_ pattern: String, values: [String: String]) -> String? {
-        fill(pattern, values: values.mapValues { NSRegularExpression.escapedPattern(for: $0) })
+        fill(pattern, values: values, escape: true)
     }
 }
 

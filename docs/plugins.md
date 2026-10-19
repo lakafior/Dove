@@ -54,7 +54,9 @@ A repository is one JSON file at a URL the user adds in Settings:
 ## Script
 
 One JavaScript file (bundle libraries such as an HTML parser into it). It runs in JavaScriptCore: no DOM, no
-`window`, no `localStorage`, no timers except `dove.sleep`. It defines one global:
+`window`, no `localStorage`, no timers except `dove.sleep`, and none of the Web APIs browsers add (`URL`,
+`TextDecoder`, `atob`): bundle polyfills for what your libraries need (cheerio's `entities` needs `atob`;
+`cheerio/slim` avoids Node built-ins). It defines one global:
 
 ```js
 globalThis.plugin = {
@@ -170,7 +172,8 @@ globalThis.plugin = {
     const response = await dove.fetch(`https://${domain}/dyn/api/fast_download.json?md5=${id}&key=${encodeURIComponent(key)}`)
     const answer = response.json()
     if (!answer.download_url) throw new Error(answer.error || "No download link")
-    const name = decodeURIComponent(new URL(answer.download_url).pathname.split("/").pop() || id)
+    const path = answer.download_url.split(/[?#]/)[0]
+    const name = decodeURIComponent(path.slice(path.lastIndexOf("/") + 1)) || id
     return { url: answer.download_url, fileName: name }
   }
 }
