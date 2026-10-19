@@ -564,8 +564,8 @@ struct LibraryShelfSummary: Identifiable {
     let covers: [URL]
     var id: LibraryFilter.Category { category }
 
-    /// Square covers for audiobooks, 2:3 for the rest.
-    var coverRatio: CGFloat { category == .audiobooks ? 1 : 2 / 3 }
+    /// Square covers for audiobooks and albums, 2:3 for the rest.
+    var coverRatio: CGFloat { category == .audiobooks || category == .music ? 1 : 2 / 3 }
 
     var symbol: String {
         switch category {
@@ -581,7 +581,7 @@ struct LibraryShelfSummary: Identifiable {
     }
 
     /// Kinds in the Library's own order, empty ones left out. Movies and series count titles (releases of one
-    /// title are one), books count books, the rest count items.
+    /// title are one), books count books, music counts albums, the rest count items.
     @MainActor
     static func all(in library: LibraryModel, showAdult: Bool) -> [LibraryShelfSummary] {
         let titles = library.titles
@@ -601,7 +601,11 @@ struct LibraryShelfSummary: Identifiable {
                 let matching = books.filter { ($0.format == .audiobook) == (category == .audiobooks) }
                 count = matching.count
                 covers = matching.compactMap(\.book?.cover)
-            case .music, .software, .adult, .other:
+            case .music:
+                let albums = library.albums
+                count = albums.count
+                covers = albums.compactMap(\.album?.cover)
+            case .software, .adult, .other:
                 count = items.filter(category.contains).count
                 covers = []
             }
