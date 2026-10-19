@@ -19,6 +19,9 @@ struct SearchView: View {
     @State private var releases = ReleaseList()
     /// Books and Audiobooks: the metadata services' answer, before any indexer is asked.
     @State private var books: [BookSummary] = []
+    /// Music: MusicBrainz's albums, before any indexer is asked.
+    @State private var albums: [AlbumSummary] = []
+    @State private var searchedAlbums: String?
     /// Rows from the plugins that serve the picked category.
     @State private var pluginSearch = PluginSearch()
     @State private var resultsTab = ResultsTab.sources
@@ -62,7 +65,7 @@ struct SearchView: View {
     /// brings it back.
     private var showsResults: Bool {
         isSearching || releases.isSearching || pluginSearch.isSearching || !pluginSearch.answers.isEmpty
-            || !results.isEmpty || !releases.isEmpty || !books.isEmpty
+            || !results.isEmpty || !releases.isEmpty || !books.isEmpty || !albums.isEmpty || searchedAlbums != nil
             || ((message != nil || releases.message != nil) && !text.isEmpty)
     }
 
@@ -126,6 +129,7 @@ struct SearchView: View {
             .navigationDestination(for: TitleRoute.self) { LibraryTitleView(titleID: $0.id) }
             .navigationDestination(for: BookRoute.self) { BookTitleView(bookID: $0.id) }
             .navigationDestination(for: BookSearchRoute.self) { BookReleasesView(route: $0) }
+            .navigationDestination(for: AlbumRoute.self) { AlbumReleasesView(route: $0) }
             .navigationDestination(for: ShelfItem.self) { LibraryItemView(item: $0.item) }
             // The field's clear button and Cancel empty the text: back to the home screen.
             .onChange(of: text) {
@@ -177,17 +181,19 @@ struct SearchView: View {
 
     /// Indexers and plugins both answered something: a tap switches instead of a scroll past every release.
     private var showsResultTabs: Bool {
-        pluginSearch.wasAsked && (!releases.isEmpty || releases.isSearching || !books.isEmpty || !results.isEmpty)
+        pluginSearch.wasAsked && (!releases.isEmpty || releases.isSearching || !books.isEmpty || !albums.isEmpty || !results.isEmpty)
     }
 
     private var ownResultsTitle: String {
         if !books.isEmpty { return activeCategory == .audiobooks ? "Audiobooks" : "Books" }
+        if !albums.isEmpty { return "Albums" }
         if activeCategory == .media, !results.isEmpty { return "Titles" }
         return "Releases"
     }
 
     private var ownResultsCount: Int? {
         if !books.isEmpty { return books.count }
+        if !albums.isEmpty { return albums.count }
         if activeCategory == .media, !results.isEmpty { return visibleResults.count }
         return releases.isSearching ? nil : releases.visible.count
     }
@@ -204,11 +210,14 @@ struct SearchView: View {
         if !books.isEmpty || searchedBooks != nil {
             booksSection
         }
+        if !albums.isEmpty || searchedAlbums != nil {
+            albumsSection
+        }
         if let message = releases.message {
             Section { Text(message).font(.footnote).foregroundStyle(.secondary) }
         }
         if !activeCategory.usesAddons, !releases.isEmpty {
-            ReleaseListSection(list: releases, title: books.isEmpty ? "Releases from your indexers" : "Releases")
+            ReleaseListSection(list: releases, title: books.isEmpty && albums.isEmpty ? "Releases from your indexers" : "Releases")
         }
         if !showsResultTabs { PluginResultsSections(search: pluginSearch) }
         siteSearchSection
@@ -269,6 +278,8 @@ struct SearchView: View {
         pluginSearch.clear()
         books = []
         searchedBooks = nil
+        albums = []
+        searchedAlbums = nil
         message = nil
         typeFilter = nil
     }
@@ -355,6 +366,7 @@ struct SearchView: View {
         home.remember(query, category: category)
         SiriSuggestions.searched(query)
         if let format = category.bookFormat { return searchBooks(query, format: format) }
+        if category == .music { return searchAlbums(query) }
         // Categories without a title to pick: the plugins answer the words beside the indexers. Books and
         // Movies & TV ask them once a title is picked (its screen), or here when no title is found.
         if category.newznabCategory != nil {
@@ -412,7 +424,7 @@ extension SearchView {
     var siteSearchSection: some View {
         let query = text.trimmingCharacters(in: .whitespacesAndNewlines)
         let browsers = model.plugins.browsers(for: activeCategory)
-        let searched = !results.isEmpty || !releases.isEmpty || !books.isEmpty || message != nil || releases.message != nil
+        let searched = !results.isEmpty || !releases.isEmpty || !books.isEmpty || !albums.isEmpty || message != nil || releases.message != nil
             || !pluginSearch.answers.isEmpty
         if !query.isEmpty, !browsers.isEmpty, searched, !isSearching, !releases.isSearching {
             Section {
@@ -440,6 +452,48 @@ extension SearchView {
             isSearching = false
             // Nothing the services know (Polish editions, obscure titles): straight to the indexers and plugins.
             if books.isEmpty {
+                searchReleases()
+                searchPlugins()
+            }
+        }
+    }
+
+    /// Music starts from MusicBrainz (no indexer hits): a tap on an album searches the indexers for it.
+    var albumsSection: some View {
+        Section {
+            ForEach(albums) { album in
+                NavigationLink(value: AlbumRoute(album: album)) { AlbumRow(album: album) }
+            }
+            if let query = searchedAlbums, releases.isEmpty, !releases.isSearching, pluginSearch.answers.isEmpty {
+                Button("Search releases for \u{201C}\(query)\u{201D}", systemImage: "magnifyingglass") {
+                    searchReleases()
+                    searchPlugins()
+                }
+            }
+        } header: {
+            if !albums.isEmpty { Text("Albums") }
+        } footer: {
+            if !albums.isEmpty {
+                Text("From MusicBrainz\(AppleMusicCatalog.isEnabled ? " and Apple Music" : ""). Pick one to search the indexers for it.")
+            }
+        }
+    }
+
+    func searchAlbums(_ query: String) {
+        isSearching = true
+        albums = []
+        searchedAlbums = nil
+        releases.clear()
+        Task {
+            do {
+                albums = try await model.musicMetadata.search(query)
+            } catch {
+                message = error.localizedDescription
+            }
+            searchedAlbums = query
+            isSearching = false
+            // Nothing MusicBrainz knows (or it is busy): straight to the indexers and plugins.
+            if albums.isEmpty {
                 searchReleases()
                 searchPlugins()
             }

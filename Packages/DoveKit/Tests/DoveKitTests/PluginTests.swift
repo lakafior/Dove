@@ -127,6 +127,48 @@ struct PluginTests {
         let manifest = try await runner.manifest(of: script)
         let rows = try await runner.search(manifest, script: script, settings: [:], query: episode.query, category: .media, title: episode)
         #expect(rows.first?.title == "Lost S01E02|Lost|series||tt0411008||1|2|undefined", "missing values are left out")
+
+        let albumScript = #"""
+        globalThis.plugin = { manifest: { id: "x" }, async search({ album }) {
+          return [{ id: 1, title: [album.title, album.artists.join("+"), album.year].join("|") }]
+        } }
+        """#
+        let album = AlbumSummary(id: "mb:1", title: "Discovery", artists: ["Daft Punk"], year: 2001)
+        let albumRows = try await runner.search(
+            try await runner.manifest(of: albumScript), script: albumScript, settings: [:], query: "Daft Punk Discovery", category: .music, album: album
+        )
+        #expect(albumRows.first?.title == "Discovery|Daft Punk|2001")
+    }
+
+    @Test func musicMetadataGivesAlbumsAndTracks() async throws {
+        let script = #"""
+        globalThis.plugin = { manifest: { id: "music.test", name: "Music test", capabilities: ["metadata"], categories: ["music"] },
+          async metadata({ query, category }) {
+            if (category !== "music") return []
+            return [
+              { id: 302127, title: "Discovery", artist: "Daft Punk", year: "2001-03-07", cover: "https://img.test/d.jpg", type: "album" },
+              { id: "x", title: "Around the World", artists: ["Daft Punk"], type: "ep" },
+              { title: "no id" },
+            ]
+          },
+          async tracks({ id }) { return [{ title: "One More Time " + id, duration: 320 }, { id: "t2", title: "Aerodynamic", position: 2, disc: "1" }] },
+        }
+        """#
+        let runner = PluginRunner(transport: MockTransport())
+        let call = PluginCall(manifest: try await runner.manifest(of: script), script: script, settings: [:])
+        let catalog = PluginAlbumCatalog(call: call, transport: MockTransport())
+
+        let albums = try await catalog.albums(matching: "discovery")
+        #expect(albums.map(\.id) == ["plugin:music.test:302127", "plugin:music.test:x"], "a row without an id is skipped")
+        #expect(albums[0].artists == ["Daft Punk"] && albums[0].year == 2001 && albums[0].type == "Album" && albums[1].type == "EP")
+        #expect(catalog.owns(albums[0].id) && !catalog.owns("am:1"))
+
+        let tracks = try await catalog.tracks(ofAlbum: albums[0].id)
+        #expect(tracks.map(\.title) == ["One More Time 302127", "Aerodynamic"])
+        #expect(tracks.map(\.position) == [1, 2] && tracks[0].duration == 320)
+
+        let metadata = MusicMetadata(catalogs: [catalog], transport: MockTransport(), gate: MusicBrainzGate(interval: .zero))
+        #expect(try await metadata.tracks(of: albums[1]).count == 2, "MusicMetadata asks the catalog that owns the album")
     }
 
     @Test func slowCallsAreAbandoned() async throws {

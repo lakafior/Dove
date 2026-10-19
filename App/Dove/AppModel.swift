@@ -865,6 +865,11 @@ final class AppModel {
     var googleBooksKey: String { (try? keychain.get(.googleBooksAPIKey)) ?? "" }
     var hardcoverToken: String { (try? keychain.get(.hardcoverToken)) ?? "" }
 
+    /// Album search for Music: MusicBrainz, plus Apple Music when it is on and allowed (Settings › Music metadata).
+    var musicMetadata: MusicMetadata {
+        MusicMetadata(catalogs: AppleMusicCatalog.isEnabled ? [AppleMusicCatalog()] : [])
+    }
+
     /// The book metadata sources for this device's region, with the user's keys and plugins.
     var bookMetadataConfiguration: BookMetadata.Configuration {
         .device(googleBooksKey: googleBooksKey, hardcoverToken: hardcoverToken, plugins: plugins.calls(.metadata))

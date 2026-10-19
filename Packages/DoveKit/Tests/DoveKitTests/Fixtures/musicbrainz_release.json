@@ -1,0 +1,53 @@
+{
+ "id": "8d28a4da-8077-4cae-a0a1-2d16c4923775",
+ "title": "Discovery",
+ "status": "Official",
+ "date": "2024-10-08",
+ "country": "XW",
+ "media": [
+  {
+   "position": 1,
+   "format": "Digital Media",
+   "track-count": 3,
+   "title": "",
+   "tracks": [
+    {
+     "id": "e0e86657-dfbc-4d34-aae4-271c16712500",
+     "number": "1",
+     "position": 1,
+     "title": "One More Time",
+     "length": 320357
+    },
+    {
+     "id": "08a9eced-d1b3-43ca-85b6-ade0a9545f27",
+     "number": "2",
+     "position": 2,
+     "title": "Aerodynamic",
+     "length": 212547
+    },
+    {
+     "id": "adb51999-0c1d-4f4e-a9d2-edc03c638e68",
+     "number": "3",
+     "position": 3,
+     "title": "Digital Love",
+     "length": 301373
+    }
+   ]
+  },
+  {
+   "position": 2,
+   "format": "CD",
+   "track-count": 1,
+   "title": "Bonus",
+   "tracks": [
+    {
+     "id": "x1",
+     "number": "1",
+     "position": 1,
+     "title": "Bonus Track",
+     "length": null
+    }
+   ]
+  }
+ ]
+}

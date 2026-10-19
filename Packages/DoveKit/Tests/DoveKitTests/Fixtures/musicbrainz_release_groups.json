@@ -1,0 +1,131 @@
+{
+ "created": "2026-10-19T12:02:10.768Z",
+ "count": 4,
+ "offset": 0,
+ "release-groups": [
+  {
+   "id": "48117b90-a16e-34ca-a514-19c702df1158",
+   "score": 100,
+   "title": "Discovery",
+   "first-release-date": "2001-02-26",
+   "primary-type": "Album",
+   "artist-credit": [
+    {
+     "name": "Daft Punk",
+     "joinphrase": "",
+     "artist": {
+      "id": "056e4f3e-d505-4dad-8ec1-d04f521cbb56",
+      "name": "Daft Punk"
+     }
+    }
+   ],
+   "releases": [
+    {
+     "id": "8d28a4da-8077-4cae-a0a1-2d16c4923775",
+     "title": "Discovery",
+     "status": "Official"
+    },
+    {
+     "id": "6cd30d99-4923-4d5e-8e51-9d87506976f1",
+     "title": "Discovery",
+     "status": "Official"
+    },
+    {
+     "id": "69b198ff-fbaa-492a-bd2e-55f7aef7c29e",
+     "title": "Discovery",
+     "status": "Official"
+    }
+   ],
+   "count": 24
+  },
+  {
+   "id": "306b7820-9f80-471a-9647-8f769feea49d",
+   "score": 100,
+   "title": "Random Access Memories",
+   "first-release-date": "2011-06-16",
+   "primary-type": "Album",
+   "artist-credit": [
+    {
+     "name": "Franz Kirmann",
+     "joinphrase": "",
+     "artist": {
+      "id": "5b554791-dc6e-4b5b-9caa-f7eb306dc407",
+      "name": "Franz Kirmann"
+     }
+    }
+   ],
+   "releases": [
+    {
+     "id": "1e04e55b-82f9-427a-b2f3-6f45bc38022d",
+     "title": "Random Access Memories",
+     "status": "Official"
+    },
+    {
+     "id": "d5fd37fa-1bb1-4138-b6fa-f94c9ef714e4",
+     "title": "Random Access Memories",
+     "status": "Official"
+    }
+   ],
+   "count": 2
+  },
+  {
+   "id": "c61d612b-6325-49d3-bcac-8f834dc94013",
+   "score": 100,
+   "title": "Random Access Memories",
+   "primary-type": "Album",
+   "artist-credit": [
+    {
+     "name": "Jarel Gomes",
+     "joinphrase": "",
+     "artist": {
+      "id": "2044ecdb-fad9-4c5c-ad11-564ea0a57ccc",
+      "name": "Jarel Gomes"
+     }
+    }
+   ],
+   "releases": [
+    {
+     "id": "8653d7ad-acf3-419a-8e75-afc466bd3cb9",
+     "title": "Random Access Memories - Piano",
+     "status": "Bootleg"
+    }
+   ],
+   "count": 1
+  },
+  {
+   "id": "aa997ea0-2936-40bd-884d-3af8a0e064dc",
+   "score": 100,
+   "title": "Random Access Memories",
+   "first-release-date": "2013-05-17",
+   "primary-type": "Album",
+   "artist-credit": [
+    {
+     "name": "Daft Punk",
+     "joinphrase": "",
+     "artist": {
+      "id": "056e4f3e-d505-4dad-8ec1-d04f521cbb56",
+      "name": "Daft Punk"
+     }
+    }
+   ],
+   "releases": [
+    {
+     "id": "5000a285-b67e-4cfc-b54b-2b98f1810d2e",
+     "title": "Random Access Memories",
+     "status": "Official"
+    },
+    {
+     "id": "bd104f75-c502-40cf-b46a-83a0535984d4",
+     "title": "Random Access Memories",
+     "status": "Bootleg"
+    },
+    {
+     "id": "e65fcfb0-02dc-407c-ab28-8168dafcb999",
+     "title": "Random Access Memories",
+     "status": "Official"
+    }
+   ],
+   "count": 23
+  }
+ ]
+}

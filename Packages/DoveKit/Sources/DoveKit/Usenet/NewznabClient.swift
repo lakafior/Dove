@@ -46,6 +46,9 @@ public enum NewznabQuery: Sendable, Hashable {
     /// One book or audiobook picked from the metadata services: `t=book` with `title=`/`author=` where the
     /// indexer has it (caps `book-search`), else a plain search for "author title".
     case book(title: String, author: String?, category: NewznabCategory)
+    /// One album picked from the metadata services: `t=music` with `album=`/`artist=` where the indexer has it
+    /// (caps `audio-search`), else a plain search for "artist album" in Music.
+    case album(title: String, artist: String?)
 
     /// From a Stremio stream ID (`tt123` or `tt123:2:5`). Nil for IDs indexers cannot search (kitsu…).
     public init?(type: MediaType, id: String, title: String?, wholeSeason: Bool) {
@@ -69,13 +72,14 @@ public enum NewznabQuery: Sendable, Hashable {
         case .episode, .season: "tvsearch"
         case .text: "search"
         case .book: supported.contains("title") ? "book" : "search"
+        case .album: supported.contains("album") ? "music" : "search"
         }
     }
 
     var imdbID: String? {
         switch self {
         case .movie(let id, _), .episode(let id, _, _, _), .season(let id, _, _): id
-        case .text, .book: nil
+        case .text, .book, .album: nil
         }
     }
 
@@ -83,12 +87,17 @@ public enum NewznabQuery: Sendable, Hashable {
         switch self {
         case .movie(_, let title), .episode(_, _, _, let title), .season(_, _, let title): title
         case .text(let words, _): words
-        case .book(let title, let author, _): [author, title].compactMap { $0 }.joined(separator: " ")
+        case .book(let title, let author, _), .album(let title, let author): [author, title].compactMap { $0 }.joined(separator: " ")
         }
     }
 
-    var isBook: Bool {
-        if case .book = self { true } else { false }
+    /// Book and album searches use caps Dove did not read at first: caps saved before are asked again.
+    func needsNewerCaps(_ caps: NewznabCaps) -> Bool {
+        switch self {
+        case .book: caps.bookParams == nil
+        case .album: caps.musicParams == nil
+        default: false
+        }
     }
 
     /// Top-level categories a result must belong to. Movie and series searches ask for Movies (2000) or
@@ -98,6 +107,7 @@ public enum NewznabQuery: Sendable, Hashable {
         case .movie: [2000]
         case .episode, .season: [5000]
         case .text(_, let category), .book(_, _, let category): category.ids
+        case .album: NewznabCategory.music.ids
         }
     }
 
@@ -107,6 +117,9 @@ public enum NewznabQuery: Sendable, Hashable {
         if case .book(let title, let author, _) = self, supported.contains("title") {
             items.append(URLQueryItem(name: "title", value: title))
             if let author, supported.contains("author") { items.append(URLQueryItem(name: "author", value: author)) }
+        } else if case .album(let title, let artist) = self, supported.contains("album") {
+            items.append(URLQueryItem(name: "album", value: title))
+            if let artist, supported.contains("artist") { items.append(URLQueryItem(name: "artist", value: artist)) }
         } else if let imdbID, supported.contains("imdbid") {
             items.append(URLQueryItem(name: "imdbid", value: String(imdbID.dropFirst(2))))
         } else if let title, !title.isEmpty {
@@ -118,7 +131,7 @@ public enum NewznabQuery: Sendable, Hashable {
             items.append(URLQueryItem(name: "cat", value: categories.map(String.init).joined(separator: ",")))
         }
         switch self {
-        case .movie, .text, .book:
+        case .movie, .text, .book, .album:
             break
         case .episode(_, let season, let episode, _):
             items.append(URLQueryItem(name: "season", value: String(season)))
@@ -138,12 +151,17 @@ public struct NewznabCaps: Codable, Sendable, Hashable {
     /// `book-search` parameters (`q,title,author`); empty when the indexer has none, nil in caps saved before
     /// Dove read them (asked again on the first book search).
     public var bookParams: Set<String>?
+    /// `audio-search` parameters (`q,artist,album`), the same way.
+    public var musicParams: Set<String>?
 
-    public init(movieParams: Set<String>, tvParams: Set<String>, maxLimit: Int? = nil, bookParams: Set<String>? = nil) {
+    public init(
+        movieParams: Set<String>, tvParams: Set<String>, maxLimit: Int? = nil, bookParams: Set<String>? = nil, musicParams: Set<String>? = nil
+    ) {
         self.movieParams = movieParams
         self.tvParams = tvParams
         self.maxLimit = maxLimit
         self.bookParams = bookParams
+        self.musicParams = musicParams
     }
 
     func params(for query: NewznabQuery) -> Set<String> {
@@ -153,6 +171,7 @@ public struct NewznabCaps: Codable, Sendable, Hashable {
         // Every Newznab indexer has the plain `search` function, with `q`.
         case .text: ["q"]
         case .book: (bookParams ?? []).union(["q"])
+        case .album: (musicParams ?? []).union(["q"])
         }
     }
 }
@@ -337,6 +356,7 @@ final class NewznabParser: NSObject, XMLParserDelegate {
     private var movieParams = Set<String>()
     private var tvParams = Set<String>()
     private var bookParams = Set<String>()
+    private var musicParams = Set<String>()
     private var inCaps = false
 
     static func parse(_ data: Data) -> NewznabDocument {
@@ -378,7 +398,7 @@ final class NewznabParser: NSObject, XMLParserDelegate {
             } else {
                 item?.attrs[key] = value
             }
-        case "movie-search", "tv-search", "book-search":
+        case "movie-search", "tv-search", "book-search", "audio-search":
             guard inCaps, attributes["available"]?.lowercased() != "no" else { break }
             let params = Set((attributes["supportedParams"] ?? "q").lowercased().split(separator: ",").map {
                 $0.trimmingCharacters(in: .whitespaces)
@@ -386,6 +406,7 @@ final class NewznabParser: NSObject, XMLParserDelegate {
             switch name {
             case "movie-search": movieParams = params
             case "tv-search": tvParams = params
+            case "audio-search": musicParams = params
             default: bookParams = params
             }
         case "limits":
@@ -416,6 +437,7 @@ final class NewznabParser: NSObject, XMLParserDelegate {
             caps.movieParams = movieParams
             caps.tvParams = tvParams
             caps.bookParams = bookParams
+            caps.musicParams = musicParams
             document.caps = caps
             inCaps = false
         default:

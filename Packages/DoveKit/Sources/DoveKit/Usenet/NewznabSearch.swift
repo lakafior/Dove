@@ -93,8 +93,8 @@ public actor NewznabSearch {
                     failures.append("\(indexer.name): \(reason)")
                     continue
                 }
-                // Caps saved before Dove read `book-search` are asked again for a book search.
-                let caps = state.caps[indexer.id].flatMap { query.isBook && $0.bookParams == nil ? nil : $0 }
+                // Caps saved before Dove read `book-search`/`audio-search` are asked again for such a search.
+                let caps = state.caps[indexer.id].flatMap { query.needsNewerCaps($0) ? nil : $0 }
                 // Two hits at most (caps once ever, then the search); reserve them before going out.
                 spend(indexer, hits: caps == nil ? 2 : 1)
                 let client = NewznabClient(indexer: indexer, transport: transport)

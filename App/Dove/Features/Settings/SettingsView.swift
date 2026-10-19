@@ -88,6 +88,12 @@ struct SettingsView: View {
                         SettingsRow("Book metadata", symbol: "books.vertical.fill", color: .brown)
                     }
                     NavigationLink {
+                        MusicMetadataSettingsView()
+                    } label: {
+                        SettingsRow("Music metadata", symbol: "music.note.list", color: .pink,
+                                    value: AppleMusicCatalog.isEnabled ? "+ Apple Music" : "MusicBrainz")
+                    }
+                    NavigationLink {
                         PluginsSettingsView()
                     } label: {
                         SettingsRow("Plugins", symbol: "puzzlepiece.fill", color: .mint,
@@ -98,7 +104,7 @@ struct SettingsView: View {
                 } header: {
                     Text("Search and metadata")
                 } footer: {
-                    Text("Addons give sources (and titles, without TMDB). Indexers are searched from your phone and power Search › Other. TMDB gives search, posters and episodes. Book metadata finds books and audiobooks.")
+                    Text("Addons give sources (and titles, without TMDB). Indexers are searched from your phone and power Search › Other. TMDB gives search, posters and episodes. Book metadata finds books and audiobooks, Music metadata albums.")
                 }
 
                 Section("This iPhone") {

@@ -36,7 +36,7 @@ final class PluginSearch {
 
     func search(
         _ query: String, category: SearchCategory, book: BookSummary? = nil, title: PluginTitle? = nil, media: MediaSummary? = nil,
-        calls: [PluginCall]
+        album: AlbumSummary? = nil, calls: [PluginCall]
     ) {
         clear()
         guard !calls.isEmpty, !query.isEmpty else { return }
@@ -51,7 +51,7 @@ final class PluginSearch {
                     group.addTask {
                         do {
                             let rows = try await PluginRunner().search(
-                                call.manifest, script: call.script, settings: call.settings, query: query, category: category, book: book, title: title
+                                call.manifest, script: call.script, settings: call.settings, query: query, category: category, book: book, title: title, album: album
                             )
                             return (call.id, .success(rows))
                         } catch {

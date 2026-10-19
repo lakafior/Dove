@@ -92,6 +92,22 @@ struct NewznabTests {
         #expect(audiobook.parameters(supported: ["title", "author"]) == [URLQueryItem(name: "title", value: "Dune"), URLQueryItem(name: "cat", value: "3030")])
     }
 
+    @Test func albumSearchesUseArtistAndAlbumWhereIndexersTakeThem() {
+        let album = NewznabQuery.album(title: "Discovery", artist: "Daft Punk")
+        let full = NewznabCaps(movieParams: [], tvParams: [], musicParams: ["q", "artist", "album"])
+        #expect(album.function(supported: full.params(for: album)) == "music")
+        #expect(album.parameters(supported: full.params(for: album)) == [
+            URLQueryItem(name: "album", value: "Discovery"),
+            URLQueryItem(name: "artist", value: "Daft Punk"),
+            URLQueryItem(name: "cat", value: "3000"),
+        ])
+        for caps in [NewznabCaps(movieParams: [], tvParams: [], musicParams: []), NewznabCaps(movieParams: [], tvParams: [])] {
+            #expect(album.function(supported: caps.params(for: album)) == "search")
+            #expect(album.parameters(supported: caps.params(for: album))?.first == URLQueryItem(name: "q", value: "Daft Punk Discovery"))
+            #expect(album.needsNewerCaps(caps) == (caps.musicParams == nil))
+        }
+    }
+
     @Test func capsSavedWithoutBookSearchAreAskedAgainForABook() async throws {
         let stateURL = FileManager.default.temporaryDirectory.appending(path: "newznab-\(UUID().uuidString).json")
         defer { try? FileManager.default.removeItem(at: stateURL) }
@@ -128,6 +144,7 @@ struct NewznabTests {
         #expect(caps.tvParams.contains("tvdbid"))
         #expect(caps.maxLimit == 100)
         #expect(caps.bookParams == ["q", "title", "author"])
+        #expect(caps.musicParams == ["q", "artist", "album"])
 
         let found = try #require(try await client.search(.movie(imdbID: "tt15398776", title: "Some Movie"), caps: caps))
         #expect(found.count == 2)

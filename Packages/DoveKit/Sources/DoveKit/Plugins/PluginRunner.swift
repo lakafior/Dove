@@ -158,9 +158,25 @@ public struct PluginRunner: Sendable {
         return try decodeList(PluginBook.self, json).map { $0.summary(plugin: plugin.id) }
     }
 
+    /// Music metadata: `metadata({query, category: "music"})` answers albums (`docs/plugins.md`, `Album`).
+    public func albums(_ plugin: PluginManifest, script: String, settings: [String: SettingValue], query: String) async throws -> [AlbumSummary] {
+        let json = try await call(plugin, script: script, settings: settings, function: "metadata", argument: [
+            "query": query, "category": SearchCategory.music.rawValue,
+        ])
+        return try decodeList(PluginAlbum.self, json).map { $0.summary(plugin: plugin.id) }
+    }
+
+    /// An album's tracks (`tracks({id})`, optional: a plugin without it has none to give).
+    public func tracks(_ plugin: PluginManifest, script: String, settings: [String: SettingValue], albumID: String) async throws -> [AlbumTrack] {
+        let json = try await call(plugin, script: script, settings: settings, function: "tracks", argument: ["id": albumID])
+        return try decodeList(PluginTrack.self, json).enumerated().map { index, track in
+            AlbumTrack(id: track.id ?? "\(albumID)/\(index)", disc: track.disc ?? 1, position: track.position ?? index + 1, title: track.title, duration: track.duration)
+        }
+    }
+
     public func search(
         _ plugin: PluginManifest, script: String, settings: [String: SettingValue],
-        query: String, category: SearchCategory, book: BookSummary? = nil, title: PluginTitle? = nil
+        query: String, category: SearchCategory, book: BookSummary? = nil, title: PluginTitle? = nil, album: AlbumSummary? = nil
     ) async throws -> [PluginResult] {
         var argument: [String: Any] = ["query": query, "category": category.rawValue]
         if let book {
@@ -168,6 +184,10 @@ public struct PluginRunner: Sendable {
             argument["book"] = year.compactMapValues { $0 }.merging(["title": book.title, "authors": book.authors]) { $1 }
         }
         if let title { argument["title"] = title.argument }
+        if let album {
+            let year: [String: Any?] = ["year": album.year]
+            argument["album"] = year.compactMapValues { $0 }.merging(["title": album.title, "artists": album.artists]) { $1 }
+        }
         let json = try await call(plugin, script: script, settings: settings, function: "search", argument: argument)
         return try decodeList(PluginResult.self, json)
     }
@@ -260,6 +280,83 @@ struct PluginBook: Decodable {
             cover: cover,
             description: description.map(ITunesPage.Result.plainText),
             link: link
+        )
+    }
+}
+
+/// An album from a plugin's `metadata` for Music (`docs/plugins.md`, `Album`).
+struct PluginAlbum: Decodable {
+    var id: String
+    var title: String
+    var artists: [String]
+    var year: Int?
+    var cover: URL?
+    var type: String?
+    var link: URL?
+
+    enum CodingKeys: String, CodingKey { case id, title, artists, artist, year, cover, type, link }
+
+    init(from decoder: any Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decodeLenientString(.id)
+        title = try c.decode(String.self, forKey: .title)
+        let one = (try? c.decodeIfPresent(String.self, forKey: .artist)).flatMap { $0 }
+        artists = (try? c.decodeIfPresent([String].self, forKey: .artists)).flatMap { $0 } ?? one.map { [$0] } ?? []
+        year = c.decodeLenientInt64(.year).map(Int.init)
+        cover = c.decodeLenientURL(.cover)
+        // `album`, `ep`, `single`, `compilation`… in any case: shown like MusicBrainz's ("EP", "Single").
+        type = (try? c.decodeIfPresent(String.self, forKey: .type)).flatMap { $0 }.map { $0.lowercased() == "ep" ? "EP" : $0.capitalized }
+        link = c.decodeLenientURL(.link)
+    }
+
+    func summary(plugin: String) -> AlbumSummary {
+        AlbumSummary(id: "plugin:\(plugin):\(id)", title: title, artists: artists, year: year, cover: cover, type: type, link: link)
+    }
+}
+
+/// A track from a plugin's `tracks` (`docs/plugins.md`, `Track`): duration in seconds.
+struct PluginTrack: Decodable {
+    var id: String?
+    var title: String
+    var disc: Int?
+    var position: Int?
+    var duration: TimeInterval?
+
+    enum CodingKeys: String, CodingKey { case id, title, disc, position, duration }
+
+    init(from decoder: any Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try? c.decodeLenientString(.id)
+        title = try c.decode(String.self, forKey: .title)
+        disc = c.decodeLenientInt64(.disc).map(Int.init)
+        position = c.decodeLenientInt64(.position).map(Int.init)
+        duration = c.decodeLenientInt64(.duration).map(TimeInterval.init)
+    }
+}
+
+/// A plugin with music `metadata` as an album source beside MusicBrainz.
+public struct PluginAlbumCatalog: AlbumCatalog {
+    public let call: PluginCall
+    let transport: any HTTPTransport
+
+    public init(call: PluginCall, transport: any HTTPTransport = URLSession.shared) {
+        self.call = call
+        self.transport = transport
+    }
+
+    public var name: String { call.manifest.name }
+    var prefix: String { "plugin:\(call.id):" }
+
+    public func owns(_ albumID: String) -> Bool { albumID.hasPrefix(prefix) }
+
+    public func albums(matching query: String) async throws -> [AlbumSummary] {
+        try await PluginRunner(transport: transport).albums(call.manifest, script: call.script, settings: call.settings, query: query)
+    }
+
+    public func tracks(ofAlbum id: String) async throws -> [AlbumTrack] {
+        guard owns(id) else { return [] }
+        return try await PluginRunner(transport: transport).tracks(
+            call.manifest, script: call.script, settings: call.settings, albumID: String(id.dropFirst(prefix.count))
         )
     }
 }

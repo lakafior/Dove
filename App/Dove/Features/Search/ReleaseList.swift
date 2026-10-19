@@ -26,10 +26,16 @@ final class ReleaseList {
     private(set) var category: SearchCategory = .all
     /// Set on a book's screen: releases of this book come first.
     let book: (summary: BookSummary, format: BookFormat)?
+    /// Set on an album's screen, the same way.
+    let album: AlbumSummary?
 
-    init(book: BookSummary? = nil, format: BookFormat = .ebook) {
+    init(book: BookSummary? = nil, format: BookFormat = .ebook, album: AlbumSummary? = nil) {
         self.book = book.map { ($0, format) }
+        self.album = album
     }
+
+    /// A book's or album's screen: the rest of the answer is behind "Show N other results".
+    var isForOneTitle: Bool { book != nil || album != nil }
 
     var isEmpty: Bool { groups.isEmpty }
 
@@ -54,8 +60,12 @@ final class ReleaseList {
         kindSplit.matching + (showOtherBookKind ? kindSplit.other : [])
     }
 
-    /// On a book's screen: this book's releases, and the rest.
+    /// On a book's or album's screen: its releases, and the rest.
     var bookSplit: (thisBook: [StreamGroup], other: [StreamGroup]) {
+        if let album {
+            let split = StreamGroup.split(ofKind, for: album)
+            return (split.thisAlbum, split.other)
+        }
         guard let book else { return (ofKind, []) }
         return StreamGroup.split(ofKind, for: book.summary, format: book.format)
     }
@@ -144,6 +154,8 @@ final class ReleaseList {
                 // often bare "Author - Title" folders of mp3s. A book's screen knows which format it searched.
                 if let book {
                     model.library.setKind(book.format == .audiobook ? .audiobooks : .books, backend: result.backend, itemID: result.itemID)
+                } else if album != nil {
+                    model.library.setKind(.music, backend: result.backend, itemID: result.itemID)
                 } else if kind == .adult || kind == .audiobooks {
                     model.library.setKind(kind, backend: result.backend, itemID: result.itemID)
                 }
@@ -188,7 +200,7 @@ struct ReleaseListSection: View {
                     onAdd: list.canAdd(group, model: model) ? { list.add(group, model: model) } : nil
                 )
             }
-            let otherBooks = list.book == nil ? 0 : list.bookSplit.other.count
+            let otherBooks = list.isForOneTitle ? list.bookSplit.other.count : 0
             if otherBooks > 0 {
                 Button(list.showOtherBooks ? "Hide \(otherBooks) other results" : "Show \(otherBooks) other results") {
                     list.showOtherBooks.toggle()

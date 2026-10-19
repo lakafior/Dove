@@ -56,6 +56,8 @@ targets:
         # Jackett/Prowlarr (Torznab) and other self-hosted servers often live on the home network, over plain HTTP.
         # Local networking only (IPs, .local, single-label names): the internet stays HTTPS-only.
         NSLocalNetworkUsageDescription: Dove talks to servers you add on your home network, such as Jackett, Prowlarr or nzbdav.
+        # Music metadata from Apple Music's catalog (AppleMusicCatalog, Settings › Music metadata); never the user's library.
+        NSAppleMusicUsageDescription: Dove searches Apple Music's catalog for album covers, titles and track lists. It does not read or change your music library.
         NSAppTransportSecurity:
           NSAllowsLocalNetworking: true
         # Players Dove hands links to (ExternalPlayer.scheme): canOpenURL tells which are installed.
