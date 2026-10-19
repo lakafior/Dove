@@ -29,11 +29,11 @@ struct DownloadsView: View {
                 if let message {
                     Text(message).font(.footnote).foregroundStyle(.red)
                 }
-                if let direct = model.directDownloadMessage {
-                    Text(direct)
+                if let incoming = model.incomingDownloadMessage {
+                    Text(incoming)
                         .font(.footnote)
                         .foregroundStyle(.secondary)
-                        .onTapGesture { model.directDownloadMessage = nil }
+                        .onTapGesture { model.incomingDownloadMessage = nil }
                 }
                 if !activity.isEmpty {
                     Section {
@@ -190,7 +190,7 @@ private struct DownloadRow: View {
                     if let backend = record.backend {
                         BackendBadge(backend: backend)
                     } else {
-                        Label("Direct", systemImage: "arrow.down.doc").labelStyle(.titleAndIcon)
+                        Label("Plugin", systemImage: "puzzlepiece").labelStyle(.titleAndIcon)
                     }
                     Text(detail)
                 }

@@ -443,11 +443,11 @@ struct BookSearchTests {
         #expect(ebook.other.map(\.title) == ["Andy.Weir.-.The.Martian.EPUB", "Andy Weir - Artemis"])
     }
 
-    @Test func rowsNameTheirSource() {
-        let provider = BookProvider(id: "p1", name: "aio-abs", url: URL(string: "https://x.example")!)
-        let names = ["ol:OL1W", "itunes:1", "gb:x", "hardcover:2", "provider:p1:978", "provider:gone:1"]
-            .map { BookSummary(id: $0, title: "T").sourceName(providers: [provider]) }
-        #expect(names == ["Open Library", "Apple Books", "Google Books", "Hardcover", "aio-abs", "Provider"])
+    @Test func rowsNameTheirSource() throws {
+        let plugin = try JSONDecoder().decode(PluginManifest.self, from: Data(#"{"id":"pl.books","name":"Polskie książki"}"#.utf8))
+        let names = ["ol:OL1W", "itunes:1", "gb:x", "hardcover:2", "plugin:pl.books:lc:1", "plugin:gone:1"]
+            .map { BookSummary(id: $0, title: "T").sourceName(plugins: [plugin]) }
+        #expect(names == ["Open Library", "Apple Books", "Google Books", "Hardcover", "Polskie książki", "Plugin"])
     }
 
     @Test func searchTitleDropsSubtitleAndEdition() {
@@ -470,46 +470,6 @@ struct BookSearchTests {
 }
 
 struct BookSourcesTests {
-    @Test func audiobookshelfProvidersAnswerInTheirFormat() async throws {
-        let transport = MockTransport()
-        await transport.stub("/search", body: try Fixture.data("abs_provider_search"))
-        let provider = BookProvider(id: "p1", name: "Lubimyczytac", url: URL(string: "https://abs.example/lc/")!, authorization: "SECRET")
-        let books = try await BookMetadata(transport: transport).search("projekt hail mary", in: .provider(provider))
-
-        #expect(books.map(\.id) == ["provider:p1:9788381885317", "provider:p1:andyweirmarsjanin"])
-        #expect(books[0].title == "Projekt Hail Mary" && books[0].year == 2021)
-        #expect(books[0].description == "Samotny astronauta musi uratować Ziemię.")
-        #expect(books[0].cover?.absoluteString == "https://covers.example/phm.jpg")
-        #expect(books[1].authors == ["Andy Weir", "Jan Kraśko"] && books[1].year == 2014, "a numeric year is read too")
-
-        let request = try #require(await transport.requests.first)
-        #expect(request.url?.path() == "/lc/search")
-        #expect(request.url?.query?.contains("query=projekt%20hail%20mary") == true)
-        #expect(request.url?.query?.contains("mediaType=book") == true)
-        #expect(request.url?.query?.contains("format=ebook") == true)
-        #expect(request.value(forHTTPHeaderField: "Authorization") == "SECRET")
-    }
-
-    @Test func providerMatchesOfTheOtherKindAreDropped() async throws {
-        let transport = MockTransport()
-        await transport.stub("/search", json: """
-        {"matches":[{"title":"A","type":"audiobook"},{"title":"B","type":"book"},{"title":"C"}]}
-        """)
-        let provider = BookProvider(id: "p", name: "P", url: URL(string: "https://p.example")!)
-        let metadata = BookMetadata(transport: transport)
-        #expect(try await metadata.search("x", in: .provider(provider), format: .audiobook).map(\.title) == ["A", "C"])
-        #expect(try await metadata.search("x", in: .provider(provider), format: .ebook).map(\.title) == ["B", "C"])
-        #expect(await transport.requests.first?.url?.query?.contains("format=audiobook") == true)
-    }
-
-    @Test func providerURLs() {
-        #expect(BookProvider.url(from: "abs.example/provider")?.absoluteString == "https://abs.example/provider")
-        #expect(BookProvider.url(from: "ftp://x") == nil)
-        #expect(BookProvider.url(from: "  ") == nil)
-        let pasted = BookProvider(name: "X", url: URL(string: "https://x.example/api/search?region=pl")!)
-        #expect(pasted.searchURL.absoluteString == "https://x.example/api/search?region=pl", "an address ending in /search keeps its query")
-    }
-
     @Test func googleBooksNeedsAKeyAndCleansCovers() async throws {
         let transport = MockTransport()
         await transport.stub("/books/v1/volumes", body: try Fixture.data("googlebooks_search"))
@@ -552,32 +512,46 @@ struct BookSourcesTests {
         #expect((body["variables"] as? [String: String])?["q"] == "project hail mary")
     }
 
-    @Test func sourcesFollowTheRegionLanguageAndKeys() {
+    @Test func sourcesFollowTheRegionPluginsAndKeys() throws {
         let us = BookMetadata(configuration: .init(region: "US"))
         #expect(us.sources(for: .ebook) == [.openLibrary, .appleBooks()])
         #expect(us.sources(for: .audiobook) == [.appleAudiobooks(), .openLibrary])
 
-        let provider = BookProvider(id: "p", name: "P", url: URL(string: "https://p.example")!)
-        let off = BookProvider(id: "q", name: "Q", url: URL(string: "https://q.example")!, enabled: false)
-        let poland = BookMetadata(configuration: .init(region: "PL", googleBooksKey: "K", hardcoverToken: "T", providers: [provider, off]))
+        let manifest = try JSONDecoder().decode(PluginManifest.self, from: Data(
+            #"{"id":"p","capabilities":["metadata"],"categories":["books","audiobooks"]}"#.utf8
+        ))
+        let ebooksOnly = try JSONDecoder().decode(PluginManifest.self, from: Data(#"{"id":"e","capabilities":["metadata"],"categories":["books"]}"#.utf8))
+        let noMetadata = try JSONDecoder().decode(PluginManifest.self, from: Data(#"{"id":"r","capabilities":["resolve"]}"#.utf8))
+        let plugin = PluginCall(manifest: manifest, script: "", settings: [:])
+        let poland = BookMetadata(configuration: .init(
+            region: "PL", googleBooksKey: "K", hardcoverToken: "T",
+            plugins: [plugin, PluginCall(manifest: ebooksOnly, script: "", settings: [:]), PluginCall(manifest: noMetadata, script: "", settings: [:])]
+        ))
         #expect(poland.sources(for: .ebook) == [
-            .provider(provider), .openLibrary, .googleBooks, .hardcover, .appleBooks(country: "PL"), .appleBooks(),
+            .plugin(plugin), .plugin(PluginCall(manifest: ebooksOnly, script: "", settings: [:])), .openLibrary, .googleBooks, .hardcover,
+            .appleBooks(country: "PL"), .appleBooks(),
         ])
         #expect(poland.sources(for: .audiobook) == [
-            .provider(provider), .appleAudiobooks(country: "PL"), .appleAudiobooks(), .hardcover, .openLibrary, .googleBooks,
+            .plugin(plugin), .appleAudiobooks(country: "PL"), .appleAudiobooks(), .hardcover, .openLibrary, .googleBooks,
         ])
 
     }
 
     @Test func searchAsksEverySourceAndPutsTheBestFitFirst() async throws {
         let transport = MockTransport()
-        await transport.stub("/lc/search", body: try Fixture.data("abs_provider_search"))
         await transport.stub("search", json: #"{"results":[]}"#)
-        await transport.stub("search.json", status: 500, json: "{}")
-        let provider = BookProvider(id: "p1", name: "Lubimyczytac", url: URL(string: "https://abs.example/lc")!)
-        let metadata = BookMetadata(configuration: .init(region: "PL", providers: [provider]), transport: transport)
-
+        await transport.stub("search.json", body: try Fixture.data("openlibrary_search"))
+        let script = #"""
+        globalThis.plugin = { manifest: { id: "pl", capabilities: ["metadata"], categories: ["audiobooks"] },
+          async metadata({ query }) { return [{ id: "1", title: "Projekt Hail Mary", authors: ["Andy Weir"] }] } }
+        """#
+        let manifest = try await PluginRunner(transport: transport).manifest(of: script)
+        let metadata = BookMetadata(
+            configuration: .init(region: "PL", plugins: [PluginCall(manifest: manifest, script: script, settings: [:])]), transport: transport
+        )
         let books = try await metadata.search("projekt hail mary", format: .audiobook)
-        #expect(books.first?.id == "provider:p1:9788381885317", "the Polish title fits the Polish words best")
+        #expect(books.first?.id == "plugin:pl:1", "the Polish title fits the Polish words best")
+        #expect(books.contains { $0.id.hasPrefix("ol:") })
     }
+
 }

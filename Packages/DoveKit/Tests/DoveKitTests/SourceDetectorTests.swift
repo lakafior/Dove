@@ -58,20 +58,20 @@ struct SourceDetectorTests {
 struct SourceInTextTests {
     @Test func magnetInsideAMessage() {
         let text = "check this out: magnet:?xt=urn:btih:1a07d876aaaebe797c21eff39df7436d2f739b7a&dn=Ubuntu+24.04 enjoy"
-        #expect(SourceDetector.firstSource(in: text) == .magnet("magnet:?xt=urn:btih:1a07d876aaaebe797c21eff39df7436d2f739b7a&dn=Ubuntu+24.04"))
+        #expect(SourceDetector.sources(in: text).first == .magnet("magnet:?xt=urn:btih:1a07d876aaaebe797c21eff39df7436d2f739b7a&dn=Ubuntu+24.04"))
     }
 
     @Test func linkInsideAMessage() {
-        let source = SourceDetector.firstSource(in: "Grab it from https://files.example.org/show.s01e01.torrent today")
+        let source = SourceDetector.sources(in: "Grab it from https://files.example.org/show.s01e01.torrent today").first
         #expect(source == .torrentURL(URL(string: "https://files.example.org/show.s01e01.torrent")!))
     }
 
     @Test func bareHashInsideText() {
-        #expect(SourceDetector.firstSource(in: "hash: 1A07D876AAAEBE797C21EFF39DF7436D2F739B7A")?.kind == .torrent)
+        #expect(SourceDetector.sources(in: "hash: 1A07D876AAAEBE797C21EFF39DF7436D2F739B7A").first?.kind == .torrent)
     }
 
     @Test func plainTextHasNoSource() {
-        #expect(SourceDetector.firstSource(in: "Diuna część druga") == nil)
+        #expect(SourceDetector.sources(in: "Diuna część druga").isEmpty)
     }
 
     @Test func displayNames() {

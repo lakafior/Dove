@@ -98,7 +98,7 @@ struct LibraryBrowserTests {
         let browser = LibraryBrowser(backends: [backend])
         let items = try await browser.children(of: .backend(.torBox))
         #expect(items.map(\.name) == ["Movie", "Movie (2)"])
-        #expect(items.allSatisfy { $0.deletesItem && $0.parent == .backend(.torBox) })
+        #expect(items.allSatisfy { if case .item = $0.id { $0.parent == .backend(.torBox) } else { false } })
     }
 
     @Test func hiddenItemsAreLeftOutOfListsAndLookups() async throws {
@@ -126,7 +126,8 @@ struct LibraryBrowserTests {
         let file = try await browser.node(.file(.nzbdav, "job:1", "/c/Show S01/Extras/Deep/x.srt"))
         #expect(file.name == "x.srt")
         #expect(file.parent == .folder(.nzbdav, "job:1", path: "Extras/Deep"))
-        #expect(!file.deletesItem && file.isDeletable)
+        #expect(file.isDeletable)
+        if case .item = file.id { Issue.record("a file is not an item") }
 
         let deep = try await browser.node(.folder(.nzbdav, "job:1", path: "Extras/Deep"))
         #expect(deep.parent == top[0].id)

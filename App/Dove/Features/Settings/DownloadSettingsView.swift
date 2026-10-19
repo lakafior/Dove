@@ -31,7 +31,7 @@ struct DownloadSettingsView: View {
             } header: {
                 Text("Download to")
             } footer: {
-                Text("Direct downloads use these; a long press on Download picks another place for one file. Offcloud, TorBox and Premiumize fetch the file into their cloud (Real-Debrid, AllDebrid and Debrid-Link only take hosters they list).")
+                Text("Downloads from plugins use these; a long press on Download picks another place for one file. Offcloud, TorBox and Premiumize fetch the file into their cloud (Real-Debrid, AllDebrid and Debrid-Link only take hosters they list).")
             }
         }
         .navigationTitle("Downloads")

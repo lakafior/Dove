@@ -14,7 +14,7 @@ struct BookReleasesView: View {
     let route: BookSearchRoute
     @State private var releases: ReleaseList
     @State private var expanded = false
-    @State private var directSearch: BrowserRequest?
+    @State private var siteSearch: BrowserRequest?
     @State private var pluginSearch = PluginSearch()
 
     init(route: BookSearchRoute) {
@@ -31,13 +31,7 @@ struct BookReleasesView: View {
                 ForEach(model.plugins.browsers(for: route.category), id: \.id) { call in
                     let words = ([route.book.authors.first, route.book.searchTitle].compactMap { $0 }).joined(separator: " ")
                     if let url = call.browseURL(for: words) {
-                        Button("Search on \(call.manifest.name)", systemImage: "safari") { directSearch = BrowserRequest(url: url) }
-                    }
-                }
-                ForEach(model.directSources(for: route.category)) { source in
-                    Button("Search on \(source.url.host() ?? source.name)", systemImage: "safari") {
-                        let words = ([route.book.authors.first, route.book.searchTitle].compactMap { $0 }).joined(separator: " ")
-                        directSearch = BrowserRequest(url: source.searchURL(words, extensions: []))
+                        Button("Search on \(call.manifest.name)", systemImage: "safari") { siteSearch = BrowserRequest(url: url) }
                     }
                 }
             }
@@ -61,7 +55,7 @@ struct BookReleasesView: View {
         .task { if releases.isEmpty, releases.message == nil { search() } }
         .onChange(of: model.sourceSelection) { search() }
         .refreshable { search() }
-        .sheet(item: $directSearch) { DirectBrowserView(start: $0.url, category: route.category, book: route.book) }
+        .sheet(item: $siteSearch) { SiteBrowserView(start: $0.url, category: route.category, book: route.book) }
     }
 
     private var header: some View {

@@ -15,7 +15,7 @@ extension CredentialKey {
         switch self {
         case .torBoxAPIKey, .realDebridAPIKey, .offcloudAPIKey, .debridLinkAPIKey, .premiumizeAPIKey, .allDebridAPIKey,
              .nzbdavAPIKey, .nzbdavWebDAVUser, .nzbdavWebDAVPassword, .nzbdavFrontendKey, .tmdbAPIKey,
-             .googleBooksAPIKey, .hardcoverToken, .bookProviders, .directSources, .pluginSettings,
+             .googleBooksAPIKey, .hardcoverToken, .pluginSettings,
              .stremioAddons, .aioStreamsPassword:
             .secret
         case .newznabIndexers, .kodi:

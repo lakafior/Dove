@@ -103,6 +103,42 @@ public struct DownloadDestinations: Codable, Sendable, Hashable {
     }
 }
 
+/// Which plugin, and which of its files, a download came from: enough to ask the plugin for a fresh link
+/// (links expire). Several files of one item carry `id#index`.
+public struct PluginFileRef: Codable, Sendable, Hashable {
+    public var pluginID: String
+    public var fileID: String
+
+    public init(pluginID: String, fileID: String) {
+        self.pluginID = pluginID
+        self.fileID = fileID
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case pluginID, fileID
+        // Records written before plugins replaced direct downloads: `sourceID` "plugin:<id>", `md5` the file id.
+        case sourceID, md5
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        if let pluginID = try c.decodeIfPresent(String.self, forKey: .pluginID) {
+            self.pluginID = pluginID
+            fileID = try c.decode(String.self, forKey: .fileID)
+        } else {
+            let source = try c.decode(String.self, forKey: .sourceID)
+            pluginID = source.hasPrefix("plugin:") ? String(source.dropFirst("plugin:".count)) : source
+            fileID = try c.decode(String.self, forKey: .md5)
+        }
+    }
+
+    public func encode(to encoder: any Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(pluginID, forKey: .pluginID)
+        try c.encode(fileID, forKey: .fileID)
+    }
+}
+
 /// One file being downloaded to the device, or already there. Persisted between launches.
 ///
 /// It never stores the download URL: debrid links carry tokens and expire. A retry without
@@ -116,10 +152,10 @@ public struct DownloadRecord: Codable, Sendable, Identifiable, Hashable {
     }
 
     public let id: String
-    /// The service the file came from; nil for a direct download (`direct`).
+    /// The service the file came from; nil for a file a plugin found (`plugin`).
     public let backend: BackendID?
-    /// Set for files fetched from a direct-download site instead of a service.
-    public let direct: DirectDownloadRef?
+    /// Set for files a plugin found (stored under the key `direct`, its name before plugins).
+    public let plugin: PluginFileRef?
     public let itemID: LibraryItem.ID
     public let fileID: LibraryFile.ID
     /// The file's name on the service.
@@ -136,15 +172,16 @@ public struct DownloadRecord: Codable, Sendable, Identifiable, Hashable {
     public var subfolder: String?
 
     enum CodingKeys: String, CodingKey {
-        case id, backend, direct, itemID, fileID, name, localName, state, bytesWritten, totalBytes, createdAt, destination
+        case id, backend, itemID, fileID, name, localName, state, bytesWritten, totalBytes, createdAt, destination
         case subfolder
+        case plugin = "direct"
     }
 
     public init(from decoder: any Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         id = try container.decode(String.self, forKey: .id)
         backend = try container.decodeIfPresent(BackendID.self, forKey: .backend)
-        direct = try container.decodeIfPresent(DirectDownloadRef.self, forKey: .direct)
+        plugin = try? container.decodeIfPresent(PluginFileRef.self, forKey: .plugin)
         itemID = try container.decode(LibraryItem.ID.self, forKey: .itemID)
         fileID = try container.decode(LibraryFile.ID.self, forKey: .fileID)
         name = try container.decode(String.self, forKey: .name)
@@ -161,7 +198,7 @@ public struct DownloadRecord: Codable, Sendable, Identifiable, Hashable {
     public init(
         id: String = UUID().uuidString,
         backend: BackendID?,
-        direct: DirectDownloadRef? = nil,
+        plugin: PluginFileRef? = nil,
         itemID: LibraryItem.ID,
         fileID: LibraryFile.ID,
         name: String,
@@ -174,7 +211,7 @@ public struct DownloadRecord: Codable, Sendable, Identifiable, Hashable {
     ) {
         self.id = id
         self.backend = backend
-        self.direct = direct
+        self.plugin = plugin
         self.itemID = itemID
         self.fileID = fileID
         self.name = name

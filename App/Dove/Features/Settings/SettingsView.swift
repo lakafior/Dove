@@ -95,12 +95,6 @@ struct SettingsView: View {
                                         ? "\(model.plugins.updatesAvailable) to update"
                                         : model.plugins.installed.isEmpty ? "None" : "\(model.plugins.installed.count)")
                     }
-                    NavigationLink {
-                        DirectDownloadsSettingsView()
-                    } label: {
-                        SettingsRow("Direct downloads", symbol: "arrow.down.doc.fill", color: .green,
-                                    value: model.directSource?.url.host() ?? "Not set up")
-                    }
                 } header: {
                     Text("Search and metadata")
                 } footer: {

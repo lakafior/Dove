@@ -90,18 +90,17 @@ public final class DownloadManager: NSObject {
         return record.id
     }
 
-    /// Starts a direct download (a link from a direct-download site), or returns the record already downloading
-    /// or holding that file.
+    /// Starts downloading a file a plugin found, or returns the record already downloading or holding it.
     @discardableResult
     public func start(
         _ request: URLRequest,
-        direct: DirectDownloadRef,
+        plugin: PluginFileRef,
         name: String,
         size: Int64? = nil,
         destination: DownloadDestination = .device,
         subfolder: String? = nil
     ) throws -> DownloadRecord.ID {
-        if let existing = records.first(where: { $0.direct == direct && $0.destination == destination }) {
+        if let existing = records.first(where: { $0.plugin == plugin && $0.destination == destination }) {
             switch existing.state {
             case .downloading, .finished: return existing.id
             case .paused, .failed: remove(existing.id)
@@ -109,7 +108,7 @@ public final class DownloadManager: NSObject {
         }
         if let size { try checkSpace(for: size) }
         let record = DownloadRecord(
-            backend: nil, direct: direct, itemID: "direct:\(direct.md5)", fileID: direct.md5, name: name, totalBytes: size,
+            backend: nil, plugin: plugin, itemID: "plugin:\(plugin.pluginID)", fileID: plugin.fileID, name: name, totalBytes: size,
             destination: destination, subfolder: subfolder
         )
         records.insert(record, at: 0)

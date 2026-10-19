@@ -1,9 +1,0 @@
-{
- "matches": [
-  {"title": "Projekt Hail Mary", "author": "Andy Weir", "narrator": "Maciej Kowalik", "publishedYear": "2021",
-   "description": "<p>Samotny astronauta musi uratowa\u0107 Ziemi\u0119.</p>", "cover": "https://covers.example/phm.jpg",
-   "isbn": "9788381885317", "series": [], "language": "pl", "duration": 58200},
-  {"title": "Marsjanin", "author": "Andy Weir, Jan Kraśko", "publishedYear": 2014},
-  {"subtitle": "no title"}
- ]
-}

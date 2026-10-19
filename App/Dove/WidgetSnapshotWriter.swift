@@ -133,15 +133,10 @@ enum DeepLink {
             let address = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?.first { $0.name == "url" }?.value
             app.show(.downloads)
             if let address, let page = URL(string: address), let link = app.plugins.link(for: page) {
-                Task { app.directDownloadMessage = await app.getFile(from: link.call, id: link.id, kind: .books) }
+                Task { app.incomingDownloadMessage = await app.getFile(from: link.call, id: link.id, kind: .books) }
             } else {
-                app.directDownloadMessage = "No installed plugin knows this address."
+                app.incomingDownloadMessage = "No installed plugin knows this address."
             }
-        case "direct":
-            // From the share extension: a direct-download site's file page, fetched with the user's key.
-            let md5 = String(url.path().dropFirst())
-            app.show(.downloads)
-            Task { app.directDownloadMessage = await app.startDirectDownload(md5: md5) }
         default: break
         }
         return true

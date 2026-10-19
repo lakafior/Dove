@@ -291,6 +291,8 @@ final class AppModel {
         reloadNewznab()
         reloadBookMetadata()
         Task { await resolveICloud() }
+        // Direct-download sites and Audiobookshelf providers became plugins (2026-10-19): their settings go.
+        keychain.removeRetired(["directSources", "bookProviders"])
         plugins.showAdult = showAdult
         plugins.onChange = { [weak self] in self?.reloadBookMetadata() }
         reloadBookMetadata()
@@ -302,10 +304,7 @@ final class AppModel {
         addonEntries = storedAddonURLs().map { AddonEntry(url: $0) }
         downloads.requestProvider = { [weak self] record in
             guard let self else { throw CancellationError() }
-            if let direct = record.direct {
-                if direct.sourceID.hasPrefix("plugin:") { return try await pluginRequest(for: direct) }
-                return URLRequest(url: try await directLink(for: direct).url)
-            }
+            if let ref = record.plugin { return try await pluginRequest(for: ref) }
             guard let id = record.backend, let backend = backend(id) else {
                 throw BackendError.api(message: "\(record.backend?.displayName ?? "The service") is no longer configured.")
             }
@@ -728,100 +727,10 @@ final class AppModel {
         aioStreamsVariant = AIOStreamsSearch.unfilteredVariantID
     }
 
-    // MARK: - Direct downloads
-
-    /// Sites the user added for direct downloads (address and member key), in their order.
-    var directSources: [DirectSource] {
-        guard let json = try? keychain.get(.directSources) else { return [] }
-        return (try? JSONDecoder().decode([DirectSource].self, from: Data(json.utf8))) ?? []
-    }
-
-    /// The account's fast downloads per source, from the last answer (this device only).
-    var directQuotas: [String: DirectDownloadQuota] = {
-        guard let data = UserDefaults.standard.data(forKey: "directQuotas") else { return [:] }
-        return (try? JSONDecoder().decode([String: DirectDownloadQuota].self, from: data)) ?? [:]
-    }() {
-        didSet { UserDefaults.standard.set(try? JSONEncoder().encode(directQuotas), forKey: "directQuotas") }
-    }
-
-    /// Checks the key (when the source is on) before keeping the list.
-    func saveDirectSource(_ source: DirectSource) async throws {
-        if source.enabled { try await DirectDownloadClient(source: source).validate() }
-        var sources = directSources
-        if let index = sources.firstIndex(where: { $0.id == source.id }) {
-            sources[index] = source
-        } else {
-            sources.append(source)
-        }
-        try storeDirectSources(sources)
-    }
-
-    func removeDirectSources(_ ids: Set<String>) throws {
-        try storeDirectSources(directSources.filter { !ids.contains($0.id) })
-        directQuotas = directQuotas.filter { !ids.contains($0.key) }
-    }
-
-    private func storeDirectSources(_ sources: [DirectSource]) throws {
-        let data = try JSONEncoder().encode(sources)
-        try keychain.set(sources.isEmpty ? nil : String(decoding: data, as: UTF8.self), for: .directSources)
-    }
-
-    /// The last direct download started from outside (share sheet), shown at the top of Downloads.
-    var directDownloadMessage: String?
-
-    /// Enabled sites that serve a search category, in the user's order.
-    func directSources(for category: SearchCategory) -> [DirectSource] {
-        directSources.filter { $0.serves(category) }
-    }
-
-    /// The first enabled source; file pages from any host go through it.
-    var directSource: DirectSource? { directSources.first(where: \.enabled) }
-
-    private func directLink(for ref: DirectDownloadRef) async throws -> DirectDownloadLink {
-        guard let source = directSources.first(where: { $0.id == ref.sourceID && $0.enabled }) ?? directSource else {
-            throw BackendError.api(message: "No direct download site is set up. Add one in Settings › Direct downloads.")
-        }
-        let link = try await DirectDownloadClient(source: source).link(md5: ref.md5)
-        if let quota = link.quota { directQuotas[source.id] = quota }
-        return link
-    }
-
-    /// Downloads a file by its md5 through the first enabled source, straight to Downloads (no service, no
-    /// cache). Returns the message to show.
-    func startDirectDownload(
-        md5: String,
-        to place: FilePlace? = nil,
-        kind: ContentKind = .books,
-        book: BookSummary? = nil
-    ) async -> String {
-        let place = place ?? self.place(for: kind)
-        guard let source = directSource else {
-            return "Add a direct download site in Settings › Direct downloads first."
-        }
-        let ref = DirectDownloadRef(sourceID: source.id, md5: md5)
-        do {
-            let link = try await directLink(for: ref)
-            let quota = link.quota?.left.map { " \($0) fast downloads left today." } ?? ""
-            guard case .download(let destination) = place else {
-                guard case .service(let id) = place else { return "" }
-                return try await sendToService(link, md5: md5, service: id, kind: kind, book: book) + quota
-            }
-            var name = link.fileName(md5: md5)
-            var subfolder: String?
-            if destination == .iCloud {
-                let place = LibraryFolderLayout.placement(kind: kind, book: book, itemName: name, fileName: name, singleFile: true)
-                name = place.fileName
-                subfolder = place.folder
-                rememberICloud(place, book: book, kind: kind)
-            }
-            try downloads.start(URLRequest(url: link.url), direct: ref, name: name, destination: destination, subfolder: subfolder)
-            return "Downloading to \(destination.displayName)." + quota
-        } catch {
-            return error.localizedDescription
-        }
-    }
-
     // MARK: - Files from plugins
+
+    /// The last file started from outside (a shared file page), shown at the top of Downloads.
+    var incomingDownloadMessage: String?
 
     /// Asks a plugin for a search row's or file page's file(s) and sends them to a place: downloaded (to iCloud
     /// Drive filed by `LibraryFolderLayout`), or handed to a service when the links need no headers.
@@ -863,8 +772,8 @@ final class AppModel {
                         subfolder = place.folder
                         rememberedPlace = rememberedPlace ?? place
                     }
-                    let ref = DirectDownloadRef(sourceID: "plugin:\(call.id)", md5: single ? id : "\(id)#\(index)")
-                    try downloads.start(Self.request(for: link), direct: ref, name: name, size: link.size, destination: destination, subfolder: subfolder)
+                    let ref = PluginFileRef(pluginID: call.id, fileID: single ? id : "\(id)#\(index)")
+                    try downloads.start(Self.request(for: link), plugin: ref, name: name, size: link.size, destination: destination, subfolder: subfolder)
                 }
                 if let rememberedPlace { rememberICloud(rememberedPlace, book: book, kind: kind) }
                 return single ? "Downloading to \(destination.displayName)." : "Downloading \(links.count) files to \(destination.displayName)."
@@ -874,13 +783,12 @@ final class AppModel {
         }
     }
 
-    /// A fresh link for a retried plugin download (`plugin:<id>`, the item id with `#<index>` for one of several files).
-    private func pluginRequest(for ref: DirectDownloadRef) async throws -> URLRequest {
-        let pluginID = String(ref.sourceID.dropFirst("plugin:".count))
-        guard let call = plugins.calls(.resolve).first(where: { $0.id == pluginID }) else {
+    /// A fresh link for a retried plugin download (the file id with `#<index>` for one of several files).
+    private func pluginRequest(for ref: PluginFileRef) async throws -> URLRequest {
+        guard let call = plugins.calls(.resolve).first(where: { $0.id == ref.pluginID }) else {
             throw BackendError.api(message: "The plugin that found this file is off or removed.")
         }
-        let parts = ref.md5.split(separator: "#", maxSplits: 1).map(String.init)
+        let parts = ref.fileID.split(separator: "#", maxSplits: 1).map(String.init)
         let links = try await PluginRunner().resolve(call.manifest, script: call.script, settings: call.settings, id: parts[0])
         let index = parts.count > 1 ? Int(parts[1]) ?? 0 : 0
         guard links.indices.contains(index) else { throw PluginError("The plugin no longer lists this file.") }
@@ -893,60 +801,14 @@ final class AppModel {
         return request
     }
 
-    /// Hands a direct link to a service that fetches it into its cloud (`acceptsDirectLinks`); the Library then
-    /// lists it like anything added there, matched to the book it was found for.
-    private func sendToService(
-        _ link: DirectDownloadLink, md5: String, service id: BackendID, kind: ContentKind, book: BookSummary?
-    ) async throws -> String {
-        guard let backend = backend(id), backend.acceptsDirectLinks else {
-            throw BackendError.api(message: "\(id.displayName) is not set up, or does not fetch direct links.")
-        }
-        let itemIDs = try await backend.addAll(.hosterURL(link.url), category: nil, privateTracker: false)
-        let name = link.fileName(md5: md5)
-        library.recordAdded(AddedHint(releaseName: name, book: book), backend: id, itemIDs: itemIDs, infoHash: nil)
-        if kind == .books || kind == .audiobooks {
-            for itemID in itemIDs { library.setKind(kind, backend: id, itemID: itemID) }
-        }
-        Task { await library.refresh(using: self, afterChange: true) }
-        return "Sent to \(id.displayName). It fetches the file into its cloud."
-    }
-
     // MARK: - Book metadata
 
     var googleBooksKey: String { (try? keychain.get(.googleBooksAPIKey)) ?? "" }
     var hardcoverToken: String { (try? keychain.get(.hardcoverToken)) ?? "" }
 
-    /// The user's Audiobookshelf metadata providers, in their order.
-    var bookProviders: [BookProvider] {
-        guard let json = try? keychain.get(.bookProviders) else { return [] }
-        return (try? JSONDecoder().decode([BookProvider].self, from: Data(json.utf8))) ?? []
-    }
-
-    /// The book metadata sources for this device's region, with the user's keys, providers and plugins.
+    /// The book metadata sources for this device's region, with the user's keys and plugins.
     var bookMetadataConfiguration: BookMetadata.Configuration {
-        .device(googleBooksKey: googleBooksKey, hardcoverToken: hardcoverToken, providers: bookProviders, plugins: plugins.calls(.metadata))
-    }
-
-    /// Checks a new or changed provider (when it is on) with one search before keeping the list.
-    func saveBookProvider(_ provider: BookProvider) async throws {
-        if provider.enabled { try await BookMetadata().validate(provider) }
-        var providers = bookProviders
-        if let index = providers.firstIndex(where: { $0.id == provider.id }) {
-            providers[index] = provider
-        } else {
-            providers.append(provider)
-        }
-        try storeBookProviders(providers)
-    }
-
-    func removeBookProviders(_ ids: Set<String>) throws {
-        try storeBookProviders(bookProviders.filter { !ids.contains($0.id) })
-    }
-
-    private func storeBookProviders(_ providers: [BookProvider]) throws {
-        let data = try JSONEncoder().encode(providers)
-        try keychain.set(providers.isEmpty ? nil : String(decoding: data, as: UTF8.self), for: .bookProviders)
-        reloadBookMetadata()
+        .device(googleBooksKey: googleBooksKey, hardcoverToken: hardcoverToken, plugins: plugins.calls(.metadata))
     }
 
     func reloadBookMetadata() {

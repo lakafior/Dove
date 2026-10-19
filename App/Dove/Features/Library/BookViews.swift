@@ -114,7 +114,7 @@ struct BookTitleView: View {
                     }
                     if let link = book.book?.link {
                         Link(destination: link) {
-                            Label(book.book?.sourceName(providers: model.bookProviders, plugins: model.plugins.manifests()) ?? "Open", systemImage: "safari")
+                            Label(book.book?.sourceName(plugins: model.plugins.manifests()) ?? "Open", systemImage: "safari")
                         }
                         .font(.footnote)
                     }
@@ -261,7 +261,7 @@ struct BookRow: View {
                 HStack(spacing: 6) {
                     if let author = book.authors.first { Text(author) }
                     if let year = book.year { Text(String(year)) }
-                    Text(book.sourceName(providers: model.bookProviders, plugins: model.plugins.manifests()))
+                    Text(book.sourceName(plugins: model.plugins.manifests()))
                 }
                 .font(.caption)
                 .foregroundStyle(.secondary)

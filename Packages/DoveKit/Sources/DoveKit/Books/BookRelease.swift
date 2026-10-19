@@ -131,9 +131,9 @@ extension StreamGroup {
 }
 
 extension BookSummary {
-    /// Where the entry came from, for rows: read from the ID's prefix. Provider entries
-    /// (`provider:<provider id>:…`) take the provider's name from `providers`.
-    public func sourceName(providers: [BookProvider] = [], plugins: [PluginManifest] = []) -> String {
+    /// Where the entry came from, for rows: read from the ID's prefix. Plugin entries (`plugin:<plugin id>:…`)
+    /// take the plugin's name from `plugins`.
+    public func sourceName(plugins: [PluginManifest] = []) -> String {
         let prefix = id.split(separator: ":").first.map(String.init) ?? ""
         switch prefix {
         case "ol": return "Open Library"
@@ -143,9 +143,6 @@ extension BookSummary {
         case "plugin":
             let pluginID = id.split(separator: ":").dropFirst().first.map(String.init)
             return plugins.first { $0.id == pluginID }?.name ?? "Plugin"
-        case "provider":
-            let providerID = id.split(separator: ":").dropFirst().first.map(String.init)
-            return providers.first { $0.id == providerID }?.name ?? "Provider"
         default: return prefix
         }
     }

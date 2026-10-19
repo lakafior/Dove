@@ -31,25 +31,6 @@ public enum SourceDetector {
         return .hosterURL(url)
     }
 
-    /// The first source anywhere in a longer text (a chat message, a web page excerpt): a magnet,
-    /// then a link Dove can use, then a bare info hash.
-    public static func firstSource(in text: String) -> Source? {
-        if let source = detect(text) { return source }
-        if let range = text.range(of: #"magnet:\?[^\s"'<>]+"#, options: [.regularExpression, .caseInsensitive]) {
-            return .magnet(String(text[range]))
-        }
-        if let detector = try? NSDataDetector(types: NSTextCheckingResult.CheckingType.link.rawValue) {
-            let matches = detector.matches(in: text, range: NSRange(text.startIndex..., in: text))
-            for match in matches {
-                if let url = match.url, let source = detect(url.absoluteString) { return source }
-            }
-        }
-        if let range = text.range(of: #"\b[0-9a-fA-F]{40}\b"#, options: .regularExpression) {
-            return detect(String(text[range]))
-        }
-        return nil
-    }
-
     /// Every source in a text, in reading order, each once: magnets, links Dove can use, bare info hashes (outside
     /// magnets and links). A list of hoster links pasted at once becomes one add.
     public static func sources(in text: String) -> [Source] {

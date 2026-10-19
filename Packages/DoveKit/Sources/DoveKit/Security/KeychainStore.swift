@@ -21,10 +21,6 @@ public enum CredentialKey: String, Sendable, CaseIterable {
     case googleBooksAPIKey
     /// Hardcover API token (book covers and titles). Optional.
     case hardcoverToken
-    /// JSON array of `BookProvider` (Audiobookshelf metadata providers; URLs and keys may be secret).
-    case bookProviders
-    /// JSON array of `DirectSource` (direct-download sites: address and member key).
-    case directSources
     /// JSON array of plugin repository index URLs. Not a secret; synced like `preferences`.
     case pluginRepositories
     /// JSON array of `InstalledPlugin` (manifests, no secrets): another device reinstalls the pinned scripts.
@@ -142,11 +138,22 @@ public struct KeychainStore: Sendable {
         }
     }
 
+    /// Deletes items of keys this build no longer has (their names), on every device iCloud Keychain reaches.
+    public func removeRetired(_ names: [String]) {
+        for name in names {
+            SecItemDelete(baseQuery(account: name) as CFDictionary)
+        }
+    }
+
     private func baseQuery(_ key: CredentialKey) -> [String: Any] {
+        baseQuery(account: key.rawValue)
+    }
+
+    private func baseQuery(account: String) -> [String: Any] {
         [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
-            kSecAttrAccount as String: key.rawValue,
+            kSecAttrAccount as String: account,
             // Match synced and device-only copies, so reads find old items and deletes leave no duplicate.
             kSecAttrSynchronizable as String: kSecAttrSynchronizableAny
         ]

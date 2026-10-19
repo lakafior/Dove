@@ -81,11 +81,6 @@ public struct LibraryNode: Identifiable, Sendable, Hashable {
         isFolder ? "folder" : "\(id.rawValue)|\(size.map(String.init) ?? "-")"
     }
 
-    /// Deleting an item folder deletes the item on its service. Nothing smaller can be deleted there.
-    public var deletesItem: Bool {
-        if case .item = id { true } else { false }
-    }
-
     /// Everything inside an item must be deletable too: Files refuses to delete a folder whose known
     /// contents are not. Deleting just a file or subfolder is refused by the extension, and it comes back.
     public var isDeletable: Bool {

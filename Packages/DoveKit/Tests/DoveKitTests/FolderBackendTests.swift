@@ -134,12 +134,19 @@ struct DownloadDestinationTests {
         let manager = DownloadManager(
             configuration: .ephemeral, directory: directory, store: DownloadStore(directory: directory.appending(path: "store"))
         )
-        let ref = DirectDownloadRef(sourceID: "s", md5: "d6e1dc51a50726f00ec438af21952a45")
+        let ref = PluginFileRef(pluginID: "annas-archive.download", fileID: "d6e1dc51a50726f00ec438af21952a45")
         let request = URLRequest(url: URL(string: "https://cdn.invalid/file.epub")!)
-        let device = try manager.start(request, direct: ref, name: "Book.epub")
-        let cloud = try manager.start(request, direct: ref, name: "Book.epub", destination: .iCloud)
+        let device = try manager.start(request, plugin: ref, name: "Book.epub")
+        let cloud = try manager.start(request, plugin: ref, name: "Book.epub", destination: .iCloud)
         #expect(device != cloud, "the same file may go to both places")
-        #expect(manager[cloud]?.destination == .iCloud)
+        #expect(manager[cloud]?.destination == .iCloud && manager[cloud]?.plugin == ref)
+
+        // Records from before plugins replaced direct downloads still read (key `direct`, `sourceID`/`md5`).
+        let old = Data(#"{"id":"1","direct":{"sourceID":"plugin:annas-archive.download","md5":"abc#2"},"itemID":"direct:abc","fileID":"abc","name":"a.epub","state":{"paused":{}},"bytesWritten":0,"createdAt":0}"#.utf8)
+        let record = try JSONDecoder().decode(DownloadRecord.self, from: old)
+        #expect(record.plugin == PluginFileRef(pluginID: "annas-archive.download", fileID: "abc#2") && record.backend == nil)
+        let again = try JSONDecoder().decode(DownloadRecord.self, from: JSONEncoder().encode(record))
+        #expect(again.plugin == record.plugin)
         manager.remove(device)
         manager.remove(cloud)
     }

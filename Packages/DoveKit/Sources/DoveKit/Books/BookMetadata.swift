@@ -40,10 +40,9 @@ public struct BookSummary: Identifiable, Sendable, Hashable, Codable {
 /// | Apple Books (iTunes Search, `media=ebook|audiobook`) | none | the US store and the device's region's store; about 20 calls a minute |
 /// | Google Books (`googleapis.com/books/v1/volumes`) | user's | the anonymous quota is shared and usually used up, so only with a key |
 /// | Hardcover (`api.hardcover.app/v1/graphql`) | user's token | books and audiobooks |
-/// | The user's Audiobookshelf metadata providers (`BookProvider`) | the provider's, if any | whatever they cover: Storytel, lubimyczytac… |
+/// | The user's Dove plugins with `metadata` (`docs/plugins.md`) | the plugin's settings | whatever they cover: Storytel, lubimyczytac, Audible… |
 ///
-/// Dove itself calls only official APIs: unofficial sources (Audible's catalog, Storytel, lubimyczytac, Goodreads)
-/// come only as providers the user adds by URL, in Audiobookshelf's custom metadata provider format.
+/// Dove itself calls only official APIs: unofficial sources come only as plugins the user installs.
 /// The picker search asks every source at once and ranks the answers against the words typed; matching a
 /// library item asks one source after another until one has the book.
 public struct BookMetadata: Sendable {
@@ -51,8 +50,6 @@ public struct BookMetadata: Sendable {
         case openLibrary
         case appleBooks(country: String = "US")
         case appleAudiobooks(country: String = "US")
-        /// One of the user's Audiobookshelf metadata providers.
-        case provider(BookProvider)
         /// One of the user's Dove plugins with `metadata` (`docs/plugins.md`).
         case plugin(PluginCall)
         case googleBooks
@@ -65,8 +62,6 @@ public struct BookMetadata: Sendable {
         public var region: String?
         public var googleBooksKey: String?
         public var hardcoverToken: String?
-        /// The user's Audiobookshelf metadata providers; only enabled ones are asked.
-        public var providers: [BookProvider]
         /// Installed plugins that give book metadata (`metadata` capability).
         public var plugins: [PluginCall]
 
@@ -74,30 +69,17 @@ public struct BookMetadata: Sendable {
             region: String? = nil,
             googleBooksKey: String? = nil,
             hardcoverToken: String? = nil,
-            providers: [BookProvider] = [],
             plugins: [PluginCall] = []
         ) {
             self.region = region?.uppercased()
             self.googleBooksKey = googleBooksKey.flatMap { $0.isEmpty ? nil : $0 }
             self.hardcoverToken = hardcoverToken.flatMap { $0.isEmpty ? nil : $0 }
-            self.providers = providers.filter(\.enabled)
             self.plugins = plugins.filter { $0.manifest.can(.metadata) }
         }
 
-        /// The device's region, with the user's keys, providers and plugins.
-        public static func device(
-            googleBooksKey: String? = nil,
-            hardcoverToken: String? = nil,
-            providers: [BookProvider] = [],
-            plugins: [PluginCall] = []
-        ) -> Configuration {
-            Configuration(
-                region: Locale.current.region?.identifier,
-                googleBooksKey: googleBooksKey,
-                hardcoverToken: hardcoverToken,
-                providers: providers,
-                plugins: plugins
-            )
+        /// The device's region, with the user's keys and plugins.
+        public static func device(googleBooksKey: String? = nil, hardcoverToken: String? = nil, plugins: [PluginCall] = []) -> Configuration {
+            Configuration(region: Locale.current.region?.identifier, googleBooksKey: googleBooksKey, hardcoverToken: hardcoverToken, plugins: plugins)
         }
 
         /// Apple's stores to ask: the device's, then the US one.
@@ -127,13 +109,12 @@ public struct BookMetadata: Sendable {
     /// built-in sources miss.
     public func sources(for format: BookFormat) -> [Source] {
         let config = configuration
-        // The user's plugins and providers first: they were added for books the built-in sources miss. A plugin
-        // that names its categories serves only those.
+        // The user's plugins first: they were added for books the built-in sources miss. A plugin that names its
+        // categories serves only those.
         let category: SearchCategory = format == .audiobook ? .audiobooks : .books
         var sources: [Source] = config.plugins
             .filter { $0.manifest.categories.isEmpty || $0.manifest.categories.contains(category) }
             .map { .plugin($0) }
-        sources += config.providers.map { .provider($0) }
         switch format {
         case .ebook:
             sources.append(.openLibrary)
@@ -207,15 +188,6 @@ public struct BookMetadata: Sendable {
             if country != "US" { parameters["country"] = country }
             let page = try await get(ITunesPage.self, Self.iTunesURL, parameters)
             return page.results.compactMap(\.summary)
-        case .provider(let provider):
-            var headers: [String: String] = [:]
-            if let key = provider.authorization, !key.isEmpty { headers["Authorization"] = key }
-            // `format` is not in Audiobookshelf's spec: providers that know it (aio-abs-providers) answer one kind,
-            // the rest ignore it; a match's `type`, when given, filters either way.
-            let page = try await get(ProviderPage.self, provider.searchURL, [
-                "query": query, "mediaType": "book", "format": format == .audiobook ? "audiobook" : "ebook",
-            ], headers: headers)
-            return page.matches.filter { $0.fits(format) }.prefix(Self.limit).compactMap { $0.summary(provider: provider) }
         case .plugin(let plugin):
             let books = try await PluginRunner(transport: transport).metadata(
                 plugin.manifest, script: plugin.script, settings: plugin.settings, query: query, format: format
@@ -231,11 +203,6 @@ public struct BookMetadata: Sendable {
             guard let token = configuration.hardcoverToken else { return [] }
             return try await hardcover(query, token: token)
         }
-    }
-
-    /// Checks a provider with one search: it must answer with Audiobookshelf's `matches` list.
-    public func validate(_ provider: BookProvider) async throws {
-        _ = try await search("dune", in: .provider(provider))
     }
 
     /// Checks a Google Books key with one search.
@@ -525,65 +492,5 @@ struct HardcoverMe: Decodable {
 
     struct Me: Decodable {
         var id: Int
-    }
-}
-
-// MARK: - Audiobookshelf providers
-
-/// Audiobookshelf's custom metadata provider answer (`GET /search` → `{"matches": [...]}`).
-struct ProviderPage: Decodable {
-    var matches: [Match]
-
-    struct Match: Decodable {
-        var title: String?
-        var subtitle: String?
-        /// Comma-separated when there are several.
-        var author: String?
-        var publishedYear: String?
-        var description: String?
-        var cover: String?
-        var isbn: String?
-        var asin: String?
-        /// `audiobook` or `book` from providers that tell them apart (aio-abs-providers); absent elsewhere.
-        var type: String?
-
-        enum CodingKeys: String, CodingKey {
-            case title, subtitle, author, publishedYear, description, cover, isbn, asin, type
-        }
-
-        /// Matches without a type fit both formats.
-        func fits(_ format: BookFormat) -> Bool {
-            guard let type = type?.lowercased(), !type.isEmpty else { return true }
-            return (type == "audiobook") == (format == .audiobook)
-        }
-
-        init(from decoder: any Decoder) throws {
-            let container = try decoder.container(keyedBy: CodingKeys.self)
-            title = try? container.decodeIfPresent(String.self, forKey: .title)
-            subtitle = try? container.decodeIfPresent(String.self, forKey: .subtitle)
-            author = try? container.decodeIfPresent(String.self, forKey: .author)
-            // The spec says string; some providers send a number.
-            publishedYear = (try? container.decodeIfPresent(String.self, forKey: .publishedYear))
-                ?? (try? container.decodeIfPresent(Int.self, forKey: .publishedYear)).map(String.init)
-            description = try? container.decodeIfPresent(String.self, forKey: .description)
-            cover = try? container.decodeIfPresent(String.self, forKey: .cover)
-            isbn = try? container.decodeIfPresent(String.self, forKey: .isbn)
-            asin = try? container.decodeIfPresent(String.self, forKey: .asin)
-            type = try? container.decodeIfPresent(String.self, forKey: .type)
-        }
-
-        func summary(provider: BookProvider) -> BookSummary? {
-            guard let title, !title.isEmpty else { return nil }
-            let authors = (author ?? "").split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
-            let key = asin ?? isbn ?? MediaGuess.normalize((authors.first ?? "") + title)
-            return BookSummary(
-                id: "provider:\(provider.id):\(key)",
-                title: title,
-                authors: authors,
-                year: publishedYear.flatMap { Int($0.prefix(4)) },
-                cover: cover.flatMap(URL.init(string:)),
-                description: description.map(ITunesPage.Result.plainText)
-            )
-        }
     }
 }

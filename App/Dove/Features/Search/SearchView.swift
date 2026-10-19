@@ -22,8 +22,8 @@ struct SearchView: View {
     /// Rows from the plugins that serve the picked category.
     @State private var pluginSearch = PluginSearch()
     @State private var searchedBooks: String?
-    /// The direct-download site's search page, in Dove's browser.
-    @State private var directSearch: BrowserRequest?
+    /// A plugin's search page, in Dove's browser.
+    @State private var siteSearch: BrowserRequest?
     @Environment(\.scenePhase) private var scenePhase
     /// `UIPasteboard.changeCount` the banner was last answered for, so it does not come back for the same copy.
     @AppStorage("clipboardAnsweredChange") private var answeredChange = -1
@@ -142,7 +142,7 @@ struct SearchView: View {
             .onAppear(perform: checkPasteboard)
             .onChange(of: scenePhase) { if scenePhase == .active { checkPasteboard() } }
             .onReceive(NotificationCenter.default.publisher(for: UIPasteboard.changedNotification)) { _ in checkPasteboard() }
-            .sheet(item: $directSearch) { DirectBrowserView(start: $0.url, category: activeCategory) }
+            .sheet(item: $siteSearch) { SiteBrowserView(start: $0.url, category: activeCategory) }
             .sheet(item: $pendingSources) { batch in
                 AddSourceSheet(sources: batch.sources) { result in
                     pendingSources = nil
@@ -177,7 +177,7 @@ struct SearchView: View {
                 ReleaseListSection(list: releases, title: books.isEmpty ? nil : "Releases")
             }
             PluginResultsSections(search: pluginSearch)
-            directSearchSection
+            siteSearchSection
             if activeCategory == .media, !results.isEmpty {
                 Section {
                     ForEach(visibleResults) { item in
@@ -288,15 +288,10 @@ struct SearchView: View {
         }
     }
 
-    /// A file page a plugin knows (`links`) or a direct-download site's `/md5/` page: starts the download and
-    /// answers true.
+    /// A file page a plugin knows (`links`): starts the download and answers true.
     private func openFilePage(_ url: URL) -> Bool {
         if let link = model.plugins.link(for: url) {
             Task { message = await model.getFile(from: link.call, id: link.id, kind: activeCategory.contentKind) }
-            return true
-        }
-        if model.directSource != nil, let md5 = DirectSource.md5(in: url) {
-            Task { message = await model.startDirectDownload(md5: md5) }
             return true
         }
         return false
@@ -309,7 +304,7 @@ struct SearchView: View {
             Task { await model.openTitle(link) }
             return
         }
-        // A plugin's or a direct-download site's file page: fetch it.
+        // A file page an installed plugin knows: fetch it through the plugin.
         if let url = URL(string: text.trimmingCharacters(in: .whitespacesAndNewlines)), url.scheme?.hasPrefix("http") == true,
            openFilePage(url) {
             return
@@ -368,24 +363,18 @@ extension SearchView {
         }
     }
 
-    /// "Search on <site>" for the direct-download sites that serve the picked category, once a search ran.
+    /// "Search on <plugin>" for the plugins with a search page in the picked category, once a search ran.
     @ViewBuilder
-    var directSearchSection: some View {
+    var siteSearchSection: some View {
         let query = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        let sources = model.directSources(for: activeCategory)
         let browsers = model.plugins.browsers(for: activeCategory)
         let searched = !results.isEmpty || !releases.isEmpty || !books.isEmpty || message != nil || releases.message != nil
             || !pluginSearch.answers.isEmpty
-        if !query.isEmpty, !sources.isEmpty || !browsers.isEmpty, searched, !isSearching, !releases.isSearching {
+        if !query.isEmpty, !browsers.isEmpty, searched, !isSearching, !releases.isSearching {
             Section {
                 ForEach(browsers, id: \.id) { call in
                     if let url = call.browseURL(for: query) {
-                        Button("Search on \(call.manifest.name)", systemImage: "safari") { directSearch = BrowserRequest(url: url) }
-                    }
-                }
-                ForEach(sources) { source in
-                    Button("Search on \(source.url.host() ?? source.name)", systemImage: "safari") {
-                        directSearch = BrowserRequest(url: source.searchURL(query, extensions: []))
+                        Button("Search on \(call.manifest.name)", systemImage: "safari") { siteSearch = BrowserRequest(url: url) }
                     }
                 }
             }

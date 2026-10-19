@@ -2,10 +2,10 @@ import DoveKit
 import SwiftUI
 import WebKit
 
-/// The direct-download site's own pages, in Dove: the user searches and browses there (the site's checks run
-/// as in Safari; cookies stay in Dove's default web data store). On a file's page (`/md5/<md5>`) the toolbar
+/// A plugin's site, in Dove: the user searches and browses there (the site's checks run as in Safari; cookies
+/// stay in Dove's default web data store). On a page a plugin's `links` recognise, the toolbar
 /// offers Download, which fetches the file through the site's API with the user's key. Dove reads no page.
-struct DirectBrowserView: View {
+struct SiteBrowserView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
     let start: URL
@@ -13,20 +13,18 @@ struct DirectBrowserView: View {
     var category: SearchCategory = .books
     /// The book the page was opened for: files it fetches into iCloud Drive are filed and matched as this book.
     var book: BookSummary?
-    @State private var page = DirectBrowserPage()
+    @State private var page = SiteBrowserPage()
     @State private var message: String?
     @State private var isStarting = false
 
-    /// A file page here: a plugin's (`links`), else a direct-download site's `/md5/` page.
-    private var md5: String? {
-        guard let url = page.url else { return nil }
-        if let link = model.plugins.link(for: url) { return "plugin:\(link.call.id):\(link.id)" }
-        return model.directSource == nil ? nil : DirectSource.md5(in: url)
+    /// The plugin that knows this page as a file's, and the file's id.
+    private var file: (call: PluginCall, id: String)? {
+        page.url.flatMap { model.plugins.link(for: $0) }
     }
 
     var body: some View {
         NavigationStack {
-            DirectWebView(start: start, page: page)
+            SiteWebView(start: start, page: page)
                 .ignoresSafeArea(edges: .bottom)
                 .overlay(alignment: .top) {
                     if page.isLoading { ProgressView(value: page.progress).progressViewStyle(.linear) }
@@ -52,12 +50,12 @@ struct DirectBrowserView: View {
                         Button("Forward", systemImage: "chevron.forward") { page.webView?.goForward() }
                             .disabled(!page.canGoForward)
                         Spacer()
-                        if let md5 {
+                        if let file {
                             // A tap goes to the kind's default place; a long press offers the others.
                             let standard = model.place(for: category.contentKind)
                             Menu {
                                 ForEach(model.places, id: \.self) { place in
-                                    Button(place.displayName, systemImage: place.symbol) { download(md5, to: place) }
+                                    Button(place.displayName, systemImage: place.symbol) { download(file, to: place) }
                                 }
                             } label: {
                                 if isStarting {
@@ -66,7 +64,7 @@ struct DirectBrowserView: View {
                                     Label("Download", systemImage: standard.symbol)
                                 }
                             } primaryAction: {
-                                download(md5, to: standard)
+                                download(file, to: standard)
                             }
                             .labelStyle(.titleAndIcon)
                             .buttonStyle(.borderedProminent)
@@ -77,20 +75,16 @@ struct DirectBrowserView: View {
         }
     }
 
-    private func download(_ md5: String, to place: FilePlace) {
+    private func download(_ file: (call: PluginCall, id: String), to place: FilePlace) {
         isStarting = true
         Task {
-            if md5.hasPrefix("plugin:"), let url = page.url, let link = model.plugins.link(for: url) {
-                message = await model.getFile(from: link.call, id: link.id, kind: category.contentKind, book: book, to: place)
-            } else {
-                message = await model.startDirectDownload(md5: md5, to: place, kind: category.contentKind, book: book)
-            }
+            message = await model.getFile(from: file.call, id: file.id, kind: category.contentKind, book: book, to: place)
             isStarting = false
         }
     }
 }
 
-/// A page to open in `DirectBrowserView` (for `.sheet(item:)`).
+/// A page to open in `SiteBrowserView` (for `.sheet(item:)`).
 struct BrowserRequest: Identifiable, Hashable {
     let id = UUID()
     let url: URL
@@ -98,7 +92,7 @@ struct BrowserRequest: Identifiable, Hashable {
 
 /// What the web view shows, for the toolbar.
 @MainActor @Observable
-final class DirectBrowserPage {
+final class SiteBrowserPage {
     var url: URL?
     var isLoading = false
     var progress = 0.0
@@ -107,9 +101,9 @@ final class DirectBrowserPage {
     @ObservationIgnored weak var webView: WKWebView?
 }
 
-private struct DirectWebView: UIViewRepresentable {
+private struct SiteWebView: UIViewRepresentable {
     let start: URL
-    let page: DirectBrowserPage
+    let page: SiteBrowserPage
 
     func makeCoordinator() -> Coordinator { Coordinator(page: page) }
 
@@ -128,10 +122,10 @@ private struct DirectWebView: UIViewRepresentable {
 
     @MainActor
     final class Coordinator: NSObject {
-        let page: DirectBrowserPage
+        let page: SiteBrowserPage
         private var observations: [NSKeyValueObservation] = []
 
-        init(page: DirectBrowserPage) {
+        init(page: SiteBrowserPage) {
             self.page = page
         }
 

@@ -2,7 +2,7 @@ import DoveKit
 import SwiftUI
 
 /// Where book and audiobook covers and titles come from: the built-in sources, the two that need the user's
-/// key, and metadata providers the user adds by URL (Audiobookshelf's format).
+/// key. Plugins with metadata (Settings › Plugins) are asked before them.
 struct BookMetadataSettingsView: View {
     @Environment(AppModel.self) private var model
     @State private var googleKey = ""
@@ -10,10 +10,6 @@ struct BookMetadataSettingsView: View {
     @State private var googleStatus: String?
     @State private var hardcoverStatus: String?
     @State private var saving: Set<String> = []
-    @State private var providers: [BookProvider] = []
-    @State private var editing: BookProvider?
-    @State private var addingProvider = false
-    @State private var providerError: String?
 
     var body: some View {
         Form {
@@ -29,33 +25,17 @@ struct BookMetadataSettingsView: View {
             }
 
             Section {
-                ForEach(providers) { provider in
-                    Button {
-                        editing = provider
-                    } label: {
-                        LabeledContent {
-                            Text(provider.enabled ? "On" : "Off")
-                        } label: {
-                            Text(provider.name).foregroundStyle(.primary)
-                            Text(provider.url.host() ?? "").font(.caption).foregroundStyle(.secondary)
-                        }
-                    }
+                let plugins = model.plugins.calls(.metadata)
+                if plugins.isEmpty {
+                    Text("None. Plugins can add more sources: Settings › Plugins.").foregroundStyle(.secondary)
                 }
-                .onDelete { offsets in
-                    let ids = Set(offsets.map { providers[$0].id })
-                    do {
-                        try model.removeBookProviders(ids)
-                        providers = model.bookProviders
-                    } catch {
-                        providerError = error.localizedDescription
-                    }
+                ForEach(plugins, id: \.id) { call in
+                    LabeledContent(call.manifest.name, value: call.manifest.categories.map(\.displayName).joined(separator: ", "))
                 }
-                Button("Add provider", systemImage: "plus") { addingProvider = true }
-                if let providerError { Text(providerError).font(.footnote).foregroundStyle(.red) }
             } header: {
-                Text("Metadata providers")
+                Text("From plugins")
             } footer: {
-                Text("Any Audiobookshelf custom metadata provider: paste its address (and its key, if it has one). The community runs providers for stores and catalogues without an official API. Asked first, before the sources above.")
+                Text("Asked first, before the sources above.")
             }
 
             keySection(
@@ -80,13 +60,6 @@ struct BookMetadataSettingsView: View {
         .onAppear {
             googleKey = model.googleBooksKey
             hardcoverToken = model.hardcoverToken
-            providers = model.bookProviders
-        }
-        .sheet(isPresented: $addingProvider) {
-            BookProviderSheet(provider: nil) { providers = model.bookProviders }
-        }
-        .sheet(item: $editing) { provider in
-            BookProviderSheet(provider: provider) { providers = model.bookProviders }
         }
     }
 
@@ -137,85 +110,6 @@ struct BookMetadataSettingsView: View {
                 status("❌ \(error.localizedDescription)")
             }
             saving.remove(name)
-        }
-    }
-}
-
-/// Adds or edits one provider; it is tested with a search before it is kept.
-private struct BookProviderSheet: View {
-    @Environment(AppModel.self) private var model
-    @Environment(\.dismiss) private var dismiss
-    let provider: BookProvider?
-    let onSave: () -> Void
-    @State private var name = ""
-    @State private var address = ""
-    @State private var key = ""
-    @State private var enabled = true
-    @State private var status: String?
-    @State private var isSaving = false
-
-    var body: some View {
-        NavigationStack {
-            Form {
-                Section {
-                    TextField("Name", text: $name)
-                    TextField("Address", text: $address)
-                        .keyboardType(.URL)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
-                    SecureField("Key (optional)", text: $key)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
-                    Toggle("On", isOn: $enabled)
-                } footer: {
-                    Text("The address Audiobookshelf would use (Settings › Item metadata utils › Custom metadata providers). Dove asks its /search.")
-                }
-                if let status {
-                    Section { Text(status).font(.footnote) }
-                }
-            }
-            .navigationTitle(provider == nil ? "Add provider" : "Provider")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
-                ToolbarItem(placement: .confirmationAction) {
-                    if isSaving { ProgressView() } else { Button("Save", action: save) }
-                }
-            }
-            .onAppear {
-                guard let provider else { return }
-                name = provider.name
-                address = provider.url.absoluteString
-                key = provider.authorization ?? ""
-                enabled = provider.enabled
-            }
-        }
-    }
-
-    private func save() {
-        guard let url = BookProvider.url(from: address) else {
-            status = "❌ Enter the provider's http(s) address."
-            return
-        }
-        let trimmedName = name.trimmingCharacters(in: .whitespaces)
-        let updated = BookProvider(
-            id: provider?.id ?? UUID().uuidString,
-            name: trimmedName.isEmpty ? (url.host() ?? "Provider") : trimmedName,
-            url: url,
-            authorization: key.isEmpty ? nil : key,
-            enabled: enabled
-        )
-        isSaving = true
-        status = nil
-        Task {
-            do {
-                try await model.saveBookProvider(updated)
-                onSave()
-                dismiss()
-            } catch {
-                status = "❌ \(error.localizedDescription)"
-            }
-            isSaving = false
         }
     }
 }
