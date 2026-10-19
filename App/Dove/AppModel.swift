@@ -305,6 +305,7 @@ final class AppModel {
         downloads.requestProvider = { [weak self] record in
             guard let self else { throw CancellationError() }
             if let ref = record.plugin { return try await pluginRequest(for: ref) }
+            if let ref = record.stream { return try await streamRequest(for: ref) }
             guard let id = record.backend, let backend = backend(id) else {
                 throw BackendError.api(message: "\(record.backend?.displayName ?? "The service") is no longer configured.")
             }
@@ -800,6 +801,62 @@ final class AppModel {
         var request = URLRequest(url: link.url)
         for (field, value) in link.headers { request.setValue(value, forHTTPHeaderField: field) }
         return request
+    }
+
+    // MARK: - Direct files from stream addons
+
+    /// Sends a source row's direct link (PenguPlay, AIOStreams HTTP) to a place: downloaded to this iPhone or
+    /// iCloud Drive (a retry asks the addon again: links expire within hours), or handed to a service that
+    /// fetches plain links. Links that need headers only Dove can download.
+    func getFile(
+        _ candidate: StreamCandidate, type: MediaType, streamID: String, media: MediaSummary?, to place: FilePlace? = nil
+    ) async -> String {
+        guard let file = candidate.directFile else { return "This source can only be played." }
+        let place = place ?? self.place(for: .video)
+        do {
+            switch place {
+            case .service(let serviceID):
+                guard file.isPlain else {
+                    throw BackendError.api(message: "Only Dove can download this file (the addon needs extra headers): pick This iPhone or iCloud Drive.")
+                }
+                guard let backend = backend(serviceID), backend.acceptsDirectLinks else {
+                    throw BackendError.api(message: "\(serviceID.displayName) is not set up, or does not fetch direct links.")
+                }
+                let itemIDs = try await backend.addAll(.hosterURL(file.url), category: nil, privateTracker: false)
+                library.recordAdded(AddedHint(releaseName: file.fileName, media: media), backend: serviceID, itemIDs: itemIDs, infoHash: nil)
+                Task { await library.refresh(using: self, afterChange: true) }
+                return "Sent to \(serviceID.displayName). It fetches the file into its cloud."
+            case .download(let destination):
+                guard let ref = StreamFileRef(candidate: candidate, type: type, streamID: streamID) else {
+                    return "This source can only be played."
+                }
+                var name = file.fileName
+                var subfolder: String?
+                if destination == .iCloud {
+                    let placement = LibraryFolderLayout.placement(kind: .video, itemName: name, fileName: name, singleFile: true)
+                    name = placement.fileName
+                    subfolder = placement.folder
+                    library.recordAdded(
+                        AddedHint(releaseName: file.fileName, media: media), backend: .iCloudDrive,
+                        itemIDs: ["folder:\(placement.folder)/\(placement.fileName)"], infoHash: nil
+                    )
+                }
+                try downloads.start(file.request, stream: ref, name: name, destination: destination, subfolder: subfolder)
+                return "Downloading to \(destination.displayName)."
+            }
+        } catch {
+            return error.localizedDescription
+        }
+    }
+
+    /// A fresh link for a retried addon download: the same addon asked again, the same file picked by name.
+    private func streamRequest(for ref: StreamFileRef) async throws -> URLRequest {
+        if !addonSet.hasStreams { await loadAddons() }
+        let candidates = try await addonSet.streams(from: ref.source, type: ref.type, id: ref.streamID)
+        guard let file = ref.pick(from: candidates) else {
+            throw BackendError.api(message: "The addon no longer lists this file.")
+        }
+        return file.request
     }
 
     // MARK: - Book metadata

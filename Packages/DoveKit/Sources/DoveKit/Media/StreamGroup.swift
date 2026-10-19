@@ -32,6 +32,7 @@ public struct StreamGroup: Identifiable, Sendable, Hashable {
     public var category: Int? { candidates.lazy.compactMap(\.category).first }
     /// The most seeders any tracker reported.
     public var seeders: Int? { candidates.compactMap(\.seeders).max() }
+    public var bitrate: Double? { candidates.lazy.compactMap(\.bitrate).first }
     public var sourceType: SourceType { primary.sourceType }
     /// True when any tracker that has it is private, false when they all said public, nil when nobody said.
     public var isPrivate: Bool? {

@@ -118,7 +118,10 @@ struct SourcesView: View {
                         warning: [ranking.realDebridWarning(for: group), completenessWarning(for: group)]
                             .compactMap { $0 }.joined(separator: " · ").nilIfEmpty,
                         onPlay: playAction(for: group),
-                        onAdd: group.librarySource.map { _ in { add(group, only: nil) } }
+                        onAdd: group.librarySource.map { _ in { add(group, only: nil) } },
+                        places: model.places,
+                        defaultPlace: model.place(for: .video),
+                        onGet: group.librarySource == nil && group.primary.directFile != nil ? { getFile(group, to: $0) } : nil
                     )
                     .contextMenu { menu(for: group) }
                 }
@@ -222,6 +225,14 @@ struct SourcesView: View {
         }
         if let url = group.playURL {
             Button("Copy link", systemImage: "link") { UIPasteboard.general.url = url }
+        }
+        if group.librarySource == nil, let file = group.primary.directFile {
+            Section("Get the file") {
+                ForEach(model.places, id: \.self) { place in
+                    Button(place.displayName, systemImage: place.symbol) { getFile(group, to: place) }
+                        .disabled(place.isService && !file.isPlain)
+                }
+            }
         }
         if group.librarySource != nil {
             Section(model.downloadOnly ? "Download only, through" : "Add only to") {
@@ -359,6 +370,17 @@ struct SourcesView: View {
     }
 
     /// Services sometimes list a release under a random name: keep the search's name and the title for the library.
+    /// A direct file link: downloaded here or to iCloud Drive, or sent to a service that fetches plain links.
+    private func getFile(_ group: StreamGroup, to place: FilePlace?) {
+        busy.insert(group.id)
+        status = nil
+        Task {
+            defer { busy.remove(group.id) }
+            let message = await model.getFile(group.primary, type: type, streamID: id, media: media, to: place)
+            status = Status(text: message, isError: !message.hasPrefix("Downloading") && !message.hasPrefix("Sent"))
+        }
+    }
+
     private func remember(_ group: StreamGroup, backend: BackendID, itemIDs: [LibraryItem.ID]) {
         model.library.recordAdded(
             AddedHint(releaseName: group.releaseName, media: media),
@@ -417,6 +439,10 @@ private struct SourceRow: View {
     let warning: String?
     let onPlay: (() -> Void)?
     let onAdd: (() -> Void)?
+    let places: [FilePlace]
+    let defaultPlace: FilePlace
+    /// Set for a direct file link: nil = the default place for video.
+    let onGet: ((FilePlace?) -> Void)?
 
     private var traits: StreamTraits { group.traits }
 
@@ -521,6 +547,24 @@ private struct SourceRow: View {
                 .buttonStyle(.borderedProminent)
                 .disabled(isBusy)
                 .accessibilityLabel(downloadOnly ? "Download only" : "Add to library")
+            }
+            if let onGet {
+                // A tap goes to the default place for video; a long press picks another.
+                Menu {
+                    ForEach(places, id: \.self) { place in
+                        Button(place.displayName, systemImage: place.symbol) { onGet(place) }
+                    }
+                } label: {
+                    Group {
+                        if isBusy { ProgressView() } else { Image(systemName: defaultPlace.symbol) }
+                    }
+                    .frame(width: 22, height: 22)
+                } primaryAction: {
+                    onGet(nil)
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(isBusy)
+                .accessibilityLabel("Download")
             }
         }
     }

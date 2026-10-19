@@ -3,10 +3,12 @@ import Foundation
 /// "Recommended" order for a source list. Criteria, most important first:
 /// 1. usable at all: a name Real-Debrid refuses is useless when Real-Debrid is the only debrid;
 /// 2. plays well through Infuse on Apple TV (no AV1, no TrueHD-only Atmos);
-/// 3. the ladder (`Tier`): ready (cached on one of the user's services, or Usenet), then uncached public
-///    torrents, then uncached private ones (only a seeding service takes them, and they cost ratio);
-/// 4. quality: resolution, DV/HDR, source, audio;
-/// 5. not refused by Real-Debrid: with other debrids "Automatic" falls through after one quick failed try, so it
+/// 3. the ladder (`Tier`): ready (cached on one of the user's services, or Usenet), then direct file links,
+///    then uncached public torrents, then uncached private ones (only a seeding service takes them, and they cost
+///    ratio), then links players cannot open (they need headers, or are DASH);
+/// 4. not starved: a bitrate the addon prints that is far too low for the resolution (MovieBox' 1 Mbps "1080p");
+/// 5. quality: resolution, DV/HDR, source, audio;
+/// 6. not refused by Real-Debrid: with other debrids "Automatic" falls through after one quick failed try, so it
 ///    only breaks ties between equal releases; then size.
 public struct SourceRanking: Sendable {
     /// The user's configured debrids, in priority order.
@@ -42,6 +44,7 @@ public struct SourceRanking: Sendable {
             refused && onlyRealDebrid ? 0 : 1,
             group.appleTVWarnings.isEmpty ? 1 : 0,
             tier(for: group).rawValue,
+            Self.isStarved(group) ? 0 : 1,
             Self.resolutionRank[traits.resolution ?? ""] ?? 0,
             Self.hdrRank(traits.visualTags),
             Self.sourceRank[traits.quality ?? ""] ?? 0,
@@ -52,15 +55,18 @@ public struct SourceRanking: Sendable {
 
     /// How ready a release is, best last. Quality sorts within a rung.
     public enum Tier: Int, Sendable, Comparable {
-        case uncachedPrivate, uncachedPublic, ready
+        case limited, uncachedPrivate, uncachedPublic, direct, ready
 
         public static func < (lhs: Tier, rhs: Tier) -> Bool { lhs.rawValue < rhs.rawValue }
     }
 
     /// Usenet counts as ready on any service (nzbdav marks it ⚡, TorBox/Offcloud do not): it downloads at line speed,
-    /// so a 2160p DV NZB should not sink below a cached 1080p torrent.
+    /// so a 2160p DV NZB should not sink below a cached 1080p torrent. A direct file link plays at once and can be
+    /// downloaded, but its sources are scrapers with links that expire: below ready, above waiting for a torrent.
+    /// One that needs headers (cookies) or is DASH rarely opens in Infuse or VLC: last.
     public func tier(for group: StreamGroup) -> Tier {
         if group.sourceType == .usenet || cachedOnUserService(group) { return .ready }
+        if group.sourceType == .web { return group.primary.playsInPlayers ? .direct : .limited }
         return group.isPrivate == true ? .uncachedPrivate : .uncachedPublic
     }
 
@@ -82,6 +88,14 @@ public struct SourceRanking: Sendable {
         let cached = group.cachedBackends()
         if debrids.isEmpty { return group.isCached }
         return cached.contains { debrids.contains($0) }
+    }
+
+    /// Below these Mb/s a resolution is a starved re-encode, whatever its label says.
+    static let minimumBitrate: [String: Double] = ["2160p": 8, "1440p": 4, "1080p": 2.5, "720p": 1.2]
+
+    static func isStarved(_ group: StreamGroup) -> Bool {
+        guard let bitrate = group.bitrate, let floor = minimumBitrate[group.traits.resolution ?? ""] else { return false }
+        return bitrate < floor
     }
 
     static let resolutionRank = ["2160p": 4, "1440p": 3, "1080p": 2, "720p": 1]

@@ -1,0 +1,50 @@
+{
+  "streams": [
+    {
+      "name": "✨ | support the project!",
+      "description": "example.org/donate",
+      "externalUrl": "https://example.org/donate"
+    },
+    {
+      "name": "🐧 Direct 🧊 1080p • Source",
+      "description": "🍿 The Shawshank Redemption (1994)\n🎞️ 1080p • MP4 • BluRay\n💾 2.62 GB",
+      "url": "https://direct.example/direct/external/AAAA/movie.5776.1994.mp4?psig=1.BBBB",
+      "behaviorHints": {
+        "notWebReady": true,
+        "bingeGroup": "direct-source-1080p",
+        "videoSize": 2813203579,
+        "filename": "The.Shawshank.Redemption.1994.1080p.BluRay.H264.AAC-RARBG.mp4|^|1080pMP4BluRay.pad-Source"
+      }
+    },
+    {
+      "name": "🐧 Direct 🧊 1080p • Box",
+      "description": "🍿 The Shawshank Redemption\n🎞️ 1080p • H.265 • DASH\n💾 1.90 GB",
+      "url": "https://cdn.example/dash/1/manifest.mpd",
+      "behaviorHints": {
+        "notWebReady": true,
+        "proxyHeaders": { "request": { "Cookie": "Policy=x", "Referer": "https://api.example/" } },
+        "videoSize": 2035122398,
+        "filename": "The.Shawshank.Redemption.1994.1080p.mpd|^|1080pDASH"
+      }
+    },
+    {
+      "name": "🐧 Direct 🧊 4K • Box",
+      "description": "💾 26.83 GB",
+      "url": "https://direct.example/direct/2/movie.mkv",
+      "behaviorHints": {
+        "proxyHeaders": { "request": { "Referer": "https://api.example/" } },
+        "filename": "The.Shawshank.Redemption.1994.2160p.mkv"
+      }
+    },
+    {
+      "name": "[RD+] Torrentio\n4k",
+      "title": "The.Shawshank.Redemption.1994.2160p.mkv\n👤 12 💾 20 GB",
+      "url": "https://torrentio.example/resolve/realdebrid/KEY/abc/null/0/file.mkv"
+    },
+    {
+      "name": "Comet 1080p",
+      "description": "[TB⚡] The.Shawshank.Redemption.1994.1080p.mkv",
+      "url": "https://comet.example/play/xyz"
+    }
+  ]
+}

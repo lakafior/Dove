@@ -139,6 +139,11 @@ public struct StreamCandidate: Identifiable, Sendable, Hashable {
     public var isPrivate: Bool?
     /// When the release was posted (Torznab/Newznab `pubDate`, AIOStreams `age`).
     public var published: Date?
+    /// Headers the `url` needs (a Stremio stream's `behaviorHints.proxyHeaders.request`: cookies, referer).
+    /// Players cannot send them; Dove's own downloads do. May hold session cookies: never log or persist.
+    public var headers: [String: String]
+    /// Mb/s as the addon prints it (`~2.6 Mbps`, AIOStreams' `29.1 ᴹᵇᵖˢ`); nil when not given.
+    public var bitrate: Double?
 
     public init(
         id: String,
@@ -163,7 +168,9 @@ public struct StreamCandidate: Identifiable, Sendable, Hashable {
         addon: String? = nil,
         tracker: String? = nil,
         isPrivate: Bool? = nil,
-        published: Date? = nil
+        published: Date? = nil,
+        headers: [String: String] = [:],
+        bitrate: Double? = nil
     ) {
         self.id = id
         self.kind = kind
@@ -188,6 +195,17 @@ public struct StreamCandidate: Identifiable, Sendable, Hashable {
         self.tracker = tracker
         self.isPrivate = isPrivate
         self.published = published
+        self.headers = headers
+        self.bitrate = bitrate
+    }
+
+    /// An external player can open the link: no headers needed, and not DASH (Infuse and VLC take HLS).
+    public var playsInPlayers: Bool {
+        guard headers.isEmpty, let url else { return false }
+        return ![title, url.lastPathComponent].contains { name in
+            let name = name.lowercased()
+            return name.hasSuffix(".mpd") || name.hasSuffix(".ism")
+        }
     }
 
     /// Where it came from, outermost first, without repeats: ["AIOStreams", "Torrentio", "1337x"], ["Jackett", "TorrentLeech"].
@@ -214,6 +232,15 @@ public struct StreamCandidate: Identifiable, Sendable, Hashable {
         if let infoHash, !infoHash.isEmpty { return .magnet(infoHash: infoHash, name: releaseName) }
         if let nzbURL { return .nzbURL(nzbURL, name: releaseName) }
         return nil
+    }
+
+    /// A plain HTTP file Dove can download or hand to a cloud service: a `.http` stream whose link is one file,
+    /// not a DASH/HLS playlist (those only play).
+    public var directFile: DirectStreamFile? {
+        guard kind == .http, let url else { return nil }
+        let names = [title, url.lastPathComponent].map { $0.lowercased() }
+        guard !names.contains(where: { name in DirectStreamFile.playlistExtensions.contains { name.hasSuffix(".\($0)") } }) else { return nil }
+        return DirectStreamFile(url: url, headers: headers, name: title, size: size)
     }
 
     /// The release's name as the search showed it: the torrent folder, else the file or indexer title.
@@ -306,5 +333,33 @@ public struct StreamTraits: Sendable, Hashable {
             seasonPack: seasonPack || other.seasonPack,
             folderSeasons: folderSeasons.isEmpty ? other.folderSeasons : folderSeasons
         )
+    }
+}
+
+/// A source row's link that is one whole file (see `StreamCandidate.directFile`).
+public struct DirectStreamFile: Sendable, Hashable {
+    public var url: URL
+    public var headers: [String: String]
+    /// The addon's file name (`behaviorHints.filename`), else its title line.
+    public var name: String
+    public var size: Int64?
+
+    static let playlistExtensions = ["m3u8", "m3u", "mpd", "ism"]
+
+    /// No headers needed: a cloud service can fetch it by the link alone.
+    public var isPlain: Bool { headers.isEmpty }
+
+    public var request: URLRequest {
+        var request = URLRequest(url: url)
+        for (field, value) in headers { request.setValue(value, forHTTPHeaderField: field) }
+        return request
+    }
+
+    /// A name to save it under: the file name with an extension, else the link's last component.
+    public var fileName: String {
+        if !(name as NSString).pathExtension.isEmpty, name != "Stream" { return name }
+        let last = url.lastPathComponent
+        if !(last as NSString).pathExtension.isEmpty { return last }
+        return name == "Stream" ? "video.mp4" : name + ".mp4"
     }
 }

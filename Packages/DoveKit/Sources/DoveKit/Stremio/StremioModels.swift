@@ -219,23 +219,28 @@ struct StremioStream: Decodable {
         let folderName: String?
         let folderSize: Int64?
         let cached: Bool?
+        let proxyHeaders: ProxyHeaders?
+    }
+
+    struct ProxyHeaders: Decodable {
+        let request: [String: String]?
     }
 
     func candidate(id: String) -> StreamCandidate {
         let text = [name, description ?? title].compactMap { $0.map(StremioText.clean) }.filter { !$0.isEmpty }
         let label = text.joined(separator: "\n")
         let details = [title, description, name].compactMap { $0 }.joined(separator: "\n")
-        let kind: StreamCandidate.Kind = if url != nil {
-            .debrid
-        } else if infoHash != nil {
+        let kind: StreamCandidate.Kind = if infoHash != nil {
             .p2p
+        } else if let url {
+            Self.isDebridLink(url, cached: behaviorHints?.cached, text: details) ? .debrid : .http
         } else {
             .unknown
         }
         return StreamCandidate(
             id: id,
             kind: kind,
-            title: behaviorHints?.filename ?? text.last?.components(separatedBy: "\n").first ?? "Stream",
+            title: behaviorHints?.filename.flatMap(Self.fileName) ?? text.last?.components(separatedBy: "\n").first ?? "Stream",
             label: label,
             size: behaviorHints?.videoSize ?? StremioText.size(in: [title, description, name].compactMap { $0 }.joined(separator: "\n")),
             folderName: behaviorHints?.folderName,
@@ -246,12 +251,42 @@ struct StremioStream: Decodable {
             cached: behaviorHints?.cached,
             bingeGroup: behaviorHints?.bingeGroup,
             seeders: StremioText.seeders(in: details),
-            tracker: StremioText.tracker(in: details)
+            tracker: StremioText.tracker(in: details),
+            headers: behaviorHints?.proxyHeaders?.request ?? [:],
+            bitrate: StremioText.bitrate(in: details)
         )
+    }
+
+    /// Stremio has no field saying what a `url` is. A debrid-configured addon (Torrentio+RD, Comet, MediaFusion,
+    /// AIOStreams) returns resolve links that add the torrent to the service on first request: those only play.
+    /// Told apart by the `cached` hint (only debrid addons send it), service names in the link's path, and the
+    /// service tags addons print (`[RD+]`, `[TB⚡]`, `RD ⚡`, `[OC ⛉ …]`); Usenet streamers' links only play too.
+    /// Anything else is a plain file link (PenguPlay, Easynews-style addons).
+    static func isDebridLink(_ url: String, cached: Bool?, text: String) -> Bool {
+        if cached != nil { return true }
+        let path = (URLComponents(string: url)?.path ?? url).lowercased()
+        let services = ["realdebrid", "real-debrid", "torbox", "alldebrid", "premiumize", "debridlink", "debrid-link",
+                        "offcloud", "easydebrid", "pikpak", "putio", "seedr", "stremthru", "/resolve/", "/debrid/"]
+        if services.contains(where: path.contains) { return true }
+        let tags = /(?i)\[(?:RD|TB|AD|PM|DL|OC|ED|PKP|PIO|SR|NZB)[\s+⚡⏳⛉\]]|\b(?:RD|TB|AD|PM|OC)\s*[+⚡]|usenet|⁽ⁿᶻᵇ⁾/
+        return text.contains(tags)
+    }
+
+    /// PenguPlay and others append sort text after `|` (`Movie.mkv|^|4KMKV…`); file names never hold one.
+    static func fileName(_ hint: String) -> String? {
+        let name = hint.split(separator: "|", maxSplits: 1).first.map(String.init)?.trimmingCharacters(in: .whitespaces) ?? ""
+        return name.isEmpty ? nil : name
     }
 }
 
 enum StremioText {
+    /// Video bitrate the addon prints, in Mb/s: `~2.6 Mbps`, `29.1 ᴹᵇᵖˢ`. Only Mb/s: kb/s figures are audio tracks
+    /// (`AAC 128kbps`).
+    static func bitrate(in text: String) -> Double? {
+        guard let match = text.firstMatch(of: /(?i)([0-9]+(?:[.,][0-9]+)?)\s*(?:mbps|mb\/s|ᴹᵇᵖˢ)/) else { return nil }
+        return Double(match.1.replacingOccurrences(of: ",", with: "."))
+    }
+
     /// Size written into the title by Torrentio, Comet and similar (`💾 20.32 GB`), when no `videoSize` hint is given.
     static func size(in text: String) -> Int64? {
         guard let match = text.firstMatch(of: /💾\s*([0-9]+(?:[.,][0-9]+)?)\s*([KMGT]i?B)/) else { return nil }

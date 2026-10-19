@@ -116,6 +116,31 @@ public final class DownloadManager: NSObject {
         return record.id
     }
 
+    /// Starts downloading a stream addon's direct link, or returns the record already downloading or holding it.
+    @discardableResult
+    public func start(
+        _ request: URLRequest,
+        stream: StreamFileRef,
+        name: String,
+        destination: DownloadDestination = .device,
+        subfolder: String? = nil
+    ) throws -> DownloadRecord.ID {
+        if let existing = records.first(where: { $0.stream == stream && $0.destination == destination }) {
+            switch existing.state {
+            case .downloading, .finished: return existing.id
+            case .paused, .failed: remove(existing.id)
+            }
+        }
+        if let size = stream.size { try checkSpace(for: size) }
+        let record = DownloadRecord(
+            backend: nil, stream: stream, itemID: "stream:\(stream.source)", fileID: "\(stream.streamID)/\(stream.fileName)",
+            name: name, totalBytes: stream.size, destination: destination, subfolder: subfolder
+        )
+        records.insert(record, at: 0)
+        run(session.downloadTask(with: request), for: record.id)
+        return record.id
+    }
+
     public func pause(_ id: DownloadRecord.ID) {
         guard let task = tasks[id], self[id]?.state == .downloading else { return }
         // Marked first, so the cancellation that follows is not reported as a failure.
@@ -292,8 +317,17 @@ public final class DownloadManager: NSObject {
         if let data = nsError.userInfo[NSURLSessionDownloadTaskResumeData] as? Data {
             store.setResumeData(data, for: id)
         }
-        update(id) { $0.state = .failed(reason: error.localizedDescription) }
+        update(id) { $0.state = .failed(reason: Self.reason(for: nsError)) }
         settled(id)
+    }
+
+    /// iOS refuses plain `http://` links (App Transport Security), also after a redirect: some addons' files
+    /// sit on such hosts. A cloud service fetches them fine.
+    nonisolated static func reason(for error: NSError) -> String {
+        if error.domain == NSURLErrorDomain, error.code == NSURLErrorAppTransportSecurityRequiresSecureConnection {
+            return "The file is served over plain HTTP, which iOS does not allow. Send it to a cloud service instead."
+        }
+        return error.localizedDescription
     }
 
     private func progress(_ id: DownloadRecord.ID, written: Int64, expected: Int64) {

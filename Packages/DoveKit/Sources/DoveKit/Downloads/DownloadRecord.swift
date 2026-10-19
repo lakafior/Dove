@@ -61,6 +61,11 @@ public enum FilePlace: Sendable, Hashable, Codable {
         case .service(let backend): backend.displayName
         }
     }
+
+    /// A service's cloud rather than a download: it fetches the link itself, so links needing headers cannot go.
+    public var isService: Bool {
+        if case .service = self { true } else { false }
+    }
 }
 
 /// The default place per content kind: books, audiobooks and music to iCloud Drive (read and played on every
@@ -152,10 +157,12 @@ public struct DownloadRecord: Codable, Sendable, Identifiable, Hashable {
     }
 
     public let id: String
-    /// The service the file came from; nil for a file a plugin found (`plugin`).
+    /// The service the file came from; nil for a file a plugin or a stream addon found (`plugin`, `stream`).
     public let backend: BackendID?
     /// Set for files a plugin found (stored under the key `direct`, its name before plugins).
     public let plugin: PluginFileRef?
+    /// Set for direct links from a stream addon (PenguPlay, AIOStreams HTTP): asked again on a retry.
+    public let stream: StreamFileRef?
     public let itemID: LibraryItem.ID
     public let fileID: LibraryFile.ID
     /// The file's name on the service.
@@ -173,7 +180,7 @@ public struct DownloadRecord: Codable, Sendable, Identifiable, Hashable {
 
     enum CodingKeys: String, CodingKey {
         case id, backend, itemID, fileID, name, localName, state, bytesWritten, totalBytes, createdAt, destination
-        case subfolder
+        case subfolder, stream
         case plugin = "direct"
     }
 
@@ -182,6 +189,7 @@ public struct DownloadRecord: Codable, Sendable, Identifiable, Hashable {
         id = try container.decode(String.self, forKey: .id)
         backend = try container.decodeIfPresent(BackendID.self, forKey: .backend)
         plugin = try? container.decodeIfPresent(PluginFileRef.self, forKey: .plugin)
+        stream = try? container.decodeIfPresent(StreamFileRef.self, forKey: .stream)
         itemID = try container.decode(LibraryItem.ID.self, forKey: .itemID)
         fileID = try container.decode(LibraryFile.ID.self, forKey: .fileID)
         name = try container.decode(String.self, forKey: .name)
@@ -199,6 +207,7 @@ public struct DownloadRecord: Codable, Sendable, Identifiable, Hashable {
         id: String = UUID().uuidString,
         backend: BackendID?,
         plugin: PluginFileRef? = nil,
+        stream: StreamFileRef? = nil,
         itemID: LibraryItem.ID,
         fileID: LibraryFile.ID,
         name: String,
@@ -212,6 +221,7 @@ public struct DownloadRecord: Codable, Sendable, Identifiable, Hashable {
         self.id = id
         self.backend = backend
         self.plugin = plugin
+        self.stream = stream
         self.itemID = itemID
         self.fileID = fileID
         self.name = name

@@ -76,6 +76,18 @@ public struct AddonSet: Sendable {
         public var failures: [String]
     }
 
+    /// One addon's (or AIOStreams Search's) answer, for a retried direct download (`StreamFileRef.source`).
+    public func streams(from source: String, type: MediaType, id: String) async throws -> [StreamCandidate] {
+        if source == StreamFileRef.aioStreams {
+            guard let aioStreams else { throw BackendError.api(message: "AIOStreams is no longer set up.") }
+            return try await aioStreams.search(type: type, id: id).candidates
+        }
+        guard let addon = addons.first(where: { $0.manifest.id == source }) else {
+            throw BackendError.api(message: "The addon that found this file is no longer added.")
+        }
+        return try await addon.streams(type: type, id: id)
+    }
+
     /// Sources for a movie ID or an episode ID (`tt…:season:episode`), from every stream addon in parallel.
     public func streams(type: MediaType, id: String) async -> Streams {
         let streamAddons = addons.filter { addon in
