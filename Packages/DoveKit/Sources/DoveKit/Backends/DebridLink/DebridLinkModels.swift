@@ -36,11 +36,12 @@ struct DebridLinkTorrent: Decodable {
     let uploadRatio: Double?
     /// Bytes per second.
     let uploadSpeed: Int64?
+    let downloadSpeed: Int64?
     let peersConnected: Int?
 
     enum CodingKeys: String, CodingKey {
         case id, name, created, hashString, wait, totalSize, downloadPercent, isZip, files
-        case uploadRatio, uploadSpeed, peersConnected
+        case uploadRatio, uploadSpeed, downloadSpeed, peersConnected
         case state = "status"
     }
 }
@@ -123,7 +124,8 @@ extension DebridLinkTorrent {
             infoHash: hashString,
             seeding: uploadRatio.map {
                 LibraryItem.Seeding(ratio: $0, isActive: state == 8, uploadSpeed: uploadSpeed, peers: peersConnected)
-            }
+            },
+            downloadSpeed: downloadSpeed
         )
     }
 

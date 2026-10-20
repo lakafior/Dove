@@ -201,7 +201,7 @@ private struct PluginResultRow: View {
             Spacer(minLength: 0)
             // A tap goes to the kind's default place; a long press picks another.
             Menu {
-                ForEach(model.places, id: \.self) { place in
+                ForEach(model.places(for: kind), id: \.self) { place in
                     Button(place.displayName, systemImage: place.symbol) { get(place) }
                 }
             } label: {

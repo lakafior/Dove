@@ -182,6 +182,21 @@ struct DownloadsView: View {
         .swipeActions {
             Button("Delete", systemImage: "trash", role: .destructive) { downloads.remove(record.id) }
         }
+        .contextMenu {
+            // A downloaded ebook can join the Calibre library (Calibre reads its details from the file).
+            if let fileURL = downloads.fileURL(for: record), record.state == .finished, model.backend(.calibre) != nil,
+               BookFiles.ebookFormats.contains(BookFiles.format(of: fileURL.lastPathComponent)) {
+                Button("Add to Calibre", systemImage: "books.vertical") {
+                    Task {
+                        do {
+                            message = try await model.addToCalibre(file: fileURL, fileName: fileURL.lastPathComponent, book: nil).message
+                        } catch {
+                            message = error.localizedDescription
+                        }
+                    }
+                }
+            }
+        }
     }
 
     private func perform(_ action: DownloadRow.Action, on record: DownloadRecord) {
@@ -469,10 +484,27 @@ private struct ServiceItemRow: View {
                 if let size = item.item.size, !isFailed {
                     Text(size.formatted(.byteCount(style: .file)))
                 }
+                // While the service downloads (uncached torrents): its speed and the time left at that speed.
+                if let speed = item.item.downloadSpeed, progress != nil {
+                    Text("\(speed.formatted(.byteCount(style: .file)))/s")
+                    if let left = item.item.secondsLeft {
+                        Text(Self.timeLeft(left))
+                    }
+                }
             }
             .font(.caption)
+            .monospacedDigit()
             .foregroundStyle(isFailed ? .red : .secondary)
         }
+    }
+
+    /// "about 12 min left", "about 2 h left".
+    private static func timeLeft(_ seconds: TimeInterval) -> String {
+        let duration = Duration.seconds(max(60, seconds))
+        let text = seconds >= 3600
+            ? duration.formatted(.units(allowed: [.hours, .minutes], width: .abbreviated, maximumUnitCount: 2))
+            : duration.formatted(.units(allowed: [.minutes], width: .abbreviated))
+        return "about \(text) left"
     }
 }
 

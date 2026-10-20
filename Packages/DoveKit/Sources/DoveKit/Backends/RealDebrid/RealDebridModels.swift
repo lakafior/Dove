@@ -7,6 +7,8 @@ struct RealDebridTorrent: Decodable {
     let hash: String?
     let bytes: Int64?
     let progress: Double?
+    /// Bytes per second while Real-Debrid downloads it.
+    let speed: Int64?
     let status: String
     let added: String?
     /// Host links, one per selected file, in file ID order. Unrestrict them to get download URLs.
@@ -76,7 +78,8 @@ extension RealDebridTorrent {
                 LibraryFile(id: String($0.id), name: ($0.path as NSString).lastPathComponent, size: $0.bytes)
             },
             addedAt: added.flatMap(APIDate.parse),
-            infoHash: hash
+            infoHash: hash,
+            downloadSpeed: speed
         )
     }
 

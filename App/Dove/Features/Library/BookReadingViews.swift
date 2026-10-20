@@ -86,7 +86,7 @@ struct BookReadSection: View {
     /// title, authors and description from this screen replace what Calibre read from the file (ISBN, publisher and
     /// language stay), and the cover too when the file had none.
     private func addToCalibre(allowDuplicate: Bool) {
-        guard let calibre else { return }
+        guard calibre != nil else { return }
         working = .calibre
         message = nil
         Task {
@@ -98,28 +98,12 @@ struct BookReadSection: View {
                     return
                 }
                 let url = try await localFile(for: pick)
-                let ext = BookFiles.format(of: pick.file.name)
-                let name = book.author.map { LibraryFolderLayout.itemName(author: $0, title: book.name) } ?? book.name
-                let result = try await calibre.addBook(file: url, fileName: "\(name).\(ext)", allowDuplicate: allowDuplicate)
-                guard let bookID = result.bookID else {
-                    calibreDuplicates = result.duplicates
-                    return
+                let summary = book.book ?? BookSummary(id: book.id, title: book.name, authors: book.author.map { [$0] } ?? [])
+                let fileName = AppModel.calibreFileName(book: summary, fileName: pick.file.name)
+                switch try await model.addToCalibre(file: url, fileName: fileName, book: book.book, allowDuplicate: allowDuplicate) {
+                case .duplicates(let books): calibreDuplicates = books
+                case let outcome: message = outcome.message
                 }
-                if let summary = book.book {
-                    // The file's own cover is the edition the user has; Dove's (a metadata service's, sometimes
-                    // another edition's) only fills in when Calibre found none in the file.
-                    let fileHasCover = (try? await calibre.item("calibre:\(bookID)"))?.book?.cover != nil
-                    let cover: Data? = if !fileHasCover, let url = summary.cover { try? await ImageCache.shared.data(for: url) } else { nil }
-                    do {
-                        try await calibre.setMetadata(bookID: bookID, book: summary, cover: cover)
-                    } catch {
-                        message = "Added to Calibre as \(ext.uppercased()), but its details could not be set: \(error.localizedDescription)"
-                        await model.library.refresh(using: model)
-                        return
-                    }
-                }
-                message = "Added to Calibre as \(ext.uppercased())."
-                await model.library.refresh(using: model)
             } catch {
                 message = error.localizedDescription
             }

@@ -10,7 +10,7 @@ struct SearchView: View {
     @Environment(AppModel.self) private var model
     @State private var text = ""
     /// "Find by description": titles the on-device model suggested and a search confirmed (nil until asked).
-    @State private var described: [MediaSummary]?
+    @State private var described: DescribedSearch.Found?
     @State private var isDescribing = false
     @State private var describeError: String?
     @State private var pendingSources: SourceBatch?
@@ -285,10 +285,10 @@ struct SearchView: View {
         let words = text.split(whereSeparator: \.isWhitespace).count
         if let described {
             Section {
-                if described.isEmpty {
+                if described.named.isEmpty && described.byPlot.isEmpty {
                     Text("No title found for that description.").font(.footnote).foregroundStyle(.secondary)
                 }
-                ForEach(described) { item in
+                ForEach(described.named) { item in
                     NavigationLink(value: item) { MediaRow(item: item) }
                         .contextMenu { WatchlistMenuItem(media: item) }
                 }
@@ -296,6 +296,18 @@ struct SearchView: View {
                 Label("Fits your description", systemImage: "sparkles")
             } footer: {
                 Text("Suggested by Apple Intelligence on this iPhone, and only shown when a search finds the title. Works best for well-known titles.")
+            }
+            if !described.byPlot.isEmpty {
+                Section {
+                    ForEach(described.byPlot) { item in
+                        NavigationLink(value: item) { MediaRow(item: item) }
+                            .contextMenu { WatchlistMenuItem(media: item) }
+                    }
+                } header: {
+                    Text("Might be one of these")
+                } footer: {
+                    Text("TMDB titles tagged with \(described.plotWords.map { "\u{201C}\($0)\u{201D}" }.joined(separator: ", ")), most popular first.")
+                }
             }
         } else if OnDeviceModel.isAvailable, words >= 3, !isSearching, SourceDetector.sources(in: text).isEmpty {
             Section {
@@ -320,10 +332,13 @@ struct SearchView: View {
         isDescribing = true
         describeError = nil
         let addons = model.addonSet
+        let key = model.tmdbKey
         Task {
             defer { isDescribing = false }
             do {
-                described = try await DescribedSearch.titles(for: query) { try await addons.search($0) }
+                described = try await DescribedSearch.titles(for: query, tmdb: key.isEmpty ? nil : TMDBMetadata(key: key)) {
+                    try await addons.search($0)
+                }
             } catch {
                 describeError = error.localizedDescription
             }

@@ -77,7 +77,65 @@ enum DescribedFilter {
     }
 }
 
+/// "series from the 80s in 4K on Real-Debrid" → a `LibraryRequest`. Titles know their kind, year, services,
+/// status and release names, not genres; `LibraryRequest` keeps only what the words name.
+enum DescribedLibrary {
+    static func request(for text: String, services: [BackendID]) async throws -> LibraryRequest {
+        #if canImport(FoundationModels)
+        if #available(iOS 26, *) {
+            let instructions = """
+            You turn a short description of what someone wants to see in their media library into filter settings.
+            kind: one of movies, series, books, audiobooks, music, software, other, or none.
+            Years: yearFrom and yearTo when the description names a year or a decade ("80s" is 1980 to 1989).
+            resolutions: from 2160p, 1440p, 1080p, 720p, 480p ("4K" is 2160p).
+            services: from \(services.map(\.displayName).joined(separator: ", ")).
+            status: ready, active (still downloading) or failed, or none.
+            words: words of a title or author the description names, copied as written, else nothing.
+            Genres are not known: leave them out. Leave out anything the description does not say.
+            """
+            let wish = try await LanguageModelSession(instructions: instructions)
+                .respond(to: text, generating: LibraryWish.self, options: GenerationOptions(samplingMode: .greedy))
+                .content
+            let request = LibraryRequest(
+                text: text,
+                kind: wish.kind == "none" ? nil : wish.kind,
+                yearFrom: wish.yearFrom,
+                yearTo: wish.yearTo,
+                resolutions: wish.resolutions,
+                services: wish.services,
+                status: wish.status == "none" ? nil : wish.status,
+                words: wish.words
+            )
+            guard !request.isEmpty else {
+                throw DescribedFilter.Failure.nothingUnderstood
+            }
+            return request
+        }
+        #endif
+        throw DescribedFilter.Failure.unavailable
+    }
+}
+
 #if canImport(FoundationModels)
+@available(iOS 26, *)
+@Generable
+struct LibraryWish {
+    @Guide(description: "What kind of item", .anyOf(["none", "movies", "series", "books", "audiobooks", "music", "software", "other"]))
+    var kind: String
+    @Guide(description: "First year asked for")
+    var yearFrom: Int?
+    @Guide(description: "Last year asked for")
+    var yearTo: Int?
+    @Guide(description: "Resolutions asked for")
+    var resolutions: [String]
+    @Guide(description: "Services asked for")
+    var services: [String]
+    @Guide(description: "Download state asked for", .anyOf(["none", "ready", "active", "failed"]))
+    var status: String
+    @Guide(description: "Title or author words, copied from the description")
+    var words: String?
+}
+
 @available(iOS 26, *)
 @Generable
 struct SourceWish {

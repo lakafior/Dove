@@ -76,7 +76,7 @@ struct SiteBrowserView: View {
                             // A tap goes to the kind's default place; a long press offers the others.
                             let standard = model.place(for: category.contentKind)
                             Menu {
-                                ForEach(model.places, id: \.self) { place in
+                                ForEach(model.places(for: category.contentKind), id: \.self) { place in
                                     Button(place.displayName, systemImage: place.symbol) { download(file, to: place) }
                                 }
                             } label: {

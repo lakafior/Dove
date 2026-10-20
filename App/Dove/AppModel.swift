@@ -519,6 +519,11 @@ final class AppModel {
         [.device] + (iCloudFolder == nil ? [] : [.iCloud]) + directLinkServices.map(FilePlace.service)
     }
 
+    /// The places for one kind: Calibre takes ebooks too (Dove downloads the file and adds it there).
+    func places(for kind: ContentKind) -> [FilePlace] {
+        places + (kind == .books && backend(.calibre) != nil ? [.service(.calibre)] : [])
+    }
+
     /// Configured services that fetch any HTTP link into their cloud, in the debrid priority order.
     var directLinkServices: [BackendID] {
         let rank = { (id: BackendID) in self.debridOrder.firstIndex(of: id) ?? Int.max }
@@ -529,8 +534,57 @@ final class AppModel {
         switch place {
         case .download(.device): true
         case .download(.iCloud): iCloudFolder != nil
+        case .service(.calibre): backend(.calibre) != nil
         case .service(let id): backend(id)?.acceptsDirectLinks == true
         }
+    }
+
+    // MARK: - Calibre
+
+    enum CalibreAddOutcome {
+        case added(format: String)
+        /// Added, but Dove's description could not be set (the account may only read, the server failed).
+        case addedWithoutDetails(format: String, reason: String)
+        /// Calibre holds books it thinks are this one; nothing was added.
+        case duplicates([String])
+
+        var message: String {
+            switch self {
+            case .added(let format): "Added to Calibre as \(format)."
+            case .addedWithoutDetails(let format, let reason): "Added to Calibre as \(format), but its details could not be set: \(reason)"
+            case .duplicates(let books): "Calibre may already have it (\(books.joined(separator: "; "))). Not added."
+            }
+        }
+    }
+
+    /// Adds a book file to Calibre, which files it under Author/Title; then the book Dove knows (a book screen's,
+    /// a search's) replaces the title, authors and description Calibre read from the file, and its cover too when
+    /// the file had none (the file's cover is the edition held). The Library is listed again afterwards.
+    func addToCalibre(file: URL, fileName: String, book: BookSummary?, allowDuplicate: Bool = false) async throws -> CalibreAddOutcome {
+        guard let calibre = backend(.calibre) as? CalibreBackend else {
+            throw BackendError.api(message: "Set up Calibre in Settings › Your libraries first.")
+        }
+        let format = BookFiles.format(of: fileName).uppercased()
+        let result = try await calibre.addBook(file: file, fileName: fileName, allowDuplicate: allowDuplicate)
+        guard let bookID = result.bookID else { return .duplicates(result.duplicates) }
+        defer { Task { await library.refresh(using: self, afterChange: true) } }
+        guard let book else { return .added(format: format) }
+        let fileHasCover = (try? await calibre.item("calibre:\(bookID)"))?.book?.cover != nil
+        let cover: Data? = if !fileHasCover, let url = book.cover { try? await ImageCache.shared.data(for: url) } else { nil }
+        do {
+            try await calibre.setMetadata(bookID: bookID, book: book, cover: cover)
+            return .added(format: format)
+        } catch {
+            return .addedWithoutDetails(format: format, reason: error.localizedDescription)
+        }
+    }
+
+    /// "Author - Title.ext" from the book Dove knows, else the file's own name.
+    static func calibreFileName(book: BookSummary?, fileName: String) -> String {
+        let ext = BookFiles.format(of: fileName)
+        guard let book, !ext.isEmpty else { return (fileName as NSString).lastPathComponent }
+        let name = book.authors.first.map { LibraryFolderLayout.itemName(author: $0, title: book.title) } ?? book.title
+        return "\(name).\(ext)"
     }
 
     // MARK: - Newznab indexers
@@ -790,6 +844,19 @@ final class AppModel {
             // The browser's cookies ride along: a login or a captcha solved in the site's pages reaches the plugin.
             let links = try await PluginRunner(transport: BrowserCookieTransport()).resolve(call.manifest, script: call.script, settings: call.settings, id: id)
             switch place {
+            case .service(.calibre):
+                // Dove fetches the file (headers and all) and adds it: Calibre cannot fetch links itself.
+                guard kind == .books else { throw PluginError("Calibre takes ebooks; pick This iPhone or iCloud Drive.") }
+                guard links.count == 1, let link = links.first else {
+                    throw PluginError("This result has \(links.count) files; Calibre takes one book file. Download it and add the format you want.")
+                }
+                let (temporary, response) = try await URLSession.shared.download(for: Self.request(for: link))
+                defer { try? FileManager.default.removeItem(at: temporary) }
+                if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
+                    throw PluginError("The site answered \(http.statusCode) for the file.")
+                }
+                let fileName = Self.calibreFileName(book: book, fileName: link.name)
+                return try await addToCalibre(file: temporary, fileName: fileName, book: book).message
             case .service(let serviceID):
                 guard links.allSatisfy(\.isPlain) else {
                     throw PluginError("Only Dove can download this file (\(call.manifest.name) needs extra headers): pick This iPhone or iCloud Drive.")

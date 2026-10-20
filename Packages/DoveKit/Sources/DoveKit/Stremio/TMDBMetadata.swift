@@ -107,6 +107,38 @@ public struct TMDBMetadata: Sendable {
         return formatter.date(from: text) ?? parseDay(String(text.prefix(10)))
     }
 
+    // MARK: - Discover
+
+    /// TMDB's keyword for a word ("memory" → its ID), the first match; nil when TMDB has none.
+    public func keywordID(_ word: String) async throws -> Int? {
+        try await get(TMDBKeywords.self, "search/keyword", ["query": word]).results.first?.id
+    }
+
+    /// Titles tagged with a keyword, most popular first, narrowed by genres and years; titles with few votes
+    /// (unreleased, obscure) are left out.
+    public func discover(_ type: MediaType, keyword: Int, genres: [Int] = [], years: ClosedRange<Int>? = nil) async throws -> [MediaSummary] {
+        var parameters = ["with_keywords": String(keyword), "sort_by": "popularity.desc", "vote_count.gte": "30", "include_adult": "false"]
+        if !genres.isEmpty { parameters["with_genres"] = genres.map(String.init).joined(separator: "|") }
+        if let years {
+            let field = type == .movie ? "primary_release_date" : "first_air_date"
+            parameters["\(field).gte"] = "\(years.lowerBound)-01-01"
+            parameters["\(field).lte"] = "\(years.upperBound)-12-31"
+        }
+        return try await get(TMDBPage.self, "discover/\(type.tmdbPath)", parameters).results.compactMap { $0.summary(as: type) }
+    }
+
+    /// TMDB's genre IDs by name; movies and series have their own lists ("Sci-Fi & Fantasy" is one series genre).
+    public static func genreIDs(_ names: [String], for type: MediaType) -> [Int] {
+        let table: [String: Int] = type == .movie
+            ? ["action": 28, "adventure": 12, "animation": 16, "comedy": 35, "crime": 80, "documentary": 99, "drama": 18,
+               "family": 10751, "fantasy": 14, "history": 36, "horror": 27, "music": 10402, "mystery": 9648,
+               "romance": 10749, "science fiction": 878, "thriller": 53, "war": 10752, "western": 37]
+            : ["action": 10759, "adventure": 10759, "animation": 16, "comedy": 35, "crime": 80, "documentary": 99,
+               "drama": 18, "family": 10751, "kids": 10762, "mystery": 9648, "science fiction": 10765, "fantasy": 10765,
+               "war": 10768, "western": 37]
+        return Array(Set(names.compactMap { table[$0.lowercased()] })).sorted()
+    }
+
     /// The movie or series with this IMDb ID (`/find`), nil when TMDB does not know it.
     public func find(imdbID: String) async throws -> MediaSummary? {
         let found = try await get(TMDBFind.self, "find/\(imdbID)", ["external_source": "imdb_id"])
@@ -196,6 +228,11 @@ extension MediaType {
 // MARK: - Wire types
 
 private struct TMDBStatus: Decodable {}
+
+private struct TMDBKeywords: Decodable {
+    struct Keyword: Decodable { let id: Int }
+    let results: [Keyword]
+}
 
 private struct TMDBReleaseDates: Decodable {
     struct Country: Decodable {

@@ -50,6 +50,7 @@ struct AllDebridMagnet: Decodable {
     let status: String?
     let statusCode: Int?
     let downloaded: Int64?
+    let downloadSpeed: Int64?
     let hash: String?
     let uploadDate: Int64?
 
@@ -74,7 +75,8 @@ struct AllDebridMagnet: Decodable {
             status: libraryStatus,
             files: files,
             addedAt: uploadDate.map { Date(timeIntervalSince1970: TimeInterval($0)) },
-            infoHash: hash
+            infoHash: hash,
+            downloadSpeed: downloadSpeed
         )
     }
 }

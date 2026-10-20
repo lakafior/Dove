@@ -72,6 +72,14 @@ public struct LibraryItem: Identifiable, Sendable, Hashable, Codable {
     public var kindHint: ContentKind?
     /// The book as the place describes it (Calibre's metadata and cover): used instead of a lookup.
     public var book: BookSummary?
+    /// Bytes per second while the service downloads it (Real-Debrid, TorBox, AllDebrid, Debrid-Link say so).
+    public var downloadSpeed: Int64?
+
+    /// Seconds until the service has it, from size, progress and speed; nil when any is unknown.
+    public var secondsLeft: TimeInterval? {
+        guard case .downloading(let progress) = status, let size, size > 0, let speed = downloadSpeed, speed > 0 else { return nil }
+        return TimeInterval(Double(size) * max(0, 1 - progress)) / TimeInterval(speed)
+    }
 
     /// Upload side of a torrent on a service that keeps seeding it.
     public struct Seeding: Sendable, Hashable, Codable {
@@ -103,8 +111,10 @@ public struct LibraryItem: Identifiable, Sendable, Hashable, Codable {
         nzbBlobID: String? = nil,
         seeding: Seeding? = nil,
         kindHint: ContentKind? = nil,
-        book: BookSummary? = nil
+        book: BookSummary? = nil,
+        downloadSpeed: Int64? = nil
     ) {
+        self.downloadSpeed = downloadSpeed.flatMap { $0 > 0 ? $0 : nil }
         self.kindHint = kindHint
         self.book = book
         self.id = id

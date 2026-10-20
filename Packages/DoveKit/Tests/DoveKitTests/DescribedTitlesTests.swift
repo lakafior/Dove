@@ -34,4 +34,32 @@ struct DescribedTitlesTests {
         ]) { catalog[$0] ?? [] }
         #expect(found.map(\.id) == ["tmdb:1", "tmdb:4"])
     }
+
+    @Test func plotKeepsOnlyTheDescriptionsOwnWords() {
+        let plot = DescribedTitles.Plot(
+            description: "the show where office workers have their memories split",
+            type: .series, keywords: ["office", "show", "memories", "dystopia", "workers", "split", "office"],
+            genres: ["Drama"], yearFrom: 2020, yearTo: nil
+        )
+        #expect(plot.keywords == ["office", "memories", "workers", "split"])
+        #expect(plot.years == nil, "no year in the words")
+    }
+
+    @Test func discoverRanksTitlesByTheWordsTheyAnswerTo() async throws {
+        let transport = MockTransport()
+        await transport.stub("3/search/keyword", queryContains: "query=office", json: #"{"results":[{"id":1}]}"#)
+        await transport.stub("3/search/keyword", queryContains: "query=memories", json: #"{"results":[{"id":2}]}"#)
+        await transport.stub("3/discover/tv", queryContains: "with_keywords=1", json: #"{"results":[{"id":10,"name":"The Office","first_air_date":"2005-03-24"},{"id":20,"name":"Severance","first_air_date":"2022-02-17"}]}"#)
+        await transport.stub("3/discover/tv", queryContains: "with_keywords=2", json: #"{"results":[{"id":20,"name":"Severance","first_air_date":"2022-02-17"},{"id":30,"name":"Dark","first_air_date":"2017-12-01"}]}"#)
+        let tmdb = TMDBMetadata(key: "0123456789abcdef0123456789abcdef", transport: transport)
+        let plot = DescribedTitles.Plot(description: "office workers memories", type: .series, keywords: ["office", "memories"],
+                                        genres: ["Drama"], yearFrom: nil, yearTo: nil)
+
+        let found = await DescribedTitles.discover(plot, tmdb: tmdb)
+
+        #expect(found.map(\.name) == ["Severance", "The Office", "Dark"])
+        let discover = try #require(await transport.requests.first { $0.url!.path.hasSuffix("discover/tv") })
+        #expect(discover.url!.query!.contains("with_genres=18"))
+        #expect(discover.url!.query!.contains("sort_by=popularity.desc"))
+    }
 }

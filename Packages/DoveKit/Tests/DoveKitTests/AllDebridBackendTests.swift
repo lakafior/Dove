@@ -95,6 +95,10 @@ struct AllDebridBackendTests {
 
         #expect(items.map(\.id) == ["link:https://1fichier.com/?abc123", "magnet:101", "magnet:102", "magnet:103"])
         #expect(items[1].status == .downloading(progress: 0.25))
+        #expect(items[1].downloadSpeed == 5_000_000)
+        // 3 GB left at 5 MB/s.
+        #expect(items[1].secondsLeft == 600)
+        #expect(items[2].downloadSpeed == nil, "0 means not downloading")
         #expect(items[1].infoHash == "0123456789abcdef0123456789abcdef01234567")
         #expect(items[2].status == .ready)
         #expect(items[3].status == .failed(reason: "File not available - no peer"))

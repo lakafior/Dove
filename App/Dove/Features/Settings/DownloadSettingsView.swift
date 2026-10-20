@@ -20,18 +20,18 @@ struct DownloadSettingsView: View {
             Section {
                 ForEach(kinds, id: \.self) { kind in
                     Picker(selection: binding(for: kind)) {
-                        ForEach(model.places, id: \.self) { place in
+                        ForEach(model.places(for: kind), id: \.self) { place in
                             Text(place.displayName).tag(place)
                         }
                     } label: {
                         Label(kind.displayName, systemImage: kind.symbol)
                     }
-                    .disabled(model.places.count < 2)
+                    .disabled(model.places(for: kind).count < 2)
                 }
             } header: {
                 Text("Download to")
             } footer: {
-                Text("Downloads from plugins use these; a long press on Download picks another place for one file. Offcloud, TorBox and Premiumize fetch the file into their cloud (Real-Debrid, AllDebrid and Debrid-Link only take hosters they list).")
+                Text("Downloads from plugins use these; a long press on Download picks another place for one file. Offcloud, TorBox and Premiumize fetch the file into their cloud (Real-Debrid, AllDebrid and Debrid-Link only take hosters they list). Calibre takes books: Dove downloads the file and adds it with the book's details.")
             }
         }
         .navigationTitle("Downloads")

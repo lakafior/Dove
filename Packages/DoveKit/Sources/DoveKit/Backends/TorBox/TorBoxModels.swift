@@ -29,6 +29,8 @@ struct TorBoxTransfer: Decodable {
     let ratio: Double?
     let uploadSpeed: Double?
     let peers: Double?
+    /// Bytes per second while TorBox downloads it (`download_speed`).
+    let downloadSpeed: Double?
 }
 
 struct TorBoxFile: Decodable {
@@ -113,7 +115,8 @@ extension TorBoxTransfer {
             addedAt: createdAt.flatMap(APIDate.parse),
             // Web downloads carry a hash of their URL, not a torrent's.
             infoHash: ref == .torrent(id) ? hash : nil,
-            seeding: ref == .torrent(id) ? seeding : nil
+            seeding: ref == .torrent(id) ? seeding : nil,
+            downloadSpeed: downloadSpeed.map { Int64($0) }
         )
     }
 

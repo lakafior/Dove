@@ -8,6 +8,10 @@ struct LibraryView: View {
     @Environment(AppModel.self) private var model
     @AppStorage("libraryMode") private var mode: Mode = .titles
     @State private var filter = LibraryFilter()
+    /// A described filter ("series from the 80s in 4K"), on top of `filter`, until cleared.
+    @State private var request: LibraryRequest?
+    @State private var isDescribing = false
+    @State private var describeError: String?
     /// Files view: several items picked for one action.
     @State private var isSelecting = false
     @State private var selection = Set<ShelfItem.ID>()
@@ -59,7 +63,12 @@ struct LibraryView: View {
             }
             .overlay { emptyState }
             .navigationTitle("Library")
-            .searchable(text: $filter.query, prompt: "Filter")
+            .searchable(text: $filter.query, prompt: OnDeviceModel.isAvailable ? "Filter, or describe and press Search" : "Filter")
+            // Typing filters as it goes; Search on three words or more asks the on-device model what they mean.
+            .onSubmit(of: .search) {
+                let words = filter.query.split(whereSeparator: \.isWhitespace).count
+                if OnDeviceModel.isAvailable, words >= 3 { describe(filter.query) }
+            }
             .toolbar {
                 ToolbarItem(placement: .principal) {
                     Picker("View", selection: $mode) {
@@ -162,16 +171,109 @@ struct LibraryView: View {
     /// "All" with nothing typed shows one row per kind (newest first, "See all" opens the kind); a chip, a typed
     /// filter or the Filters menu's Type shows full grids. A library of 1,500 books no longer buries what follows it.
     private var showsShelves: Bool {
-        filter.category == nil && filter.query.trimmingCharacters(in: .whitespaces).isEmpty
+        filter.category == nil && filter.query.trimmingCharacters(in: .whitespaces).isEmpty && request == nil
+    }
+
+    // MARK: Filtered content
+
+    private var shownTitles: [LibraryTitle] {
+        let titles = filter.apply(to: library.titles)
+        return request?.apply(to: titles) ?? titles
+    }
+
+    private var shownBooks: [BookTitle] {
+        let books = filter.apply(to: library.books)
+        return request?.apply(to: books) ?? books
+    }
+
+    private var shownAlbums: [AlbumTitle] {
+        let albums = filter.apply(to: library.albums)
+        return request?.apply(to: albums) ?? albums
+    }
+
+    private var shownOthers: [ShelfItem] {
+        let others = filter.apply(to: library.others)
+        return request?.apply(to: others) ?? others
+    }
+
+    /// With a described filter, the items of the titles, books and albums it keeps (a series' year is the title's,
+    /// not in its release names), so the count and the Files view match what Titles shows.
+    private var shownItems: [ShelfItem] {
+        guard request != nil else { return filter.apply(to: library.items) }
+        let kept = shownTitles.flatMap(\.items) + shownBooks.flatMap(\.items) + shownAlbums.flatMap(\.items) + shownOthers
+        var seen: Set<ShelfItem.ID> = []
+        return kept.filter { seen.insert($0.id).inserted }
+    }
+
+    // MARK: Described filter
+
+    private func describe(_ text: String) {
+        let text = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        isDescribing = true
+        describeError = nil
+        let services = model.backends.map(\.id)
+        Task {
+            defer { isDescribing = false }
+            do {
+                let request = try await DescribedLibrary.request(for: text, services: services)
+                withAnimation {
+                    self.request = request
+                    filter.query = ""
+                }
+            } catch {
+                describeError = error.localizedDescription
+            }
+        }
+    }
+
+    /// What the described filter understood, with a button to clear it; or the model at work, or why it failed.
+    @ViewBuilder
+    private var describedChip: some View {
+        if isDescribing {
+            HStack(spacing: 8) {
+                ProgressView().controlSize(.small)
+                Text("Reading your description…")
+            }
+            .font(.footnote)
+            .foregroundStyle(.secondary)
+            .padding(.horizontal)
+        } else if let request {
+            HStack(alignment: .firstTextBaseline) {
+                Label {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("\u{201C}\(request.text)\u{201D}")
+                        Text(request.ignoresGenre
+                             ? "\(request.summary) · genres are not known to the Library"
+                             : request.summary)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                } icon: {
+                    Image(systemName: "sparkles")
+                }
+                .font(.footnote)
+                Spacer()
+                Button("Clear", systemImage: "xmark.circle.fill") {
+                    withAnimation { self.request = nil }
+                }
+                .labelStyle(.iconOnly)
+                .foregroundStyle(.secondary)
+                .buttonStyle(.borderless)
+            }
+            .padding(.horizontal)
+        } else if let describeError {
+            Text(describeError).font(.caption).foregroundStyle(.red).padding(.horizontal)
+        }
     }
 
     private var titlesView: some View {
-        let titles = filter.apply(to: library.titles)
-        let books = filter.apply(to: library.books)
-        let artists = LibraryShelf.artists(filter.apply(to: library.albums))
-        let others = filter.apply(to: library.others)
+        let titles = shownTitles
+        let books = shownBooks
+        let artists = LibraryShelf.artists(shownAlbums)
+        let others = shownOthers
         return ScrollView {
             categoryChips
+            describedChip
             failuresBanner.padding(.horizontal)
             if showsShelves {
                 shelf(.movies, titles.filter { $0.type == .movie }, width: 112, cell: titleCell)
@@ -429,9 +531,12 @@ struct LibraryView: View {
     // MARK: - Files
 
     private var filesView: some View {
-        let items = filter.apply(to: library.items)
+        let items = shownItems
         return List(selection: $selection) {
             categoryChips
+                .listRowInsets(EdgeInsets())
+                .listRowBackground(Color.clear)
+            describedChip
                 .listRowInsets(EdgeInsets())
                 .listRowBackground(Color.clear)
             failuresBanner
@@ -569,7 +674,7 @@ struct LibraryView: View {
 
     /// "46 items, 1.1 TB", over what the filters leave.
     private var usage: String? {
-        let usage = LibraryUsage(filter.apply(to: library.items))
+        let usage = LibraryUsage(shownItems)
         guard usage.items > 0 else { return nil }
         let count = usage.items == 1 ? "1 item" : "\(usage.items) items"
         return usage.bytes > 0 ? "\(count), \(usage.bytes.formatted(.byteCount(style: .file)))" : count
@@ -583,7 +688,7 @@ struct LibraryView: View {
             ProgressView()
         } else if library.hasLoaded && library.items.isEmpty {
             ContentUnavailableView("Your library is empty", systemImage: "tray")
-        } else if library.hasLoaded && filter.apply(to: library.items).isEmpty {
+        } else if library.hasLoaded && !isDescribing && shownItems.isEmpty {
             ContentUnavailableView.search(text: filter.query)
         }
     }

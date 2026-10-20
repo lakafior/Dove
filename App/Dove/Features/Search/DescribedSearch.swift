@@ -11,7 +11,20 @@ import FoundationModels
 enum DescribedSearch {
     private static let logger = Logger(subsystem: "net.smigi.dove", category: "described-search")
 
-    static func titles(for description: String, search: @escaping @Sendable (String) async throws -> [MediaSummary]) async throws -> [MediaSummary] {
+    struct Found: Equatable {
+        /// Titles the model named and a search confirmed.
+        var named: [MediaSummary]
+        /// Titles TMDB tags with the description's words (with a TMDB key), the named ones left out.
+        var byPlot: [MediaSummary]
+        /// The words they were found by, for the footer.
+        var plotWords: [String]
+    }
+
+    static func titles(
+        for description: String,
+        tmdb: TMDBMetadata?,
+        search: @escaping @Sendable (String) async throws -> [MediaSummary]
+    ) async throws -> Found {
         #if canImport(FoundationModels)
         if #available(iOS 26, *) {
             let session = LanguageModelSession(instructions: """
@@ -32,9 +45,32 @@ enum DescribedSearch {
                     type: $0.kind == "series" ? .series : $0.kind == "movie" ? .movie : nil
                 )
             }
-            let found = await DescribedTitles.verify(candidates, search: search)
-            logger.debug("Suggested \(candidates.map(\.title), privacy: .public); confirmed \(found.map(\.name), privacy: .public)")
-            return found
+            let named = await DescribedTitles.verify(candidates, search: search)
+            logger.debug("Suggested \(candidates.map(\.title), privacy: .public); confirmed \(named.map(\.name), privacy: .public)")
+            guard let tmdb else { return Found(named: named, byPlot: [], plotWords: []) }
+
+            // The plot's own words, looked up as TMDB keywords: finds what the model cannot name.
+            let query = try await LanguageModelSession(instructions: """
+            You pick search words from a viewer's description of a movie or TV series. keywords: up to four single \
+            nouns copied from the description that say what it is about (not names of people). kind: movie or \
+            series when the description says so, else any. genres: from Action, Adventure, Animation, Comedy, Crime, \
+            Documentary, Drama, Family, Fantasy, History, Horror, Mystery, Romance, Science Fiction, Thriller, War, \
+            Western, only when the description makes one plain. Years only when it names a year or a decade.
+            """)
+            .respond(to: description, generating: PlotQuery.self, options: GenerationOptions(samplingMode: .greedy))
+            .content
+            let plot = DescribedTitles.Plot(
+                description: description,
+                type: query.kind == "movie" ? .movie : query.kind == "series" ? .series : nil,
+                keywords: query.keywords,
+                genres: query.genres,
+                yearFrom: query.yearFrom,
+                yearTo: query.yearTo
+            )
+            let namedIDs = Set(named.map(\.id))
+            let byPlot = await DescribedTitles.discover(plot, tmdb: tmdb).filter { !namedIDs.contains($0.id) }
+            logger.debug("Plot words \(plot.keywords, privacy: .public); found \(byPlot.map(\.name), privacy: .public)")
+            return Found(named: named, byPlot: byPlot, plotWords: plot.keywords)
         }
         #endif
         throw DescribedFilter.Failure.unavailable
@@ -57,5 +93,18 @@ struct TitleSuggestions {
 
     @Guide(description: "Titles that fit the description, most likely first", .maximumCount(5))
     var titles: [Title]
+}
+
+@available(iOS 26, *)
+@Generable
+struct PlotQuery {
+    @Guide(description: "Single nouns copied from the description", .maximumCount(4))
+    var keywords: [String]
+    @Guide(description: "Movie or TV series", .anyOf(["movie", "series", "any"]))
+    var kind: String
+    @Guide(description: "Genres the description makes plain")
+    var genres: [String]
+    var yearFrom: Int?
+    var yearTo: Int?
 }
 #endif
