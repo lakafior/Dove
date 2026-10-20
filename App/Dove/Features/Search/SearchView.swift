@@ -463,10 +463,12 @@ extension SearchView {
     /// Books and Audiobooks start from Open Library and Apple Books (no indexer hits): a tap on a book searches
     /// the indexers for it. "Search releases" keeps the name search for what the services do not know.
     var booksSection: some View {
-        Section {
+        let held = HeldBooks(model.library.books)
+        return Section {
             ForEach(books) { book in
                 NavigationLink(value: BookSearchRoute(book: book, category: activeCategory)) {
-                    BookRow(book: book, format: activeCategory.bookFormat ?? .ebook)
+                    BookRow(book: book, format: activeCategory.bookFormat ?? .ebook,
+                            held: held.held(book, format: activeCategory.bookFormat ?? .ebook))
                 }
             }
             if let query = searchedBooks, releases.isEmpty, !releases.isSearching, pluginSearch.answers.isEmpty {

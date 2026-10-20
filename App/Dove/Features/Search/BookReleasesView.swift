@@ -29,6 +29,25 @@ struct BookReleasesView: View {
         List {
             Section {
                 header
+                // Already in the library (Calibre, or a service): its screen has Read and Download.
+                if let held = HeldBooks(model.library.books).held(route.book, format: format) {
+                    NavigationLink(value: BookRoute(id: held.id)) {
+                        Label {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Already \(held.heldLabel.prefix(1).lowercased() + held.heldLabel.dropFirst())")
+                                    .font(.subheadline.weight(.semibold))
+                                // Formats, and the services that hold it besides Calibre (named in the line above).
+                                Text([held.heldFormats, held.backends.filter { $0 != .calibre }.map(\.displayName).joined(separator: ", ")]
+                                    .filter { !$0.isEmpty }.joined(separator: " · "))
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                        } icon: {
+                            Image(systemName: "checkmark.circle.fill")
+                                .foregroundStyle(held.backends.contains(.calibre) ? BackendID.calibre.tint : .green)
+                        }
+                    }
+                }
                 ForEach(model.plugins.browsers(for: route.category), id: \.id) { call in
                     let words = ([route.book.authors.first, route.book.searchTitle].compactMap { $0 }).joined(separator: " ")
                     if let url = call.browseURL(for: words) {

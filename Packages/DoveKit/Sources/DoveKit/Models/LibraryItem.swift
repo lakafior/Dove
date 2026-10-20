@@ -11,6 +11,8 @@ public enum BackendID: String, Sendable, Codable, CaseIterable, Identifiable {
     case nzbdav
     /// The user's own iCloud Drive › Dove folder: a place files are kept, not a service. Adds never go there.
     case iCloudDrive
+    /// The user's Calibre library (Content server): books kept there, listed and downloaded, never added through.
+    case calibre
 
     public var id: String { rawValue }
 
@@ -24,14 +26,19 @@ public enum BackendID: String, Sendable, Codable, CaseIterable, Identifiable {
         case .allDebrid: "AllDebrid"
         case .nzbdav: "nzbdav"
         case .iCloudDrive: "iCloud Drive"
+        case .calibre: "Calibre"
         }
     }
 
     /// Usenet backends get their own segment in the Library tab, because their statuses mean different things.
     public var isUsenet: Bool { self == .nzbdav }
 
-    /// A storage place of the user's (iCloud Drive), not a debrid or Usenet service: no key, no adds, no account.
-    public var isStorage: Bool { self == .iCloudDrive }
+    /// A storage place of the user's (iCloud Drive, Calibre), not a debrid or Usenet service: no key, no adds through
+    /// the router, no premium account.
+    public var isStorage: Bool { self == .iCloudDrive || self == .calibre }
+
+    /// The files are already on this device's storage (iCloud Drive): nothing to download or link.
+    public var isOnDevice: Bool { self == .iCloudDrive }
 }
 
 /// One entry in a backend's library: a torrent, a hoster download or an NZB job.
@@ -63,6 +70,8 @@ public struct LibraryItem: Identifiable, Sendable, Hashable, Codable {
     public var seeding: Seeding?
     /// What the place says the item is (iCloud Drive › Dove › Books/…): beats classifying the name.
     public var kindHint: ContentKind?
+    /// The book as the place describes it (Calibre's metadata and cover): used instead of a lookup.
+    public var book: BookSummary?
 
     /// Upload side of a torrent on a service that keeps seeding it.
     public struct Seeding: Sendable, Hashable, Codable {
@@ -93,9 +102,11 @@ public struct LibraryItem: Identifiable, Sendable, Hashable, Codable {
         infoHash: String? = nil,
         nzbBlobID: String? = nil,
         seeding: Seeding? = nil,
-        kindHint: ContentKind? = nil
+        kindHint: ContentKind? = nil,
+        book: BookSummary? = nil
     ) {
         self.kindHint = kindHint
+        self.book = book
         self.id = id
         self.backend = backend
         self.name = name

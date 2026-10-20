@@ -192,6 +192,28 @@ struct BookShelfTests {
         #expect(LibraryShelf.albums(items, matches: [:]).flatMap(\.items).map(\.item.id) == ["4"])
     }
 
+    @Test func calibresCopyJoinsTheSameWorkMatchedElsewhere() {
+        let calibreBook = BookSummary(id: "calibre:2852", title: "Solaris", authors: ["Stanisław Lem"])
+        let items = [
+            ShelfItem(item: item("1", "Lem, Stanislaw - Solaris (Premier Digital Publishing).epub", backend: .offcloud, added: 1)),
+            ShelfItem(item: LibraryItem(id: "calibre:2852", backend: .calibre, name: "Stanisław Lem - Solaris", status: .ready,
+                                        kindHint: .books, book: calibreBook)),
+            ShelfItem(item: item("3", "Chantal Thomas - Solaris [epub]", added: 2)),
+        ]
+        let offcloud = items[0].bookGuess!.key
+        let calibre = items[1].bookGuess!.key
+        let books = LibraryShelf.books(items, matches: [
+            offcloud: BookSummary(id: "ol:OL1W", title: "Solaris", authors: ["Stanisław Lem"], year: 1961),
+            calibre: calibreBook,
+        ])
+
+        let lem = try! #require(books.first { $0.items.contains { $0.item.id == "1" } })
+        #expect(lem.id == "book:ebook:ol:OL1W", "the service's group keeps its ID")
+        #expect(lem.items.map(\.item.id).sorted() == ["1", "calibre:2852"])
+        #expect(lem.book?.id == "calibre:2852")
+        #expect(books.count == 2, "another author's Solaris stays apart")
+    }
+
     @Test func filterPicksTheFormatAndSearchesAuthors() {
         let items = [
             ShelfItem(item: item("1", "Andy Weir - Project Hail Mary [epub]")),

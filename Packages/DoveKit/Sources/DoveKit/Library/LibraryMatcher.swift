@@ -130,10 +130,12 @@ public enum LibraryMatcher {
     public static func applyBookHints(_ items: [ShelfItem], store: MetadataStore<BookSummary>) async -> [String: BookSummary] {
         var applied: [String: BookSummary] = [:]
         for item in items {
-            guard let book = item.hint?.book, let key = item.bookGuess?.key, applied[key] == nil else { continue }
+            // The place's own description (Calibre) first, then what Dove knew when it added the item.
+            guard let book = item.item.book ?? item.hint?.book, let key = item.bookGuess?.key, applied[key] == nil else { continue }
             switch await store.entry(for: key) {
             case .manual: continue
-            case .matched(let current) where current.id == book.id: continue
+            // Same book with a new cover or description (edited in Calibre) is recorded again.
+            case .matched(let current) where current == book: continue
             default:
                 await store.set(.matched(book), for: key)
                 applied[key] = book

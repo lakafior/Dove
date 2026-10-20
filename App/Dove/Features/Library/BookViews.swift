@@ -248,6 +248,8 @@ struct BookRow: View {
     @Environment(AppModel.self) private var model
     let book: BookSummary
     let format: BookFormat
+    /// The library's copy of this book (`HeldBooks`), marked so it is not fetched twice.
+    var held: BookTitle?
 
     var body: some View {
         HStack(spacing: 12) {
@@ -265,8 +267,34 @@ struct BookRow: View {
                 }
                 .font(.caption)
                 .foregroundStyle(.secondary)
+                if let held { HeldBookMark(title: held) }
             }
         }
+    }
+}
+
+/// "In Calibre" (or "In library" for a copy on a service) under a search result the library already holds.
+struct HeldBookMark: View {
+    let title: BookTitle
+
+    var body: some View {
+        Label(title.heldLabel, systemImage: "checkmark.circle.fill")
+            .font(.caption.weight(.semibold))
+            .foregroundStyle(title.backends.contains(.calibre) ? BackendID.calibre.tint : .green)
+    }
+}
+
+extension BookTitle {
+    /// Where the library keeps it, Calibre first: it is the user's own copy.
+    var heldLabel: String {
+        backends.contains(.calibre) ? "In Calibre" : "In library"
+    }
+
+    /// The formats the library's copies come in ("EPUB, MOBI"), from file names.
+    var heldFormats: String {
+        let formats = items.flatMap(\.item.files).map { BookFiles.format(of: $0.name).uppercased() }
+            .filter { BookFiles.ebookFormats.contains($0.lowercased()) || AudiobookTracks.playableExtensions.contains($0.lowercased()) }
+        return formats.reduce(into: [String]()) { if !$0.contains($1) { $0.append($1) } }.joined(separator: ", ")
     }
 }
 

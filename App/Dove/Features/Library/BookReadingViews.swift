@@ -13,10 +13,19 @@ struct BookReadSection: View {
     @State private var working: Action?
     @State private var message: String?
     @State private var isAsking = false
+    /// Books Calibre said are this one, when adding to Calibre: shown before adding a second copy.
+    @State private var calibreDuplicates: [String]?
 
     enum Action: Hashable {
         case read(ReadingTarget)
         case share
+        case calibre
+    }
+
+    /// Calibre is set up and does not hold this book yet.
+    private var calibre: CalibreBackend? {
+        guard !book.backends.contains(.calibre) else { return nil }
+        return model.backend(.calibre) as? CalibreBackend
     }
 
     private static let cache = BookFileCache()
@@ -44,6 +53,9 @@ struct BookReadSection: View {
                     Button(title(target), systemImage: symbol(target)) { run(.read(target)) }
                 }
                 Button("Share file…", systemImage: "square.and.arrow.up") { run(.share) }
+                if calibre != nil {
+                    Button("Add to Calibre", systemImage: "books.vertical") { addToCalibre(allowDuplicate: false) }
+                }
             } label: {
                 Label("More", systemImage: "ellipsis.circle")
             }
@@ -56,6 +68,61 @@ struct BookReadSection: View {
                 Button(title(target)) { run(.read(target)) }
             }
             Button("Cancel", role: .cancel) {}
+        }
+        .confirmationDialog(
+            "Calibre may already have this book",
+            isPresented: Binding(get: { calibreDuplicates != nil }, set: { if !$0 { calibreDuplicates = nil } }),
+            titleVisibility: .visible,
+            presenting: calibreDuplicates
+        ) { _ in
+            Button("Add anyway") { addToCalibre(allowDuplicate: true) }
+            Button("Cancel", role: .cancel) {}
+        } message: { duplicates in
+            Text(duplicates.joined(separator: "\n"))
+        }
+    }
+
+    /// The best ebook of a service's ready release goes to Calibre, which files it under Author/Title; then the
+    /// title, authors and description from this screen replace what Calibre read from the file (ISBN, publisher and
+    /// language stay), and the cover too when the file had none.
+    private func addToCalibre(allowDuplicate: Bool) {
+        guard let calibre else { return }
+        working = .calibre
+        message = nil
+        Task {
+            defer { working = nil }
+            do {
+                let items = try await readyItems().filter { $0.backend != .calibre }
+                guard let pick = BookFiles.pickAny(from: items) else {
+                    message = items.isEmpty ? "No release is ready on a service yet." : BookFiles.Refusal.noBookFile.message(for: .appleBooks)
+                    return
+                }
+                let url = try await localFile(for: pick)
+                let ext = BookFiles.format(of: pick.file.name)
+                let name = book.author.map { LibraryFolderLayout.itemName(author: $0, title: book.name) } ?? book.name
+                let result = try await calibre.addBook(file: url, fileName: "\(name).\(ext)", allowDuplicate: allowDuplicate)
+                guard let bookID = result.bookID else {
+                    calibreDuplicates = result.duplicates
+                    return
+                }
+                if let summary = book.book {
+                    // The file's own cover is the edition the user has; Dove's (a metadata service's, sometimes
+                    // another edition's) only fills in when Calibre found none in the file.
+                    let fileHasCover = (try? await calibre.item("calibre:\(bookID)"))?.book?.cover != nil
+                    let cover: Data? = if !fileHasCover, let url = summary.cover { try? await ImageCache.shared.data(for: url) } else { nil }
+                    do {
+                        try await calibre.setMetadata(bookID: bookID, book: summary, cover: cover)
+                    } catch {
+                        message = "Added to Calibre as \(ext.uppercased()), but its details could not be set: \(error.localizedDescription)"
+                        await model.library.refresh(using: model)
+                        return
+                    }
+                }
+                message = "Added to Calibre as \(ext.uppercased())."
+                await model.library.refresh(using: model)
+            } catch {
+                message = error.localizedDescription
+            }
         }
     }
 
@@ -85,7 +152,8 @@ struct BookReadSection: View {
                         message = refusal.message(for: target)
                         return
                     }
-                case .share:
+                // `.calibre` runs `addToCalibre`, never here.
+                case .share, .calibre:
                     guard let found = BookFiles.pickAny(from: items) else {
                         message = BookFiles.Refusal.noBookFile.message(for: .appleBooks)
                         return

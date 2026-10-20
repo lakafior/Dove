@@ -107,6 +107,19 @@ struct SettingsView: View {
                     Text("Addons give sources (and titles, without TMDB). Indexers are searched from your phone and power Search › Other. TMDB gives search, posters and episodes. Book metadata finds books and audiobooks, Music metadata albums.")
                 }
 
+                Section {
+                    NavigationLink {
+                        CalibreSettingsView()
+                    } label: {
+                        SettingsRow("Calibre", symbol: BackendID.calibre.settingsSymbol, color: BackendID.calibre.settingsColor,
+                                    value: serviceValue(.calibre), light: serviceLight(.calibre))
+                    }
+                } header: {
+                    Text("Your libraries")
+                } footer: {
+                    Text("Books you keep in Calibre show in the Library with Calibre's own covers, and download or open with Read like any other.")
+                }
+
                 Section("This iPhone") {
                     NavigationLink {
                         NotificationSettingsView()
@@ -265,6 +278,7 @@ extension BackendID {
         case .allDebrid: "a.circle.fill"
         case .nzbdav: "server.rack"
         case .iCloudDrive: "icloud.fill"
+        case .calibre: "books.vertical.fill"
         }
     }
 
@@ -278,6 +292,7 @@ extension BackendID {
         case .allDebrid: .yellow
         case .nzbdav: .orange
         case .iCloudDrive: .cyan
+        case .calibre: .brown
         }
     }
 
@@ -290,7 +305,7 @@ extension BackendID {
         case .debridLink: "debrid-link.com › My account › API key. Debrid-Link seeds, so torrents from private trackers can go here."
         case .premiumize: "premiumize.me › Account › API key. Every plan includes Usenet."
         case .allDebrid: "alldebrid.com › Account › API keys (alldebrid.com/apikeys). A new key may need confirming from the e-mail AllDebrid sends."
-        case .nzbdav, .iCloudDrive: ""
+        case .nzbdav, .iCloudDrive, .calibre: ""
         }
     }
 }
@@ -312,8 +327,8 @@ private struct DebridKeyView: View {
         case .premiumize: .premiumizeAPIKey
         case .allDebrid: .allDebridAPIKey
         case .nzbdav: .nzbdavAPIKey
-        // Never shown for iCloud Drive: this screen is only for `SharedConfiguration.debrids`.
-        case .iCloudDrive: preconditionFailure("iCloud Drive has no key")
+        // Never shown for places: this screen is only for `SharedConfiguration.debrids`.
+        case .iCloudDrive, .calibre: preconditionFailure("\(backend.displayName) has no key")
         }
     }
 

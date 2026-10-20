@@ -18,6 +18,9 @@ public actor ImageCache {
     private let directory: URL
     private let transport: any HTTPTransport
     private var inFlight: [URL: Task<Data, any Error>] = [:]
+    /// Requests for URLs of a scheme of Dove's own (`calibre://cover/…`): the real address and the login, which
+    /// stay out of the URL the cache is keyed by.
+    private var resolvers: [String: @Sendable (URL) async throws -> URLRequest] = [:]
 
     public init(directory: URL, transport: any HTTPTransport = URLSession.shared) {
         self.directory = directory
@@ -30,8 +33,10 @@ public actor ImageCache {
         if let stored = try? Data(contentsOf: file) { return stored }
         if let running = inFlight[url] { return try await running.value }
         let transport = transport
+        let resolver = url.scheme.flatMap { resolvers[$0] }
         let task = Task<Data, any Error> {
-            let (data, response) = try await transport.send(URLRequest(url: url))
+            let request = try await resolver?(url) ?? URLRequest(url: url)
+            let (data, response) = try await transport.send(request)
             if let error = response.backendError { throw error }
             guard !data.isEmpty else { throw BackendError.invalidResponse }
             return data
@@ -42,6 +47,11 @@ public actor ImageCache {
         try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         try? data.write(to: file, options: .atomic)
         return data
+    }
+
+    /// Sets (or with nil, removes) how URLs of a scheme are fetched.
+    public func setResolver(for scheme: String, _ resolver: (@Sendable (URL) async throws -> URLRequest)?) {
+        resolvers[scheme] = resolver
     }
 
     /// Whether the image is on disk (no download).

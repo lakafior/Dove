@@ -27,6 +27,7 @@ extension BackendID {
         case .allDebrid: "AD"
         case .nzbdav: "ND"
         case .iCloudDrive: "iC"
+        case .calibre: "CA"
         }
     }
 
@@ -40,6 +41,7 @@ extension BackendID {
         case .allDebrid: .yellow
         case .nzbdav: .orange
         case .iCloudDrive: .cyan
+        case .calibre: .brown
         }
     }
 }

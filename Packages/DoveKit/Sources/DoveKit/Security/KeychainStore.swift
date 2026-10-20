@@ -16,6 +16,13 @@ public enum CredentialKey: String, Sendable, CaseIterable {
     /// nzbdav's `FRONTEND_BACKEND_API_KEY` (set in its environment): NZB downloads from history and signed
     /// `/view` links. Optional.
     case nzbdavFrontendKey
+    /// Calibre's Content server at home (`http://192.168.1.10:8888`).
+    case calibreURL
+    /// The same server away from home (Tailscale). Optional.
+    case calibreRemoteURL
+    /// A Calibre user account (Sharing over the net › User accounts). Optional: without it, read-only.
+    case calibreUser
+    case calibrePassword
     case tmdbAPIKey
     /// Google Books API key (book covers and titles). Optional.
     case googleBooksAPIKey
@@ -233,6 +240,17 @@ public enum SharedConfiguration {
             webDAVPassword: value(.nzbdavWebDAVPassword),
             frontendKey: value(.nzbdavFrontendKey)
         )
+    }
+
+    /// Calibre, when an address is set: home first, then away. App only (not the share or Files extensions).
+    public static func calibre(from keychain: KeychainStore) -> CalibreBackend? {
+        let value = { (key: CredentialKey) in (try? keychain.get(key))?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "" }
+        let addresses = [value(.calibreURL), value(.calibreRemoteURL)].compactMap { text -> URL? in
+            guard let url = URL(string: text), url.scheme == "http" || url.scheme == "https", url.host() != nil else { return nil }
+            return url
+        }
+        guard !addresses.isEmpty else { return nil }
+        return CalibreBackend(addresses: addresses, user: value(.calibreUser), password: (try? keychain.get(.calibrePassword)) ?? "")
     }
 
     public static let debrids = BackendID.allCases.filter { !$0.isUsenet && !$0.isStorage }

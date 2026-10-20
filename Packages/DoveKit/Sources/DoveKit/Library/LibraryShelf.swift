@@ -195,6 +195,27 @@ public enum LibraryShelf {
             }
             books[id]!.items.append(item)
         }
+        // The same work under two matches (Calibre's own record and a metadata service's) is one book: same format
+        // and title, and authors on both sides sharing a name word. The first group keeps its ID (services come
+        // before Calibre, so an open screen stays); Calibre's description wins, being the user's own.
+        var byTitle: [String: String] = [:]
+        for id in order {
+            guard let title = books[id] else { continue }
+            let authors = HeldBooks.authorWords(title.book?.authors ?? title.guess.author.map { [$0] } ?? [])
+            let keys = HeldBooks.titleKeys(title.name).map { "\(title.format.rawValue)|\($0)" }
+            let target = keys.lazy.compactMap { byTitle[$0] }.first { targetID in
+                guard let other = books[targetID] else { return false }
+                let theirs = HeldBooks.authorWords(other.book?.authors ?? other.guess.author.map { [$0] } ?? [])
+                return !authors.isEmpty && !theirs.isEmpty && !authors.isDisjoint(with: theirs)
+            }
+            guard let target else {
+                for key in keys where byTitle[key] == nil { byTitle[key] = id }
+                continue
+            }
+            books[target]!.items += title.items
+            if title.book?.id.hasPrefix("calibre:") == true { books[target]!.book = title.book }
+            books[id] = nil
+        }
         return order.compactMap { books[$0] }
             .sorted { ($0.latestAdded ?? .distantPast) > ($1.latestAdded ?? .distantPast) }
     }

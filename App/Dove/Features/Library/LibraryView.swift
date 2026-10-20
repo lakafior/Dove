@@ -159,70 +159,178 @@ struct LibraryView: View {
 
     // MARK: - Titles
 
+    /// "All" with nothing typed shows one row per kind (newest first, "See all" opens the kind); a chip, a typed
+    /// filter or the Filters menu's Type shows full grids. A library of 1,500 books no longer buries what follows it.
+    private var showsShelves: Bool {
+        filter.category == nil && filter.query.trimmingCharacters(in: .whitespaces).isEmpty
+    }
+
     private var titlesView: some View {
         let titles = filter.apply(to: library.titles)
         let books = filter.apply(to: library.books)
         let artists = LibraryShelf.artists(filter.apply(to: library.albums))
         let others = filter.apply(to: library.others)
         return ScrollView {
+            categoryChips
             failuresBanner.padding(.horizontal)
-            titleGrid("Movies", titles.filter { $0.type == .movie })
-            titleGrid("Series", titles.filter { $0.type == .series })
-            bookGrid("Books", books.filter { $0.format == .ebook }, minimum: 104)
-            bookGrid("Audiobooks", books.filter { $0.format == .audiobook }, minimum: 140)
-            artistGrid(artists)
-            if !others.isEmpty {
-                LazyVStack(alignment: .leading, spacing: 0) {
-                    HStack(alignment: .firstTextBaseline) {
-                        Text("Other files").font(.title3.bold())
-                        Text("\(others.count)").font(.subheadline).foregroundStyle(.secondary)
-                    }
-                    .padding(.bottom, 6)
-                    ForEach(others) { item in
-                        NavigationLink(value: item) {
-                            ShelfItemRow(item: item, showsBackend: true)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .padding(.vertical, 8)
-                                .contentShape(Rectangle())
-                        }
-                        .buttonStyle(.plain)
-                        .contextMenu {
-                            kindMenu([item])
-                            batchActions([item])
-                            deleteButton(item)
-                        }
-                        Divider()
-                    }
-                }
-                .padding(.horizontal)
-                .padding(.bottom)
+            if showsShelves {
+                shelf(.movies, titles.filter { $0.type == .movie }, width: 112, cell: titleCell)
+                shelf(.series, titles.filter { $0.type == .series }, width: 112, cell: titleCell)
+                shelf(.books, books.filter { $0.format == .ebook }, width: 104, cell: bookCell)
+                shelf(.audiobooks, books.filter { $0.format == .audiobook }, width: 140, cell: bookCell)
+                shelf(.music, artists, width: 120, count: "\(artists.reduce(0) { $0 + $1.albums.count }) albums", cell: artistCell)
+                otherFiles(others, limit: 5)
+            } else {
+                titleGrid("Movies", titles.filter { $0.type == .movie })
+                titleGrid("Series", titles.filter { $0.type == .series })
+                bookGrid("Books", books.filter { $0.format == .ebook }, minimum: 104)
+                bookGrid("Audiobooks", books.filter { $0.format == .audiobook }, minimum: 140)
+                artistGrid(artists)
+                otherFiles(others, limit: nil)
             }
         }
     }
+
+    // MARK: Category chips
+
+    /// The kinds the library holds (adult only when shown), as chips; "All" clears the kind. Same state as the
+    /// Filters menu's Type.
+    private var chipCategories: [LibraryFilter.Category] {
+        let items = library.items
+        return LibraryFilter.Category.allCases.filter { category in
+            (category != .adult || model.showAdult) && items.contains { category.contains($0) }
+        }
+    }
+
+    @ViewBuilder
+    private var categoryChips: some View {
+        let categories = chipCategories
+        if categories.count > 1 {
+            ScrollView(.horizontal) {
+                HStack(spacing: 8) {
+                    categoryChip("All", nil)
+                    ForEach(categories, id: \.self) { categoryChip($0.title, $0) }
+                }
+                .padding(.horizontal)
+                .padding(.vertical, 4)
+            }
+            .scrollIndicators(.hidden)
+        }
+    }
+
+    private func categoryChip(_ title: String, _ category: LibraryFilter.Category?) -> some View {
+        let selected = filter.category == category
+        return Button(title) {
+            withAnimation { filter.category = category }
+        }
+        .font(.subheadline.weight(selected ? .semibold : .regular))
+        .buttonStyle(.bordered)
+        .buttonBorderShape(.capsule)
+        .controlSize(.small)
+        .tint(selected ? Color.accentColor : .secondary)
+        .accessibilityAddTraits(selected ? .isSelected : [])
+    }
+
+    // MARK: Shelves
+
+    /// One kind as a row of its newest entries; the heading opens the kind.
+    @ViewBuilder
+    private func shelf<Item: Identifiable, Cell: View>(
+        _ category: LibraryFilter.Category,
+        _ items: [Item],
+        width: CGFloat,
+        count: String? = nil,
+        @ViewBuilder cell: @escaping (Item) -> Cell
+    ) -> some View {
+        if !items.isEmpty {
+            VStack(alignment: .leading, spacing: 8) {
+                seeAllHeading(category.title, count: count ?? "\(items.count)", category: category)
+                ScrollView(.horizontal, showsIndicators: false) {
+                    LazyHStack(alignment: .top, spacing: 12) {
+                        ForEach(items.prefix(Self.shelfLength)) { cell($0).frame(width: width) }
+                    }
+                    .padding(.horizontal)
+                }
+            }
+            .padding(.bottom)
+        }
+    }
+
+    private static let shelfLength = 20
+
+    private func seeAllHeading(_ title: String, count: String, category: LibraryFilter.Category) -> some View {
+        Button {
+            withAnimation { filter.category = category }
+        } label: {
+            HStack(alignment: .firstTextBaseline) {
+                // Plain colours: inside a button `.primary` would take the tint.
+                Text(title).font(.title3.bold()).foregroundStyle(Color(uiColor: .label))
+                Text(count).font(.subheadline).foregroundStyle(Color(uiColor: .secondaryLabel))
+                Spacer()
+                Group {
+                    Text("See all").font(.subheadline)
+                    Image(systemName: "chevron.right").font(.caption.weight(.semibold))
+                }
+                .foregroundStyle(Color.accentColor)
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .padding(.horizontal)
+    }
+
+    // MARK: Cells
+
+    private func titleCell(_ title: LibraryTitle) -> some View {
+        NavigationLink(value: TitleRoute(id: title.id)) {
+            TitleCard(title: title)
+        }
+        .buttonStyle(.plain)
+        .contextMenu {
+            kindMenu(title.items)
+            if let media = title.media { WatchlistMenuItem(media: media) }
+            Button("Wrong title?", systemImage: "magnifyingglass") { fixingTitle = title }
+            batchActions(title.items)
+            Button("Delete", systemImage: "trash", role: .destructive) { pending = .delete(title.items) }
+        }
+    }
+
+    private func bookCell(_ book: BookTitle) -> some View {
+        NavigationLink(value: BookRoute(id: book.id)) {
+            BookCard(book: book)
+        }
+        .buttonStyle(.plain)
+        .contextMenu {
+            kindMenu(book.items)
+            Button("Wrong book?", systemImage: "magnifyingglass") { fixingBook = book }
+            batchActions(book.items)
+            Button("Delete", systemImage: "trash", role: .destructive) { pending = .delete(book.items) }
+        }
+    }
+
+    private func artistCell(_ artist: ArtistShelf) -> some View {
+        NavigationLink(value: ArtistRoute(id: artist.id)) {
+            ArtistCard(artist: artist)
+        }
+        .buttonStyle(.plain)
+        .contextMenu {
+            let items = artist.albums.flatMap(\.items)
+            kindMenu(items)
+            batchActions(items)
+            Button("Delete", systemImage: "trash", role: .destructive) { pending = .delete(items) }
+        }
+    }
+
+    // MARK: Grids
 
     /// One kind of title under its own heading; nothing when there are none (e.g. filtered to the other kind).
     @ViewBuilder
     private func titleGrid(_ heading: String, _ titles: [LibraryTitle]) -> some View {
         if !titles.isEmpty {
             LazyVStack(alignment: .leading, spacing: 8) {
-                HStack(alignment: .firstTextBaseline) {
-                    Text(heading).font(.title3.bold())
-                    Text("\(titles.count)").font(.subheadline).foregroundStyle(.secondary)
-                }
+                gridHeading(heading, count: "\(titles.count)")
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 104), spacing: 12)], spacing: 16) {
-                    ForEach(titles) { title in
-                        NavigationLink(value: TitleRoute(id: title.id)) {
-                            TitleCard(title: title)
-                        }
-                        .buttonStyle(.plain)
-                        .contextMenu {
-                            kindMenu(title.items)
-                            if let media = title.media { WatchlistMenuItem(media: media) }
-                            Button("Wrong title?", systemImage: "magnifyingglass") { fixingTitle = title }
-                            batchActions(title.items)
-                            Button("Delete", systemImage: "trash", role: .destructive) { pending = .delete(title.items) }
-                        }
-                    }
+                    ForEach(titles) { titleCell($0) }
                 }
             }
             .padding(.horizontal)
@@ -235,23 +343,9 @@ struct LibraryView: View {
     private func bookGrid(_ heading: String, _ books: [BookTitle], minimum: CGFloat) -> some View {
         if !books.isEmpty {
             LazyVStack(alignment: .leading, spacing: 8) {
-                HStack(alignment: .firstTextBaseline) {
-                    Text(heading).font(.title3.bold())
-                    Text("\(books.count)").font(.subheadline).foregroundStyle(.secondary)
-                }
+                gridHeading(heading, count: "\(books.count)")
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: minimum), spacing: 12)], alignment: .leading, spacing: 16) {
-                    ForEach(books) { book in
-                        NavigationLink(value: BookRoute(id: book.id)) {
-                            BookCard(book: book)
-                        }
-                        .buttonStyle(.plain)
-                        .contextMenu {
-                            kindMenu(book.items)
-                            Button("Wrong book?", systemImage: "magnifyingglass") { fixingBook = book }
-                            batchActions(book.items)
-                            Button("Delete", systemImage: "trash", role: .destructive) { pending = .delete(book.items) }
-                        }
-                    }
+                    ForEach(books) { bookCell($0) }
                 }
             }
             .padding(.horizontal)
@@ -280,18 +374,51 @@ struct LibraryView: View {
                     .font(.subheadline)
                 }
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 120), spacing: 12)], alignment: .leading, spacing: 16) {
-                    ForEach(artists) { artist in
-                        NavigationLink(value: ArtistRoute(id: artist.id)) {
-                            ArtistCard(artist: artist)
-                        }
-                        .buttonStyle(.plain)
-                        .contextMenu {
-                            let items = artist.albums.flatMap(\.items)
-                            kindMenu(items)
-                            batchActions(items)
-                            Button("Delete", systemImage: "trash", role: .destructive) { pending = .delete(items) }
-                        }
+                    ForEach(artists) { artistCell($0) }
+                }
+            }
+            .padding(.horizontal)
+            .padding(.bottom)
+        }
+    }
+
+    private func gridHeading(_ heading: String, count: String) -> some View {
+        HStack(alignment: .firstTextBaseline) {
+            Text(heading).font(.title3.bold())
+            Text(count).font(.subheadline).foregroundStyle(.secondary)
+        }
+    }
+
+    /// Items that are not a title, book or album (software, other files), as rows; on "All" the first few, with
+    /// "See all" opening their kind.
+    @ViewBuilder
+    private func otherFiles(_ others: [ShelfItem], limit: Int?) -> some View {
+        if !others.isEmpty {
+            LazyVStack(alignment: .leading, spacing: 0) {
+                if limit != nil {
+                    // The kind most of them are, so "See all" lands on a chip that holds them.
+                    let kinds = [LibraryFilter.Category.other, .software, .adult]
+                    let category = kinds.max { a, b in others.filter(a.contains).count < others.filter(b.contains).count } ?? .other
+                    seeAllHeading("Other files", count: "\(others.count)", category: category)
+                        .padding(.horizontal, -16)
+                        .padding(.bottom, 6)
+                } else {
+                    gridHeading("Other files", count: "\(others.count)").padding(.bottom, 6)
+                }
+                ForEach(limit.map { Array(others.prefix($0)) } ?? others) { item in
+                    NavigationLink(value: item) {
+                        ShelfItemRow(item: item, showsBackend: true)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.vertical, 8)
+                            .contentShape(Rectangle())
                     }
+                    .buttonStyle(.plain)
+                    .contextMenu {
+                        kindMenu([item])
+                        batchActions([item])
+                        deleteButton(item)
+                    }
+                    Divider()
                 }
             }
             .padding(.horizontal)
@@ -304,6 +431,9 @@ struct LibraryView: View {
     private var filesView: some View {
         let items = filter.apply(to: library.items)
         return List(selection: $selection) {
+            categoryChips
+                .listRowInsets(EdgeInsets())
+                .listRowBackground(Color.clear)
             failuresBanner
             ForEach(items) { item in
                 NavigationLink(value: item) { ShelfItemRow(item: item, showsBackend: true) }
@@ -764,10 +894,13 @@ struct LibraryItemView: View {
                     Text(size.formatted(.byteCount(style: .file))).font(.caption).foregroundStyle(.secondary)
                 }
                 Spacer()
-                // Files already in iCloud Drive › Dove are the user's own: nothing to fetch or link.
+                // Places' links are the user's own server or device (Calibre's need its login): no link to share.
                 if !item.backend.isStorage {
                     Button { copyLink(file) } label: { Image(systemName: "link") }
                         .accessibilityLabel("Copy link")
+                }
+                // Files already in iCloud Drive › Dove are on this device: nothing to fetch.
+                if !item.backend.isOnDevice {
                     downloadButton(file)
                 }
                 // Players take video; other files are for the link or the phone.
@@ -792,6 +925,8 @@ struct LibraryItemView: View {
             }
             if !item.backend.isStorage {
                 Button("Copy link", systemImage: "link") { copyLink(file) }
+            }
+            if !item.backend.isOnDevice {
                 Button("Download to phone", systemImage: "arrow.down.circle") { download(file) }
                 if model.iCloudFolder != nil {
                     Button("Save to iCloud Drive", systemImage: "icloud.and.arrow.down") { download(file, to: .iCloud) }

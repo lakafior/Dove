@@ -50,6 +50,7 @@ extension BackendID {
         case .allDebrid: "alldebrid"
         case .nzbdav: "nzbdav"
         case .iCloudDrive: "icloud"
+        case .calibre: "calibre"
         }
     }
 

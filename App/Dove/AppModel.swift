@@ -469,7 +469,17 @@ final class AppModel {
 
     /// Rebuilds backends from the Keychain. Call after credentials change.
     func reloadBackends() {
-        backends = SharedConfiguration.backends(from: keychain) + (iCloudFolder.map { [FolderBackend(directory: $0)] } ?? [])
+        let calibre = SharedConfiguration.calibre(from: keychain)
+        backends = SharedConfiguration.backends(from: keychain)
+            + (iCloudFolder.map { [FolderBackend(directory: $0)] } ?? [])
+            + (calibre.map { [$0] } ?? [])
+        // Calibre's covers are `calibre://cover/…` URLs: fetched at the address that answers, with the login.
+        var coverResolver: (@Sendable (URL) async throws -> URLRequest)?
+        if let calibre {
+            coverResolver = { url in try await calibre.coverRequest(for: url) }
+        }
+        let resolver = coverResolver
+        Task { await ImageCache.shared.setResolver(for: CalibreBackend.coverScheme, resolver) }
         let hasServices = backends.contains { !$0.id.isStorage }
         Task { await FilesLocation.update(hasServices: hasServices) }
     }

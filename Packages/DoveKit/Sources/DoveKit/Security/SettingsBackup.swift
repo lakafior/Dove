@@ -15,13 +15,14 @@ extension CredentialKey {
         switch self {
         case .torBoxAPIKey, .realDebridAPIKey, .offcloudAPIKey, .debridLinkAPIKey, .premiumizeAPIKey, .allDebridAPIKey,
              .nzbdavAPIKey, .nzbdavWebDAVUser, .nzbdavWebDAVPassword, .nzbdavFrontendKey, .tmdbAPIKey,
-             .googleBooksAPIKey, .hardcoverToken, .pluginSettings,
+             .googleBooksAPIKey, .hardcoverToken, .pluginSettings, .calibreUser, .calibrePassword,
              .stremioAddons, .aioStreamsPassword:
             .secret
         case .newznabIndexers, .kodi:
             .mixed
         case .nzbdavURL, .debridOrder, .usenetOrder, .torBoxUsenet, .torBoxPlan, .privateTrackers, .offcloudUsenet,
-             .premiumizeUsenet, .preferences, .audiobookPositions, .watchlist, .pluginRepositories, .plugins:
+             .premiumizeUsenet, .preferences, .audiobookPositions, .watchlist, .pluginRepositories, .plugins,
+             .calibreURL, .calibreRemoteURL:
             .setting
         }
     }
