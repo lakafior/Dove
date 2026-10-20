@@ -4,7 +4,8 @@ import SwiftUI
 import UIKit
 
 /// "Read" on a book screen: the best file of the book's ready releases (`BookFiles`) goes to Apple Books (through the
-/// share sheet: Books has no URL scheme for files) or to Kindle (a Mail draft to the Send to Kindle address).
+/// share sheet: Books has no URL scheme for files) or by mail (a Mail draft to the Kindle, PocketBook or other
+/// address set in Settings › Books).
 /// The file is downloaded to Caches once (`BookFileCache`), or taken from Downloads when it is already there.
 struct BookReadSection: View {
     @Environment(AppModel.self) private var model
@@ -20,7 +21,7 @@ struct BookReadSection: View {
 
     private static let cache = BookFileCache()
 
-    /// The preferred target when it is still available (Kindle needs an address).
+    /// The preferred target when it is still available (mail targets need an address).
     private var preferred: ReadingTarget? {
         model.readIn.flatMap { model.readingTargets.contains($0) ? $0 : nil }
             ?? (model.readingTargets.count == 1 ? .appleBooks : nil)
@@ -58,12 +59,10 @@ struct BookReadSection: View {
         }
     }
 
-    private func title(_ target: ReadingTarget) -> String {
-        target == .kindle ? "Send to Kindle" : "Open in Apple Books"
-    }
+    private func title(_ target: ReadingTarget) -> String { target.actionTitle }
 
     private func symbol(_ target: ReadingTarget) -> String {
-        target == .kindle ? "paperplane" : "book"
+        target.isMail ? "paperplane" : "book"
     }
 
     private func run(_ action: Action) {
@@ -94,8 +93,8 @@ struct BookReadSection: View {
                     pick = found
                 }
                 let url = try await localFile(for: pick)
-                if case .read(.kindle) = action {
-                    sendToKindle(url, pick: pick)
+                if case .read(let target) = action, target.isMail {
+                    send(url, pick: pick, to: target)
                 } else {
                     SheetPresenter.share(url)
                     if case .read(.appleBooks) = action { message = "Pick Books in the share sheet." }
@@ -136,22 +135,22 @@ struct BookReadSection: View {
     }
 
     /// A Mail draft with the file attached; without a Mail account, the share sheet and the address on the clipboard.
-    private func sendToKindle(_ url: URL, pick: BookFiles.Pick) {
+    private func send(_ url: URL, pick: BookFiles.Pick, to target: ReadingTarget) {
         let name = (pick.file.name as NSString).lastPathComponent
+        let recipient = model.mailAddress(for: target)
         guard MFMailComposeViewController.canSendMail() else {
-            UIPasteboard.general.string = model.kindleAddress
+            UIPasteboard.general.string = recipient
             SheetPresenter.share(url)
-            message = "Mail has no account on this iPhone. The Kindle address is copied: share the file to your mail app and paste it as the recipient."
+            message = "Mail has no account on this iPhone. The address is copied: share the file to your mail app and paste it as the recipient."
             return
         }
         do {
             let data = try Data(contentsOf: url)
-            let recipient = model.kindleAddress
             SheetPresenter.mail(to: recipient, subject: book.name, data: data,
                                 mimeType: BookFiles.mimeType(of: name), fileName: name) { result in
                 switch result {
                 case .sent:
-                    message = "Sent to \(recipient). Amazon delivers it in a few minutes."
+                    message = ["Sent to \(recipient).", target.deliveryNote].filter { !$0.isEmpty }.joined(separator: " ")
                 case .failed:
                     message = "Mail could not send it. Try again, or use Share file."
                 default:
@@ -229,13 +228,13 @@ enum SheetPresenter {
     }
 }
 
-/// Settings › Books: where Read goes, and the Send to Kindle address.
+/// Settings › Books: where Read goes, and the addresses books are mailed to.
 struct BookSettingsView: View {
     @Environment(AppModel.self) private var model
-    @State private var address = ""
+    @State private var addresses: [ReadingTarget: String] = [:]
     @State private var cacheBytes: Int64?
 
-    private var addressIsValid: Bool { address.isEmpty || BookFiles.isValidAddress(address) }
+    private static let mailTargets = ReadingTarget.allCases.filter(\.isMail)
 
     var body: some View {
         @Bindable var model = model
@@ -246,24 +245,11 @@ struct BookSettingsView: View {
                     ForEach(model.readingTargets) { Text($0.displayName).tag(Optional($0)) }
                 }
             } footer: {
-                Text("Read sends the book's EPUB, or its PDF when there is no EPUB. Apple Books opens through the share sheet. Neither takes MOBI or AZW3: use Share file for those.")
+                Text("Read sends the best file the reader takes: EPUB first, then PDF. Apple Books opens through the share sheet; the others get a Mail draft. Apple Books and Kindle do not take MOBI or AZW3: use Share file for those.")
             }
 
-            Section {
-                TextField("name@kindle.com", text: $address)
-                    .keyboardType(.emailAddress)
-                    .textContentType(.emailAddress)
-                    .textInputAutocapitalization(.never)
-                    .autocorrectionDisabled()
-                    .onSubmit(save)
-            } header: {
-                Text("Send to Kindle")
-            } footer: {
-                if addressIsValid {
-                    Text("Find it on Amazon: Manage Your Content and Devices › Preferences › Personal Document Settings. Add the address Mail sends from to the Approved Personal Document E-mail List there, or Amazon drops the book. Up to 50 MB a book.")
-                } else {
-                    Text("That does not look like an e-mail address.").foregroundStyle(.red)
-                }
+            ForEach(Self.mailTargets) { target in
+                addressSection(target)
             }
 
             Section {
@@ -280,16 +266,56 @@ struct BookSettingsView: View {
         .navigationTitle("Books")
         .navigationBarTitleDisplayMode(.inline)
         .onAppear {
-            address = model.kindleAddress
+            for target in Self.mailTargets { addresses[target] = model.mailAddress(for: target) }
             cacheBytes = BookFileCache().size()
         }
-        .onDisappear(perform: save)
+        .onDisappear(perform: saveAll)
     }
 
-    private func save() {
-        let trimmed = address.trimmingCharacters(in: .whitespaces)
-        guard trimmed.isEmpty || BookFiles.isValidAddress(trimmed), trimmed != model.kindleAddress else { return }
-        model.kindleAddress = trimmed
-        if trimmed.isEmpty, model.readIn == .kindle { model.readIn = nil }
+    private func addressSection(_ target: ReadingTarget) -> some View {
+        let address = addresses[target] ?? ""
+        let isValid = address.isEmpty || BookFiles.isValidAddress(address)
+        return Section {
+            TextField(target.addressPlaceholder, text: Binding(
+                get: { addresses[target] ?? "" },
+                set: { addresses[target] = $0 }
+            ))
+            .keyboardType(.emailAddress)
+            .textContentType(.emailAddress)
+            .textInputAutocapitalization(.never)
+            .autocorrectionDisabled()
+            .onSubmit { save(target) }
+        } header: {
+            Text(target.actionTitle)
+        } footer: {
+            if isValid {
+                Text(Self.help(for: target))
+            } else {
+                Text("That does not look like an e-mail address.").foregroundStyle(.red)
+            }
+        }
+    }
+
+    private static func help(for target: ReadingTarget) -> String {
+        switch target {
+        case .kindle:
+            "Find it on Amazon: Manage Your Content and Devices › Preferences › Personal Document Settings. Add the address Mail sends from to the Approved Personal Document E-mail List there, or Amazon drops the book. Up to 50 MB a book."
+        case .pocketBook:
+            "Set it up on the reader: Send-to-PocketBook in its applications (needs a PocketBook Cloud account). The first book from a new sender address may need your confirmation by e-mail. EPUB, FB2, PDF, MOBI, AZW3, DjVu and comics."
+        case .email:
+            "Any address: your own inbox, or another reader's mail service. Takes any ebook format, EPUB first. Kobo has no such address: use Share file and its Dropbox or Google Drive library instead."
+        case .appleBooks:
+            ""
+        }
+    }
+
+    private func saveAll() {
+        for target in Self.mailTargets { save(target) }
+    }
+
+    private func save(_ target: ReadingTarget) {
+        let trimmed = (addresses[target] ?? "").trimmingCharacters(in: .whitespaces)
+        guard trimmed.isEmpty || BookFiles.isValidAddress(trimmed), trimmed != model.mailAddress(for: target) else { return }
+        model.setMailAddress(trimmed, for: target)
     }
 }

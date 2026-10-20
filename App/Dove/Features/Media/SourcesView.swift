@@ -33,6 +33,11 @@ struct SourcesView: View {
     /// Plugins that search Movies & TV, asked for this title (not when looking for an upgrade: their rows have no traits).
     @State private var pluginSearch = PluginSearch()
     @State private var tab = ResultsTab.sources
+    /// A described filter ("4K DV, no Atmos, under 20 GB") on top of the saved one, for this list only.
+    @State private var request: SourceRequest?
+    @State private var description = ""
+    @State private var isDescribing = false
+    @State private var describeError: String?
 
     struct UsenetJob: Equatable {
         let backend: BackendID
@@ -60,7 +65,8 @@ struct SourcesView: View {
     }
 
     private var visible: [StreamGroup] {
-        model.sourceFilter.apply(to: upgrades, ranking: ranking)
+        let filtered = model.sourceFilter.apply(to: upgrades, ranking: ranking)
+        return request?.apply(to: filtered, ranking: ranking) ?? filtered
     }
 
     /// Every group, or only the better ones when looking for an upgrade.
@@ -98,6 +104,9 @@ struct SourcesView: View {
                     )
                     .font(.footnote)
                     .foregroundStyle(.secondary)
+                }
+                if OnDeviceModel.isAvailable, !groups.isEmpty {
+                    describeRow(total: groups.count)
                 }
                 if model.sourceFilter.isActive, !groups.isEmpty {
                     Button {
@@ -163,6 +172,63 @@ struct SourcesView: View {
             @Bindable var model = model
             SourceFilterSheet(filter: $model.sourceFilter, groups: groups ?? [])
                 .presentationDetents([.medium, .large])
+        }
+    }
+
+    /// The field for a described filter, or what it understood with a button to clear it.
+    @ViewBuilder
+    private func describeRow(total: Int) -> some View {
+        if let request {
+            HStack(alignment: .firstTextBaseline) {
+                Label {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("\u{201C}\(request.text)\u{201D}")
+                        Text("\(request.summary) · \(visible.count) of \(total)")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                } icon: {
+                    Image(systemName: "sparkles")
+                }
+                .font(.footnote)
+                Spacer()
+                Button("Clear", systemImage: "xmark.circle.fill") {
+                    self.request = nil
+                    description = ""
+                }
+                .labelStyle(.iconOnly)
+                .foregroundStyle(.secondary)
+                .buttonStyle(.borderless)
+            }
+        } else {
+            VStack(alignment: .leading, spacing: 4) {
+                HStack {
+                    Image(systemName: "sparkles").foregroundStyle(.secondary)
+                    TextField("Describe it: 4K DV, no Atmos, under 20 GB", text: $description)
+                        .submitLabel(.search)
+                        .onSubmit(describe)
+                        .disabled(isDescribing)
+                    if isDescribing { ProgressView() }
+                }
+                if let describeError {
+                    Text(describeError).font(.caption).foregroundStyle(.red)
+                }
+            }
+        }
+    }
+
+    private func describe() {
+        let text = description.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty, let groups else { return }
+        isDescribing = true
+        describeError = nil
+        Task {
+            defer { isDescribing = false }
+            do {
+                request = try await DescribedFilter.request(for: text, groups: groups)
+            } catch {
+                describeError = error.localizedDescription
+            }
         }
     }
 

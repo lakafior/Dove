@@ -11,6 +11,8 @@ struct SyncedPreferencesTests {
         preferences.sourceFilter.toggle("2160p", in: .resolution)
         preferences.readIn = .kindle
         preferences.kindleAddress = "me@kindle.com"
+        preferences.pocketBookAddress = "me@pbsync.com"
+        preferences.emailAddress = "me@example.com"
         let data = try JSONEncoder().encode(preferences)
         #expect(try JSONDecoder().decode(SyncedPreferences.self, from: data) == preferences)
 
@@ -21,5 +23,7 @@ struct SyncedPreferencesTests {
         #expect(partial.sourceFilter == SourceFilter())
         #expect(partial.readIn == nil)
         #expect(partial.kindleAddress.isEmpty)
+        #expect(partial.pocketBookAddress.isEmpty)
+        #expect(partial.emailAddress.isEmpty)
     }
 }

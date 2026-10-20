@@ -16,6 +16,10 @@ public struct SyncedPreferences: Codable, Sendable, Equatable {
     public var readIn: ReadingTarget?
     /// The user's Send to Kindle address (`name@kindle.com`); empty hides Kindle.
     public var kindleAddress = ""
+    /// Send-to-PocketBook address (`name@pbsync.com`); empty hides PocketBook.
+    public var pocketBookAddress = ""
+    /// Any other address books are mailed to; empty hides "E-mail".
+    public var emailAddress = ""
     /// Where downloads of each kind go unless the user picks another place.
     public var downloadDestinations = DownloadDestinations()
 
@@ -23,7 +27,7 @@ public struct SyncedPreferences: Codable, Sendable, Equatable {
 
     enum CodingKeys: String, CodingKey {
         case downloadOnly, sourceFilter, aioStreamsVariant, showAdult, sourceSelection, readIn, kindleAddress
-        case downloadDestinations
+        case downloadDestinations, pocketBookAddress, emailAddress
     }
 
     public init(from decoder: any Decoder) throws {
@@ -35,6 +39,8 @@ public struct SyncedPreferences: Codable, Sendable, Equatable {
         sourceSelection = (try? c.decodeIfPresent(SourceSelection.self, forKey: .sourceSelection)) ?? SourceSelection()
         readIn = try? c.decodeIfPresent(ReadingTarget.self, forKey: .readIn)
         kindleAddress = (try? c.decodeIfPresent(String.self, forKey: .kindleAddress)) ?? ""
+        pocketBookAddress = (try? c.decodeIfPresent(String.self, forKey: .pocketBookAddress)) ?? ""
+        emailAddress = (try? c.decodeIfPresent(String.self, forKey: .emailAddress)) ?? ""
         downloadDestinations = (try? c.decodeIfPresent(DownloadDestinations.self, forKey: .downloadDestinations))
             ?? DownloadDestinations()
     }

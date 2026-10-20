@@ -1,9 +1,12 @@
 import Foundation
 
 /// Where "Read" sends an ebook. Apple Books takes EPUB and PDF; Send to Kindle (e-mail) takes EPUB, PDF and DOCX,
-/// up to 50 MB. Neither takes MOBI or AZW3 (Amazon dropped MOBI from Send to Kindle in 2022).
+/// up to 50 MB, and neither takes MOBI or AZW3 (Amazon dropped MOBI from Send to Kindle in 2022). Send-to-PocketBook
+/// (e-mail to `name@pbsync.com`, delivered to the reader's library on its next sync) takes what PocketBook readers
+/// open, FB2 and AZW3 included. "E-mail" is any address the user sets (their own inbox, another reader's mail
+/// service) and takes any ebook. Kobo has no send-by-e-mail address, so it is not a target.
 public enum ReadingTarget: String, Codable, Sendable, CaseIterable, Identifiable {
-    case appleBooks, kindle
+    case appleBooks, kindle, pocketBook, email
 
     public var id: String { rawValue }
 
@@ -11,6 +14,40 @@ public enum ReadingTarget: String, Codable, Sendable, CaseIterable, Identifiable
         switch self {
         case .appleBooks: "Apple Books"
         case .kindle: "Kindle"
+        case .pocketBook: "PocketBook"
+        case .email: "E-mail"
+        }
+    }
+
+    /// What the Read button says.
+    public var actionTitle: String {
+        switch self {
+        case .appleBooks: "Open in Apple Books"
+        case .kindle: "Send to Kindle"
+        case .pocketBook: "Send to PocketBook"
+        case .email: "Send by E-mail"
+        }
+    }
+
+    /// Sent as a Mail draft to an address the user sets; Apple Books is the only one that is not.
+    public var isMail: Bool { self != .appleBooks }
+
+    /// The address field's placeholder.
+    public var addressPlaceholder: String {
+        switch self {
+        case .appleBooks: ""
+        case .kindle: "name@kindle.com"
+        case .pocketBook: "name@pbsync.com"
+        case .email: "name@example.com"
+        }
+    }
+
+    /// Said after Mail sent it.
+    public var deliveryNote: String {
+        switch self {
+        case .appleBooks, .email: ""
+        case .kindle: "Amazon delivers it in a few minutes."
+        case .pocketBook: "It reaches the reader's library on its next sync."
         }
     }
 
@@ -19,12 +56,15 @@ public enum ReadingTarget: String, Codable, Sendable, CaseIterable, Identifiable
         switch self {
         case .appleBooks: ["epub", "pdf"]
         case .kindle: ["epub", "pdf", "docx"]
+        case .pocketBook: ["epub", "fb2", "pdf", "azw3", "mobi", "djvu", "cbz", "cbr", "docx"]
+        case .email: BookFiles.ebookFormats
         }
     }
 
     /// Amazon's limit for one Send to Kindle e-mail.
     public static let kindleMailLimit: Int64 = 50 * 1_000_000
 
+    /// Only Amazon states one; other mail goes as far as the user's mail provider takes it.
     public var sizeLimit: Int64? { self == .kindle ? Self.kindleMailLimit : nil }
 }
 
@@ -39,7 +79,7 @@ public enum BookFiles {
         case noBookFile
         /// Only formats the target does not take, uppercased: `["AZW3", "MOBI"]`.
         case unsupported(formats: [String])
-        /// The only usable file is over the Send to Kindle limit.
+        /// The only usable file is over the target's limit (Send to Kindle).
         case tooLarge(size: Int64)
 
         public func message(for target: ReadingTarget) -> String {
@@ -50,8 +90,8 @@ public enum BookFiles {
                 let list = ListFormatter.localizedString(byJoining: formats)
                 return "\(target.displayName) does not take \(list). Use Share to open it in another reader."
             case .tooLarge(let size):
-                let limit = ReadingTarget.kindleMailLimit.formatted(.byteCount(style: .file))
-                return "The file is \(size.formatted(.byteCount(style: .file))); Send to Kindle takes up to \(limit)."
+                let limit = (target.sizeLimit ?? 0).formatted(.byteCount(style: .file))
+                return "The file is \(size.formatted(.byteCount(style: .file))); \(target.actionTitle) takes up to \(limit)."
             }
         }
     }
@@ -108,6 +148,12 @@ public enum BookFiles {
         case "epub": "application/epub+zip"
         case "pdf": "application/pdf"
         case "docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        case "fb2": "application/x-fictionbook+xml"
+        case "mobi": "application/x-mobipocket-ebook"
+        case "azw3", "azw": "application/vnd.amazon.ebook"
+        case "djvu": "image/vnd.djvu"
+        case "cbz": "application/vnd.comicbook+zip"
+        case "cbr": "application/vnd.comicbook-rar"
         default: "application/octet-stream"
         }
     }

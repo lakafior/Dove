@@ -9,6 +9,10 @@ import SwiftUI
 struct SearchView: View {
     @Environment(AppModel.self) private var model
     @State private var text = ""
+    /// "Find by description": titles the on-device model suggested and a search confirmed (nil until asked).
+    @State private var described: [MediaSummary]?
+    @State private var isDescribing = false
+    @State private var describeError: String?
     @State private var pendingSources: SourceBatch?
     @State private var message: String?
     @State private var results: [MediaSummary] = []
@@ -66,7 +70,7 @@ struct SearchView: View {
     private var showsResults: Bool {
         isSearching || releases.isSearching || pluginSearch.isSearching || !pluginSearch.answers.isEmpty
             || !results.isEmpty || !releases.isEmpty || !books.isEmpty || !albums.isEmpty || searchedAlbums != nil
-            || ((message != nil || releases.message != nil) && !text.isEmpty)
+            || ((message != nil || releases.message != nil) && !text.isEmpty) || isDescribing || described != nil
     }
 
     var body: some View {
@@ -221,6 +225,9 @@ struct SearchView: View {
         }
         if !showsResultTabs { PluginResultsSections(search: pluginSearch) }
         siteSearchSection
+        if activeCategory == .media {
+            describedSection
+        }
         if activeCategory == .media, !results.isEmpty {
             Section {
                 ForEach(visibleResults) { item in
@@ -271,9 +278,63 @@ struct SearchView: View {
         }
     }
 
+    /// A few words that sound like a plot ("the show where office workers…"): Apple Intelligence suggests titles,
+    /// a search confirms each, only confirmed ones are listed.
+    @ViewBuilder
+    private var describedSection: some View {
+        let words = text.split(whereSeparator: \.isWhitespace).count
+        if let described {
+            Section {
+                if described.isEmpty {
+                    Text("No title found for that description.").font(.footnote).foregroundStyle(.secondary)
+                }
+                ForEach(described) { item in
+                    NavigationLink(value: item) { MediaRow(item: item) }
+                        .contextMenu { WatchlistMenuItem(media: item) }
+                }
+            } header: {
+                Label("Fits your description", systemImage: "sparkles")
+            } footer: {
+                Text("Suggested by Apple Intelligence on this iPhone, and only shown when a search finds the title. Works best for well-known titles.")
+            }
+        } else if OnDeviceModel.isAvailable, words >= 3, !isSearching, SourceDetector.sources(in: text).isEmpty {
+            Section {
+                Button(action: describeSearch) {
+                    HStack {
+                        Label("Find by description", systemImage: "sparkles")
+                        Spacer()
+                        if isDescribing { ProgressView() }
+                    }
+                }
+                .disabled(isDescribing)
+                if let describeError {
+                    Text(describeError).font(.caption).foregroundStyle(.red)
+                }
+            }
+        }
+    }
+
+    private func describeSearch() {
+        let query = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !query.isEmpty else { return }
+        isDescribing = true
+        describeError = nil
+        let addons = model.addonSet
+        Task {
+            defer { isDescribing = false }
+            do {
+                described = try await DescribedSearch.titles(for: query) { try await addons.search($0) }
+            } catch {
+                describeError = error.localizedDescription
+            }
+        }
+    }
+
     private func clearResults() {
         resultsTab = .sources
         results = []
+        described = nil
+        describeError = nil
         releases.clear()
         pluginSearch.clear()
         books = []
@@ -344,6 +405,8 @@ struct SearchView: View {
 
     private func handleSubmit() {
         message = nil
+        described = nil
+        describeError = nil
         // A movie's or series' page (IMDb, Apple TV, Letterboxd…): open that title.
         if SourceDetector.sources(in: text).isEmpty, let link = TitleLink.first(in: text) {
             Task { await model.openTitle(link) }

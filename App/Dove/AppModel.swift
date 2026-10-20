@@ -202,14 +202,44 @@ final class AppModel {
         didSet { savePreferences() }
     }
 
+    /// Send-to-PocketBook address; empty hides PocketBook.
+    var pocketBookAddress = "" {
+        didSet { savePreferences() }
+    }
+
+    /// Any other address books are mailed to; empty hides "E-mail".
+    var emailAddress = "" {
+        didSet { savePreferences() }
+    }
+
+    func mailAddress(for target: ReadingTarget) -> String {
+        switch target {
+        case .appleBooks: ""
+        case .kindle: kindleAddress
+        case .pocketBook: pocketBookAddress
+        case .email: emailAddress
+        }
+    }
+
+    /// Clearing the preferred target's address makes Read ask again.
+    func setMailAddress(_ address: String, for target: ReadingTarget) {
+        switch target {
+        case .appleBooks: return
+        case .kindle: kindleAddress = address
+        case .pocketBook: pocketBookAddress = address
+        case .email: emailAddress = address
+        }
+        if address.isEmpty, readIn == target { readIn = nil }
+    }
+
     /// Where downloads of each kind go by default (synced).
     var downloadDestinations = DownloadDestinations() {
         didSet { savePreferences() }
     }
 
-    /// Kindle is offered only with an address to send to.
+    /// Mail targets are offered only with an address to send to.
     var readingTargets: [ReadingTarget] {
-        kindleAddress.isEmpty ? [.appleBooks] : ReadingTarget.allCases
+        ReadingTarget.allCases.filter { !$0.isMail || !mailAddress(for: $0).isEmpty }
     }
 
     /// Filters, variant and "download only" travel with the keys through iCloud Keychain.
@@ -222,6 +252,8 @@ final class AppModel {
         preferences.sourceSelection = sourceSelection
         preferences.readIn = readIn
         preferences.kindleAddress = kindleAddress
+        preferences.pocketBookAddress = pocketBookAddress
+        preferences.emailAddress = emailAddress
         preferences.downloadDestinations = downloadDestinations
         SharedConfiguration.savePreferences(preferences, to: keychain)
     }
@@ -269,6 +301,8 @@ final class AppModel {
             sourceSelection = preferences.sourceSelection
             readIn = preferences.readIn
             kindleAddress = preferences.kindleAddress
+            pocketBookAddress = preferences.pocketBookAddress
+            emailAddress = preferences.emailAddress
             downloadDestinations = preferences.downloadDestinations
         } else {
             // First launch of this build: bring the old UserDefaults values along, then save them synced.
@@ -415,6 +449,8 @@ final class AppModel {
             sourceSelection = preferences.sourceSelection
             readIn = preferences.readIn
             kindleAddress = preferences.kindleAddress
+            pocketBookAddress = preferences.pocketBookAddress
+            emailAddress = preferences.emailAddress
             downloadDestinations = preferences.downloadDestinations
         }
         library.showAdult = showAdult

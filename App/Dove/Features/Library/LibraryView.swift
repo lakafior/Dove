@@ -413,23 +413,21 @@ struct LibraryView: View {
 
     // MARK: - Pieces
 
-    /// "Updating…" while the services are asked (the cached list stays on screen), when the list is from, and
-    /// what failed.
+    /// "Updating…" while the services are asked (the cached list stays on screen), when the list is from, how
+    /// much it holds, and what failed.
     @ViewBuilder
     private var failuresBanner: some View {
         VStack(alignment: .leading, spacing: 6) {
-            if library.isLoading, !library.items.isEmpty {
-                HStack(spacing: 6) {
+            HStack(spacing: 6) {
+                if library.isLoading, !library.items.isEmpty {
                     ProgressView().controlSize(.mini)
-                    Text("Updating…")
+                    Text(["Updating…", usage].compactMap { $0 }.joined(separator: " · "))
+                } else if let updatedAt = library.updatedAt {
+                    Text(["Updated \(updatedAt.formatted(.relative(presentation: .named)))", usage].compactMap { $0 }.joined(separator: " · "))
                 }
-                .font(.caption)
-                .foregroundStyle(.secondary)
-            } else if let updatedAt = library.updatedAt {
-                Text("Updated \(updatedAt.formatted(.relative(presentation: .named)))")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
             }
+            .font(.caption)
+            .foregroundStyle(.secondary)
             if !library.failures.isEmpty {
                 Label(library.failures.joined(separator: "\n"), systemImage: "exclamationmark.triangle")
                     .font(.footnote)
@@ -437,6 +435,14 @@ struct LibraryView: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    /// "46 items, 1.1 TB", over what the filters leave.
+    private var usage: String? {
+        let usage = LibraryUsage(filter.apply(to: library.items))
+        guard usage.items > 0 else { return nil }
+        let count = usage.items == 1 ? "1 item" : "\(usage.items) items"
+        return usage.bytes > 0 ? "\(count), \(usage.bytes.formatted(.byteCount(style: .file)))" : count
     }
 
     @ViewBuilder

@@ -150,7 +150,7 @@ public struct SourceFilter: Codable, Equatable, Sendable {
         }
     }
 
-    private static let preferredOrder: [Dimension: [String]] = [
+    static let preferredOrder: [Dimension: [String]] = [
         .type: ["Torrent", "Usenet", "Debrid link", "Web"],
         .privacy: ["Private", "Public", "Unknown"],
         .resolution: ["2160p", "1440p", "1080p", "720p", "480p", "Unknown"],

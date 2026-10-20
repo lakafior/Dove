@@ -263,6 +263,20 @@ struct BookFilesTests {
         #expect(BookFiles.pick(from: [onlyBig], for: .kindle) == .failure(.tooLarge(size: 80_000_000)))
     }
 
+    @Test func pocketBookAndEmailTakeWhatKindleRefuses() throws {
+        let kindleOnly = item("a", [("Book.azw3", 1_000), ("Book.mobi", 1_000), ("Book.fb2", 1_000)])
+        #expect(try BookFiles.pick(from: [kindleOnly], for: .pocketBook).get().file.name == "Book.fb2")
+        #expect(try BookFiles.pick(from: [kindleOnly], for: .email).get().file.name == "Book.azw3")
+        let big = item("b", [("Book.pdf", 80_000_000)])
+        #expect(try BookFiles.pick(from: [big], for: .pocketBook).get().file.name == "Book.pdf")
+        #expect(BookFiles.mimeType(of: "Book.fb2") == "application/x-fictionbook+xml")
+    }
+
+    @Test func tooLargeMessageNamesTheTarget() {
+        let message = BookFiles.Refusal.tooLarge(size: 80_000_000).message(for: .kindle)
+        #expect(message.contains("Send to Kindle takes up to"))
+    }
+
     @Test func nothingToReadWithoutFiles() {
         #expect(BookFiles.pick(from: [item("a", [])], for: .appleBooks) == .failure(.noBookFile))
         #expect(BookFiles.pick(from: [item("a", [("sample.epub", 1)])], for: .appleBooks) == .failure(.noBookFile))
