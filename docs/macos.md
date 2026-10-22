@@ -1,6 +1,6 @@
 # Dove for macOS: review and architecture plan
 
-Status (2026-10-22): phase 0 done; the Mac app itself is not started.
+Status (2026-10-22): phases 0 and 1 done.
 
 Goal (owner): a native Mac app that uses what a computer does better, not the iPad app on a Mac and not
 Catalyst. No hurry: the Mac app comes before the release pipeline (#6), which then builds both platforms.
@@ -49,7 +49,7 @@ One protocol the shell injects into `AppModel` at launch (`AppModel(platform:)`)
 |---|---|---|
 | `open(_ url:)`, `canOpen(_ url:)` | `UIApplication` | `NSWorkspace` (+ `urlForApplication(toOpen:)` to detect players) |
 | Clipboard read/write | `UIPasteboard` (never read on appear) | `NSPasteboard` |
-| Download directory | Documents | a folder the user picks (security-scoped bookmark), default `~/Downloads/Dove` |
+| Download directory | Documents | `~/Downloads` itself (no Dove subfolder: it breaks the Downloads stack in the Dock); other folders per kind picked by the user (security-scoped bookmarks) |
 | Audio session | `AVAudioSession` | none |
 | Artwork image | `UIImage` | `NSImage` |
 | Mail draft (Send to Kindle…) | `MFMailComposeViewController` | `NSSharingService(named: .composeEmail)` |
@@ -77,12 +77,12 @@ Navigation state leaves `AppModel`: `selectedTab`/`searchPath` become an iOS `Ro
 | Decision | Proposal | Why |
 |---|---|---|
 | Distribution | Developer ID + notarization, DMG on GitHub Releases | worldwide, automated review only |
-| Bundle ID | `net.smigi.dove` (one App ID for both platforms) | same iCloud container, same capabilities |
-| App Sandbox | **on** | good hygiene, keeps the Mac App Store open, forces explicit folder access (bookmarks, also useful for the iOS "Folder" place) |
-| Entitlements | network client, user-selected read/write, downloads folder, keychain group, app group, iCloud Documents, MusicKit service | as iOS, plus sandbox ones |
+| Bundle ID | `net.smigi.dove`, one App ID for both platforms (decided) | same iCloud container, same capabilities |
+| App Sandbox | **on** (decided) | good hygiene, keeps the Mac App Store open, forces explicit folder access (bookmarks, also useful for the iOS "Folder" place) |
+| Entitlements | network client, user-selected read/write, downloads folder (`com.apple.security.files.downloads.read-write`), keychain group, app group, iCloud Documents, MusicKit service | as iOS, plus sandbox ones |
 | App Group | `group.net.smigi.dove` with the provisioning profile (macOS 15+), else `5TA8RF548P.net.smigi.dove` | to verify when the File Provider/widgets come |
 | Updates | own check against GitHub Releases API, user confirms | no Sparkle (no third-party deps); no server of Dove's |
-| Minimum | macOS 15 | `Inspector`, `Table` improvements, window APIs; Foundation Models gated on 26 as on iOS |
+| Minimum | macOS 26 | Liquid Glass and Foundation Models without availability checks; no older Macs to carry |
 
 ## 3. What the Mac app should do better
 
@@ -96,8 +96,8 @@ Navigation state leaves `AppModel`: `selectedTab`/`searchPath` become an iOS `Ro
 | Where files go | any folder per kind (NAS share, external disk): the Mac is where 40 GB remuxes can go to a Plex/Jellyfin folder. Naming per `LibraryFolderLayout` |
 | Input | drop `.torrent`/`.nzb`/magnet text on the window or Dock icon; ⌘O; File › Add from Clipboard (⇧⌘V); Services menu "Add to Dove" for selected text; "Make Dove the default app for magnet links" (`NSWorkspace.setDefaultApplication`, user confirms) |
 | Menus and keys | Commands: File (Add…, Open…), Library (Refresh ⌘R, Titles/Files), Go (⌘1…⌘5), Playback (Play in…) |
-| Menu bar | `MenuBarExtra`: downloads in progress, download-only jobs, now playing, Add from Clipboard; optional "keep running after the last window closes" |
-| Players | Infuse (Mac), IINA, VLC, custom template; `ExternalPlayer` gets a per-platform list |
+| Menu bar | `MenuBarExtra`: downloads in progress, download-only jobs, now playing, Add from Clipboard; keeps running after the last window closes by default (downloads go on), can be turned off in Settings |
+| Players | Infuse, IINA, VLC first (decided), plus the custom template; Kodi works as on iOS (JSON-RPC); `ExternalPlayer` gets a per-platform list |
 | Audiobooks, music | same `AudiobookPlayer`; Now Playing and media keys work through `MPRemoteCommandCenter` |
 | Settings | `Settings` scene with tabs (Services, Libraries, Search, Titles and covers, Playing and reading, App), reusing the iOS settings forms (`Form` + `.formStyle(.grouped)`) |
 | Finder | later: the File Provider location in Finder's sidebar (DoveKit's `LibraryBrowser` is ready) |
@@ -123,7 +123,7 @@ Rule of thumb: share what draws a thing, not what arranges things.
 | # | Phase | Done when |
 |---|---|---|
 | 0 | ✅ (2026-10-22) **Prepare on iOS, no visible change**: create `DoveAppCore`, move `AppModel` and feature models into it, add the platform seam with the iOS implementation, move navigation state to an iOS router, make the download directory injectable, `KeychainStore` data protection flag on macOS, first model tests | iOS app behaves exactly as before (Simulator + owner's device), `swift test` covers the models |
-| 1 | **Mac skeleton**: target in `project.yml`, sandbox and entitlements, sidebar shell, Settings scene with the shared forms | Mac sees the iPhone's settings through iCloud Keychain; services' status lights green |
+| 1 | ✅ (2026-10-22) **Mac skeleton**: target in `project.yml`, sandbox and entitlements, sidebar shell, Settings scene with the shared forms | Mac sees the iPhone's settings through iCloud Keychain; services' status lights green |
 | 2 | **Core flows**: Search → sources `Table` → add; Library (Titles grid, Files table); Downloads to chosen folders with Dock progress | add, list, download and delete work against the owner's services |
 | 3 | **Detail screens and playback**: title/series/book/album/game screens, Play in Infuse/IINA/VLC, audiobook and music player | Play all and audiobook positions sync with the iPhone |
 | 4 | **Mac integration**: drag and drop, ⌘O, Dock drop, magnet default handler, Services menu, MenuBarExtra, notifications, App Intents/Spotlight | each checked on the owner's Mac |
@@ -140,13 +140,37 @@ iCloud state), the feature models, `AudiobookPlayer`, `PlaybackModel`, `Download
 stay in the iOS views until the Mac needs them. Audio session calls are `#if os(iOS)` inside `AudiobookPlayer`.
 `AppModel.Destination` gained `.library(category)` and `.settings`, so the home screen and `dove://` links route
 through the platform like Siri and Spotlight. Checked on the Simulator (tabs, shelf → Library category, `dove://`
-links, title screens); not yet on a device.
+links, title screens); checked briefly on a device by the owner (2026-10-22).
 
-## 6. Open questions for the owner
+## 6. Decisions (owner, 2026-10-22)
 
-1. Minimum macOS: 15 (proposed) or 26?
-2. App Sandbox on (proposed)?
-3. Keep running in the menu bar after the last window closes: on by default, off, or ask?
-4. Default download folder: `~/Downloads/Dove` or ask on first download?
-5. Mac players to support first: Infuse, IINA, VLC?
-6. Same bundle ID as iOS (proposed) or `net.smigi.dove.mac`?
+| Question | Decision |
+|---|---|
+| Minimum macOS | **26** |
+| App Sandbox | **on** |
+| Bundle ID | **`net.smigi.dove`**, shared with iOS |
+| After the last window closes | **keeps running in the menu bar** (downloads go on); a setting turns it off |
+| Default download folder | **`~/Downloads`**, no Dove subfolder (it breaks the Downloads stack in the Dock) |
+| Players first | **Infuse, IINA, VLC** (Kodi and the custom template come with `ExternalPlayer` anyway) |
+
+## 7. Phase 1 as built (2026-10-22)
+
+- `DoveMac` target in `project.yml` (macOS 26, sandbox, hardened runtime, network client, user-selected and Downloads
+  folder access, the shared keychain group, iCloud Documents; same bundle ID and icon as iOS). Signed builds work
+  with `-allowProvisioningUpdates` (Xcode made a macOS profile for `net.smigi.dove`).
+- `MacPlatform`: `NSWorkspace` for players and links, the user's real `~/Downloads`, Now Playing artwork from
+  `NSImage`; Finder, Spotlight, widgets and Dock progress hooks are empty until phases 4–5.
+- `MacRouter` + `MacRootView`: sidebar with Search, Watchlist, Library (All and the kinds the library holds),
+  Downloads, On services and the set-up services with status lights; a service shows its state, account and item
+  count; the other pages are placeholders until phase 2. The app keeps running after its window closes; the menu bar
+  extra comes in phase 4.
+- Settings window: `SettingsCatalog` (shared with iOS, whose Settings list now reads it too) in a sidebar; each page
+  is the iOS form with `.formStyle(.grouped)`. Shared views compile through `App/Components/PlatformShims.swift` and
+  `SystemSettings`; `#if os(iOS)` only for the addon list's Edit button, the routing page's edit mode and the Files
+  location reset.
+- `CachedImage` works on both (`PlatformImage`).
+- Checked on the owner's Mac (2026-10-22): iCloud Keychain brought every key from the iPhone; the sidebar listed
+  the library's kinds and every service with a green light; the Settings window shows every page. A build run from
+  `/tmp` is unknown to Launch Services: no `dove://` links and no notification permission prompt. Built into Xcode's
+  DerivedData it is registered: `dove://settings` opens the Settings window through `MacRouter`. The notifications
+  page now shows the error when the system refuses to ask.

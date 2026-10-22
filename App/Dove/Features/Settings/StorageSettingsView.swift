@@ -35,6 +35,8 @@ struct StorageSettingsView: View {
                 Text("Kept so a second Read does not download the book again. iOS may clear both when space runs low; Dove then fetches them again as needed. Downloads are in the Downloads tab.")
             }
 
+            // The Mac's Finder location comes later (docs/macos.md, phase 5).
+            #if os(iOS)
             Section {
                 Button(action: resetFiles) {
                     HStack {
@@ -49,6 +51,7 @@ struct StorageSettingsView: View {
             } footer: {
                 Text("Your services appear in Files under Locations › Dove. If Files shows an error there, reset it: Files forgets what it knew and lists everything again.")
             }
+            #endif
         }
         .navigationTitle("Storage and Files")
         .navigationBarTitleDisplayMode(.inline)
@@ -62,6 +65,7 @@ struct StorageSettingsView: View {
         bytes.map { $0.formatted(.byteCount(style: .file)) } ?? "…"
     }
 
+    #if os(iOS)
     private func resetFiles() {
         filesStatus = .testing
         Task {
@@ -73,4 +77,5 @@ struct StorageSettingsView: View {
             }
         }
     }
+    #endif
 }

@@ -1,12 +1,13 @@
 import DoveAppCore
 import SwiftUI
-import UIKit
 import UserNotifications
 
-/// Settings › Notifications: whether iOS lets Dove notify, and which kinds Dove sends.
+/// Settings › Notifications: whether the system lets Dove notify, and which kinds Dove sends.
 struct NotificationSettingsView: View {
     @Environment(\.scenePhase) private var scenePhase
     @State private var status: UNAuthorizationStatus?
+    /// Why the system refused to ask (a build it does not know, e.g. not registered with Launch Services).
+    @State private var requestError: String?
     /// Mirrors `NotificationKind.isOn` so the toggles redraw.
     @State private var enabled: [NotificationKind: Bool] = [:]
 
@@ -17,20 +18,23 @@ struct NotificationSettingsView: View {
                 case .notDetermined:
                     Button("Allow notifications", systemImage: "bell.badge") { request() }
                 case .denied:
-                    LabeledContent("iOS", value: "Off")
-                    Button("Open iPhone Settings", systemImage: "gear") { openSystemSettings() }
+                    LabeledContent(SystemSettings.systemName, value: "Off")
+                    Button("Open \(SystemSettings.appName)", systemImage: "gear") { SystemSettings.openNotifications() }
                 case nil:
                     ProgressView()
                 default:
-                    LabeledContent("iOS", value: "Allowed")
-                    Button("Notification style in iPhone Settings", systemImage: "gear") { openSystemSettings() }
+                    LabeledContent(SystemSettings.systemName, value: "Allowed")
+                    Button("Notification style in \(SystemSettings.appName)", systemImage: "gear") { SystemSettings.openNotifications() }
+                }
+                if let requestError {
+                    SettingsStatusView(status: .failure(requestError))
                 }
             } footer: {
                 Text(statusFooter)
             }
 
             Section {
-                ForEach(NotificationKind.allCases) { kind in
+                ForEach(NotificationKind.shown) { kind in
                     Toggle(isOn: binding(kind)) {
                         Label {
                             VStack(alignment: .leading, spacing: 2) {
@@ -58,9 +62,9 @@ struct NotificationSettingsView: View {
 
     private var statusFooter: String {
         switch status {
-        case .notDetermined: "iOS asks once. Dove also asks the first time something on the list below happens."
-        case .denied: "iOS blocks Dove's notifications. Turn them on in iPhone Settings › Notifications › Dove."
-        default: "Banners, sounds and Lock Screen are set in iPhone Settings."
+        case .notDetermined: "\(SystemSettings.systemName) asks once. Dove also asks the first time something on the list below happens."
+        case .denied: "\(SystemSettings.systemName) blocks Dove's notifications. Turn them on in \(SystemSettings.appName) › Notifications › Dove."
+        default: "Banners, sounds and Lock Screen are set in \(SystemSettings.appName)."
         }
     }
 
@@ -81,14 +85,24 @@ struct NotificationSettingsView: View {
 
     private func request() {
         Task {
-            _ = try? await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound])
+            do {
+                _ = try await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound])
+                requestError = nil
+            } catch {
+                requestError = error.localizedDescription
+            }
             await refresh()
         }
     }
+}
 
-    private func openSystemSettings() {
-        if let url = URL(string: UIApplication.openNotificationSettingsURLString) {
-            UIApplication.shared.open(url)
-        }
+private extension NotificationKind {
+    /// The Mac has no Live Activity.
+    static var shown: [NotificationKind] {
+        #if os(iOS)
+        allCases
+        #else
+        allCases.filter { $0 != .liveActivity }
+        #endif
     }
 }

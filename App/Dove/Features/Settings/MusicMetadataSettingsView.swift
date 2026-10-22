@@ -7,7 +7,6 @@ import SwiftUI
 /// (MusicKit permission, this device only).
 struct MusicMetadataSettingsView: View {
     @Environment(AppModel.self) private var model
-    @Environment(\.openURL) private var openURL
     @AppStorage(AppleMusicCatalog.preferenceKey) private var appleMusic = false
     @State private var status: String?
     @State private var isChecking = false
@@ -27,9 +26,7 @@ struct MusicMetadataSettingsView: View {
                     Text(status).font(.footnote).foregroundStyle(.secondary)
                 }
                 if MusicAuthorization.currentStatus == .denied {
-                    Button("Open iPhone Settings") {
-                        if let url = URL(string: UIApplication.openSettingsURLString) { openURL(url) }
-                    }
+                    Button("Open \(SystemSettings.appName)") { SystemSettings.openAppleMusicAccess() }
                 }
             } header: {
                 Text("Sources")

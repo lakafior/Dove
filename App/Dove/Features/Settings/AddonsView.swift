@@ -38,9 +38,12 @@ struct AddonsView: View {
         }
         .navigationTitle("Stremio addons")
         .toolbar {
+            // The Mac's list reorders by dragging, without an edit mode.
+            #if os(iOS)
             if model.addonEntries.count > 1 {
                 ToolbarItem(placement: .topBarTrailing) { EditButton() }
             }
+            #endif
             ToolbarItem(placement: .primaryAction) {
                 if isAdding {
                     ProgressView()

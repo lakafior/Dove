@@ -71,7 +71,9 @@ struct RoutingSettingsView: View {
                 Text("Downloads the start of a big file from each service's library (up to 150 MB or 10 seconds) over Wi-Fi, the network your TV uses. Results stay on this iPhone. Ordering by speed is up to you. A release cached on some services goes to the first of those in this order; one cached nowhere goes to the first service.")
             }
         }
+        #if os(iOS)
         .environment(\.editMode, .constant(.active))
+        #endif
         .navigationTitle("Order and fallback")
         .navigationBarTitleDisplayMode(.inline)
     }

@@ -1,6 +1,14 @@
 import DoveKit
 import SwiftUI
+#if canImport(UIKit)
 import UIKit
+
+typealias PlatformImage = UIImage
+#else
+import AppKit
+
+typealias PlatformImage = NSImage
+#endif
 
 /// Artwork from `ImageCache` (on disk across launches) with decoded images kept in memory, so posters neither
 /// download again on launch nor flicker when a grid scrolls them back in.
@@ -8,7 +16,7 @@ struct CachedImage<Placeholder: View>: View {
     let url: URL?
     @ViewBuilder var placeholder: () -> Placeholder
     /// Seeded once from memory so a known poster shows on the first frame; `task(id:)` follows URL changes.
-    @State private var image: UIImage?
+    @State private var image: PlatformImage?
 
     init(url: URL?, @ViewBuilder placeholder: @escaping () -> Placeholder) {
         self.url = url
@@ -21,7 +29,11 @@ struct CachedImage<Placeholder: View>: View {
         Color.clear
             .overlay {
                 if let image {
+                    #if canImport(UIKit)
                     Image(uiImage: image).resizable().scaledToFill()
+                    #else
+                    Image(nsImage: image).resizable().scaledToFill()
+                    #endif
                 } else {
                     placeholder()
                 }
@@ -53,26 +65,35 @@ struct CachedImage<Placeholder: View>: View {
 
 /// Reads and decodes off the main actor (a grid of covers at launch is read in parallel). Outside `CachedImage`:
 /// a function of the generic view would carry its `Placeholder` into the concurrent context.
-private nonisolated func decodeImage(_ data: @autoclosure @Sendable () -> Data?) async -> UIImage? {
+private nonisolated func decodeImage(_ data: @autoclosure @Sendable () -> Data?) async -> PlatformImage? {
     guard let data = data() else { return nil }
+    #if canImport(UIKit)
     return await UIImage(data: data)?.byPreparingForDisplay()
+    #else
+    return NSImage(data: data)
+    #endif
 }
 
 /// Decoded images by URL. `NSCache` is thread-safe and drops entries under memory pressure.
 final class DecodedImages: @unchecked Sendable {
     static let shared = DecodedImages()
-    private let cache: NSCache<NSURL, UIImage> = {
-        let cache = NSCache<NSURL, UIImage>()
+    private let cache: NSCache<NSURL, PlatformImage> = {
+        let cache = NSCache<NSURL, PlatformImage>()
         cache.totalCostLimit = 120 * 1024 * 1024
         return cache
     }()
 
-    func image(for url: URL) -> UIImage? {
+    func image(for url: URL) -> PlatformImage? {
         cache.object(forKey: url as NSURL)
     }
 
-    func insert(_ image: UIImage, for url: URL) {
+    func insert(_ image: PlatformImage, for url: URL) {
+        #if canImport(UIKit)
         let pixels = image.size.width * image.size.height * image.scale * image.scale
+        #else
+        // Points at 2x: Mac screens are Retina.
+        let pixels = image.size.width * image.size.height * 4
+        #endif
         cache.setObject(image, forKey: url as NSURL, cost: Int(pixels) * 4)
     }
 
