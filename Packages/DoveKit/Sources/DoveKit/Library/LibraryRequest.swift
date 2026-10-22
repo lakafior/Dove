@@ -132,7 +132,7 @@ public struct LibraryRequest: Equatable, Sendable {
         }
     }
 
-    private func keepsItem(_ item: ShelfItem) -> Bool {
+    func keepsItem(_ item: ShelfItem) -> Bool {
         if !backends.isEmpty, !backends.contains(item.item.backend) { return false }
         if let status, LibraryFilter.Status(of: item.item.status) != status { return false }
         if !resolutions.isEmpty {
@@ -141,13 +141,13 @@ public struct LibraryRequest: Equatable, Sendable {
         return true
     }
 
-    private func keepsYear(_ year: String?) -> Bool {
+    func keepsYear(_ year: String?) -> Bool {
         guard let years else { return true }
         guard let year = year.flatMap({ Int($0.prefix(4)) }) else { return false }
         return years.contains(year)
     }
 
-    private func keepsWords(_ names: [String]) -> Bool {
+    func keepsWords(_ names: [String]) -> Bool {
         guard let words else { return true }
         let wanted = MediaGuess.normalize(words)
         return names.contains { $0.localizedCaseInsensitiveContains(words) || MediaGuess.normalize($0).contains(wanted) }
@@ -171,6 +171,7 @@ public struct LibraryRequest: Equatable, Sendable {
         .books: ["book", "books", "ebook", "ebooks", "książki", "ksiazki", "książka"],
         .audiobooks: ["audiobook", "audiobooks", "audiobooki"],
         .music: ["music", "album", "albums", "muzyka"],
+        .games: ["game", "games", "gry", "gra", "rom", "roms"],
         .software: ["software", "app", "apps", "program", "programs"],
         .adult: ["adult", "xxx"],
         .other: ["other", "others", "inne"],

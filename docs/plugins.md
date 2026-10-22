@@ -81,7 +81,7 @@ manifest: {
   version: "1.0.0",
   api: 1,
   capabilities: ["metadata", "search", "resolve"],
-  categories: ["books", "audiobooks"],   // search categories it serves: media, books, audiobooks, music, software, adult, all
+  categories: ["books", "audiobooks"],   // search categories it serves: media, books, audiobooks, music, games, software, adult, all
   hosts: ["lubimyczytac.pl", "*.storytel.com", "{domain}"],
   settings: [
     { key: "domain", title: "Address", type: "text", required: true, help: "The site's current domain" },
@@ -133,6 +133,7 @@ When `search` is asked (`query` is always the words to search with):
 | `books`, `audiobooks` | on the screen of a book picked from the metadata search; from the search field only when no book is found or the user taps "Search releases" | `book` once picked |
 | `media` | on a movie's or episode's source list (also season and series packs); from the search field only when no title is found | `title` |
 | `music` | on the screen of an album picked from MusicBrainz; from the search field only when no album is found or the user taps "Search releases" | `album` once picked |
+| `games` | on the screen of a game picked from IGDB/Wikidata (with its title as the words); from the search field only when no game is found or the user taps "Search releases" | — |
 | `software`, `adult`, `all` | from the search field, beside the indexers' releases | — |
 
 `book` (to `search`): `{ title, authors: ["…"], year }`. `album`: `{ title, artists: ["…"], year }`. `title` (to `search`):
@@ -163,7 +164,7 @@ only `title` is required.
 { id, title, author, kind, format, size, language, year, cover, link }
 ```
 
-`kind`: `books`, `audiobooks`, `music`, `video`, `software`, `other`; `format`: a file extension (`epub`, `m4b`);
+`kind`: `books`, `audiobooks`, `music`, `video`, `games`, `software`, `other`; `format`: a file extension (`epub`, `m4b`);
 `size` in bytes. `id` is what `resolve` gets back.
 
 `Link` (from `resolve`), or an array of them for several files:

@@ -261,9 +261,9 @@ public enum LibraryShelf {
             .sorted { ($0.latestAdded ?? .distantPast) > ($1.latestAdded ?? .distantPast) }
     }
 
-    /// Everything that is neither video, a book nor music, newest first: listed by name, no titles or covers.
+    /// Everything that is neither video, a book, music nor a game, newest first: listed by name, no titles or covers.
     public static func others(_ items: [ShelfItem]) -> [ShelfItem] {
-        items.filter { $0.kind != .video && $0.kind != .music && BookFormat(kind: $0.kind) == nil }
+        items.filter { $0.kind != .video && $0.kind != .music && $0.kind != .games && BookFormat(kind: $0.kind) == nil }
     }
 }
 
@@ -271,7 +271,7 @@ public enum LibraryShelf {
 public struct LibraryFilter: Equatable, Sendable {
     /// Movies and series split video; the other kinds map one to one.
     public enum Category: String, CaseIterable, Sendable {
-        case movies, series, music, books, audiobooks, software, adult, other
+        case movies, series, music, books, audiobooks, games, software, adult, other
 
         public var title: String {
             switch self {
@@ -280,6 +280,7 @@ public struct LibraryFilter: Equatable, Sendable {
             case .music: "Music"
             case .books: "Books"
             case .audiobooks: "Audiobooks"
+            case .games: "Games"
             case .software: "Software"
             case .adult: "Adult"
             case .other: "Other"
@@ -293,6 +294,7 @@ public struct LibraryFilter: Equatable, Sendable {
             case .music: item.kind == .music
             case .books: item.kind == .books
             case .audiobooks: item.kind == .audiobooks
+            case .games: item.kind == .games
             case .software: item.kind == .software
             case .adult: item.kind == .adult
             case .other: item.kind == .other
@@ -352,7 +354,7 @@ public struct LibraryFilter: Equatable, Sendable {
             case nil: break
             case .movies: if title.type != .movie { return nil }
             case .series: if title.type != .series { return nil }
-            case .music, .books, .audiobooks, .software, .adult, .other: return nil
+            case .music, .books, .audiobooks, .games, .software, .adult, .other: return nil
             }
             var title = title
             title.items = title.items.filter { keeps($0, names: [title.name]) }
@@ -367,7 +369,7 @@ public struct LibraryFilter: Equatable, Sendable {
             case nil: break
             case .books: if book.format != .ebook { return nil }
             case .audiobooks: if book.format != .audiobook { return nil }
-            case .movies, .series, .music, .software, .adult, .other: return nil
+            case .movies, .series, .music, .games, .software, .adult, .other: return nil
             }
             var book = book
             book.items = book.items.filter { keeps($0, names: [book.name, book.author].compactMap { $0 }) }
@@ -386,7 +388,7 @@ public struct LibraryFilter: Equatable, Sendable {
     }
 
     /// An item of a title or book passes the service and status filters, and the query matches it or the title.
-    private func keeps(_ item: ShelfItem, names: [String]) -> Bool {
+    func keeps(_ item: ShelfItem, names: [String]) -> Bool {
         if !backends.isEmpty && !backends.contains(item.item.backend) { return false }
         if let status, Status(of: item.item.status) != status { return false }
         return matchesQuery(item.name) || matchesQuery(item.item.name) || names.contains(where: matchesQuery)

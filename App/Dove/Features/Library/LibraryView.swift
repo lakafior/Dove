@@ -21,6 +21,7 @@ struct LibraryView: View {
     @State private var fixingTitle: LibraryTitle?
     /// "Wrong book?" from a cover's menu.
     @State private var fixingBook: BookTitle?
+    @State private var fixingGame: GameTitle?
     /// Short confirmation (e.g. magnets copied), cleared after a moment.
     @State private var notice: String?
 
@@ -129,6 +130,7 @@ struct LibraryView: View {
             }
             .sheet(item: $fixingTitle) { MatchPickerSheet(title: $0) }
             .sheet(item: $fixingBook) { BookPickerSheet(book: $0) }
+            .sheet(item: $fixingGame) { GamePickerSheet(game: $0) }
             .overlay(alignment: .bottom) {
                 if let notice {
                     Text(notice)
@@ -158,6 +160,8 @@ struct LibraryView: View {
             .navigationDestination(for: ArtistRoute.self) { ArtistView(artistID: $0.id) }
             .navigationDestination(for: LibraryAlbumRoute.self) { LibraryAlbumView(albumID: $0.id) }
             .navigationDestination(for: AlbumRoute.self) { AlbumReleasesView(route: $0) }
+            .navigationDestination(for: LibraryGameRoute.self) { LibraryGameView(gameID: $0.id) }
+            .navigationDestination(for: GameRoute.self) { GameReleasesView(route: $0) }
             .navigationDestination(for: ShelfItem.self) { LibraryItemView(item: $0.item) }
             .navigationDestination(for: WatchlistRoute.self) { _ in WatchlistView() }
             .navigationDestination(for: MediaSummary.self) { MediaDetailView(item: $0) }
@@ -191,6 +195,11 @@ struct LibraryView: View {
         return request?.apply(to: albums) ?? albums
     }
 
+    private var shownGames: [GameTitle] {
+        let games = filter.apply(to: library.games)
+        return request?.apply(to: games) ?? games
+    }
+
     private var shownOthers: [ShelfItem] {
         let others = filter.apply(to: library.others)
         return request?.apply(to: others) ?? others
@@ -200,7 +209,8 @@ struct LibraryView: View {
     /// not in its release names), so the count and the Files view match what Titles shows.
     private var shownItems: [ShelfItem] {
         guard request != nil else { return filter.apply(to: library.items) }
-        let kept = shownTitles.flatMap(\.items) + shownBooks.flatMap(\.items) + shownAlbums.flatMap(\.items) + shownOthers
+        let kept = shownTitles.flatMap(\.items) + shownBooks.flatMap(\.items) + shownAlbums.flatMap(\.items)
+            + shownGames.flatMap(\.items) + shownOthers
         var seen: Set<ShelfItem.ID> = []
         return kept.filter { seen.insert($0.id).inserted }
     }
@@ -270,6 +280,7 @@ struct LibraryView: View {
         let titles = shownTitles
         let books = shownBooks
         let artists = LibraryShelf.artists(shownAlbums)
+        let games = shownGames
         let others = shownOthers
         return ScrollView {
             categoryChips
@@ -281,6 +292,7 @@ struct LibraryView: View {
                 shelf(.books, books.filter { $0.format == .ebook }, width: 104, cell: bookCell)
                 shelf(.audiobooks, books.filter { $0.format == .audiobook }, width: 140, cell: bookCell)
                 shelf(.music, artists, width: 120, count: "\(artists.reduce(0) { $0 + $1.albums.count }) albums", cell: artistCell)
+                shelf(.games, games, width: 104, cell: gameCell)
                 otherFiles(others, limit: 5)
             } else {
                 titleGrid("Movies", titles.filter { $0.type == .movie })
@@ -288,6 +300,7 @@ struct LibraryView: View {
                 bookGrid("Books", books.filter { $0.format == .ebook }, minimum: 104)
                 bookGrid("Audiobooks", books.filter { $0.format == .audiobook }, minimum: 140)
                 artistGrid(artists)
+                gameGrid(games)
                 otherFiles(others, limit: nil)
             }
         }
@@ -410,6 +423,21 @@ struct LibraryView: View {
         }
     }
 
+    private func gameCell(_ game: GameTitle) -> some View {
+        NavigationLink(value: LibraryGameRoute(id: game.id)) {
+            GameCard(game: game)
+        }
+        .buttonStyle(.plain)
+        .contextMenu {
+            kindMenu(game.items)
+            if !game.isCollection {
+                Button("Wrong game?", systemImage: "magnifyingglass") { fixingGame = game }
+            }
+            batchActions(game.items)
+            Button("Delete", systemImage: "trash", role: .destructive) { pending = .delete(game.items) }
+        }
+    }
+
     private func artistCell(_ artist: ArtistShelf) -> some View {
         NavigationLink(value: ArtistRoute(id: artist.id)) {
             ArtistCard(artist: artist)
@@ -433,6 +461,21 @@ struct LibraryView: View {
                 gridHeading(heading, count: "\(titles.count)")
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 104), spacing: 12)], spacing: 16) {
                     ForEach(titles) { titleCell($0) }
+                }
+            }
+            .padding(.horizontal)
+            .padding(.bottom)
+        }
+    }
+
+    /// Games and ROM sets under their own heading, box covers.
+    @ViewBuilder
+    private func gameGrid(_ games: [GameTitle]) -> some View {
+        if !games.isEmpty {
+            LazyVStack(alignment: .leading, spacing: 8) {
+                gridHeading("Games", count: "\(games.count)")
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 104), spacing: 12)], alignment: .leading, spacing: 16) {
+                    ForEach(games) { gameCell($0) }
                 }
             }
             .padding(.horizontal)

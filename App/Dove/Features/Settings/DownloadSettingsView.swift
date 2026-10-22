@@ -7,7 +7,7 @@ struct DownloadSettingsView: View {
     @Environment(AppModel.self) private var model
 
     private var kinds: [ContentKind] {
-        [.books, .audiobooks, .music, .video, .software, .other] + (model.showAdult ? [.adult] : [])
+        [.books, .audiobooks, .music, .video, .games, .software, .other] + (model.showAdult ? [.adult] : [])
     }
 
     var body: some View {

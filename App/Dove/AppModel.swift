@@ -1014,6 +1014,32 @@ final class AppModel {
         reloadBookMetadata()
     }
 
+    // MARK: - Game metadata
+
+    var igdbClientID: String { (try? keychain.get(.igdbClientID)) ?? "" }
+    var igdbClientSecret: String { (try? keychain.get(.igdbClientSecret)) ?? "" }
+
+    /// The user's Twitch app for IGDB, when both halves are set.
+    var igdbCredentials: GameMetadata.IGDBCredentials? {
+        let id = igdbClientID, secret = igdbClientSecret
+        return id.isEmpty || secret.isEmpty ? nil : GameMetadata.IGDBCredentials(clientID: id, clientSecret: secret)
+    }
+
+    /// Game search for Games: IGDB with the user's Twitch app, and Wikidata, which needs no key.
+    var gameMetadata: GameMetadata { GameMetadata(igdb: igdbCredentials) }
+
+    /// Checks the Twitch app with a token and one IGDB search before keeping it. Both empty removes it.
+    func saveIGDB(clientID: String, clientSecret: String) async throws {
+        let credentials = GameMetadata.IGDBCredentials(clientID: clientID, clientSecret: clientSecret)
+        switch (credentials.clientID.isEmpty, credentials.clientSecret.isEmpty) {
+        case (true, true): break
+        case (false, false): try await GameMetadata(igdb: credentials, usesWikidata: false).validateIGDB()
+        default: throw BackendError.api(message: "Both the Client ID and the Client Secret are needed.")
+        }
+        try keychain.set(credentials.clientID, for: .igdbClientID)
+        try keychain.set(credentials.clientSecret, for: .igdbClientSecret)
+    }
+
     // MARK: - TMDB
 
     var tmdbKey: String {

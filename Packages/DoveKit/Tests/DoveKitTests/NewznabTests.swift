@@ -71,7 +71,7 @@ struct NewznabTests {
 
         let all = try #require(try await client.search(.text("Some Movie", category: .all), caps: caps))
         #expect(all.count == 4)
-        #expect(all.compactMap(\.category).map(ContentKind.init(newznabCategory:)) == [.video, .software, .music])
+        #expect(all.compactMap(\.category).map(ContentKind.init(newznabCategory:)) == [.video, .games, .music], "4050 is PC games")
     }
 
     @Test func bookSearchesUseTitleAndAuthorWhereIndexersTakeThem() {

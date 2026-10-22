@@ -28,6 +28,9 @@ public enum CredentialKey: String, Sendable, CaseIterable {
     case googleBooksAPIKey
     /// Hardcover API token (book covers and titles). Optional.
     case hardcoverToken
+    /// The user's Twitch app for IGDB (game covers and titles): Client ID and secret. Optional.
+    case igdbClientID
+    case igdbClientSecret
     /// JSON array of plugin repository index URLs. Not a secret; synced like `preferences`.
     case pluginRepositories
     /// JSON array of `InstalledPlugin` (manifests, no secrets): another device reinstalls the pinned scripts.

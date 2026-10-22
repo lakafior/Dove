@@ -94,6 +94,12 @@ struct SettingsView: View {
                                     value: AppleMusicCatalog.isEnabled ? "+ Apple Music" : "MusicBrainz")
                     }
                     NavigationLink {
+                        GameMetadataSettingsView()
+                    } label: {
+                        SettingsRow("Game metadata", symbol: "gamecontroller.fill", color: .indigo,
+                                    value: model.igdbCredentials != nil ? "IGDB" : "Wikidata")
+                    }
+                    NavigationLink {
                         PluginsSettingsView()
                     } label: {
                         SettingsRow("Plugins", symbol: "puzzlepiece.fill", color: .mint,
@@ -104,7 +110,7 @@ struct SettingsView: View {
                 } header: {
                     Text("Search and metadata")
                 } footer: {
-                    Text("Addons give sources (and titles, without TMDB). Indexers are searched from your phone and power Search › Other. TMDB gives search, posters and episodes. Book metadata finds books and audiobooks, Music metadata albums.")
+                    Text("Addons give sources (and titles, without TMDB). Indexers are searched from your phone and power Search › Other. TMDB gives search, posters and episodes. Book metadata finds books and audiobooks, Music metadata albums, Game metadata games.")
                 }
 
                 Section {

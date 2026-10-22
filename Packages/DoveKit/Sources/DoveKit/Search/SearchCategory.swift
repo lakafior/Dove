@@ -8,6 +8,7 @@ public enum SearchCategory: String, CaseIterable, Sendable, Hashable, Codable {
     case books
     case audiobooks
     case music
+    case games
     case software
     /// Hidden unless the user shows adult content.
     case adult
@@ -21,6 +22,7 @@ public enum SearchCategory: String, CaseIterable, Sendable, Hashable, Codable {
         case .books: .books
         case .audiobooks: .audiobooks
         case .music: .music
+        case .games: .games
         case .software: .software
         case .adult: .adult
         case .all: .all
@@ -43,6 +45,7 @@ public enum SearchCategory: String, CaseIterable, Sendable, Hashable, Codable {
         case .books: .books
         case .audiobooks: .audiobooks
         case .music: .music
+        case .games: .games
         case .software: .software
         case .adult: .adult
         case .all: .other
@@ -58,6 +61,7 @@ public enum SearchCategory: String, CaseIterable, Sendable, Hashable, Codable {
         case .books: "Books"
         case .audiobooks: "Audiobooks"
         case .music: "Music"
+        case .games: "Games"
         case .software: "Software"
         case .adult: "Adult"
         case .all: "All"
@@ -70,6 +74,7 @@ public enum SearchCategory: String, CaseIterable, Sendable, Hashable, Codable {
         case .books: "book"
         case .audiobooks: "headphones"
         case .music: "music.note"
+        case .games: "gamecontroller"
         case .software: "shippingbox"
         case .adult: "eye.slash"
         case .all: "square.grid.2x2"

@@ -21,6 +21,8 @@ final class ReleaseList {
     var bookFormat: BookFileFormat? { didSet { derived = Derived() } }
     /// Music: only releases that name this format (FLAC, Hi-Res, MP3…).
     var musicFormat: MusicFileFormat? { didSet { derived = Derived() } }
+    /// Games: only releases for this platform (from the indexer's console subcategory or the name).
+    var gamePlatform: GamePlatform? { didSet { derived = Derived() } }
     /// A book's screen: the rest of the indexers' answer, not this book.
     var showOtherBooks = false { didSet { derived = Derived() } }
 
@@ -35,13 +37,14 @@ final class ReleaseList {
         var visible: [StreamGroup]?
         var formats: [BookFileFormat]?
         var musicFormats: [MusicFileFormat]?
+        var gamePlatforms: [GamePlatform]?
     }
     @ObservationIgnored private var derived = Derived()
 
     /// The cached value, or a fresh one. Reads what the values are built from first, so a view stays observing
     /// them even when the cache answers.
     private func cached<Value>(_ path: WritableKeyPath<Derived, Value?>, build: () -> Value) -> Value {
-        _ = (groups, filter, showOtherBookKind, bookFormat, musicFormat, showOtherBooks, category)
+        _ = (groups, filter, showOtherBookKind, bookFormat, musicFormat, gamePlatform, showOtherBooks, category)
         if let value = derived[keyPath: path] { return value }
         let value = build()
         derived[keyPath: path] = value
@@ -51,14 +54,17 @@ final class ReleaseList {
     let book: (summary: BookSummary, format: BookFormat)?
     /// Set on an album's screen, the same way.
     let album: AlbumSummary?
+    /// Set on a game's screen, the same way.
+    let game: GameSummary?
 
-    init(book: BookSummary? = nil, format: BookFormat = .ebook, album: AlbumSummary? = nil) {
+    init(book: BookSummary? = nil, format: BookFormat = .ebook, album: AlbumSummary? = nil, game: GameSummary? = nil) {
         self.book = book.map { ($0, format) }
         self.album = album
+        self.game = game
     }
 
-    /// A book's or album's screen: the rest of the answer is behind "Show N other results".
-    var isForOneTitle: Bool { book != nil || album != nil }
+    /// A book's, album's or game's screen: the rest of the answer is behind "Show N other results".
+    var isForOneTitle: Bool { book != nil || album != nil || game != nil }
 
     var isEmpty: Bool { groups.isEmpty }
 
@@ -68,6 +74,7 @@ final class ReleaseList {
         showOtherBookKind = false
         bookFormat = nil
         musicFormat = nil
+        gamePlatform = nil
         showOtherBooks = false
     }
 
@@ -86,9 +93,13 @@ final class ReleaseList {
         kindSplit.matching + (showOtherBookKind ? kindSplit.other : [])
     }
 
-    /// On a book's or album's screen: its releases, and the rest.
+    /// On a book's, album's or game's screen: its releases, and the rest.
     var bookSplit: (thisBook: [StreamGroup], other: [StreamGroup]) {
         cached(\.bookSplit) {
+            if let game {
+                let split = StreamGroup.split(ofKind, for: game)
+                return (split.thisGame, split.other)
+            }
             if let album {
                 let split = StreamGroup.split(ofKind, for: album)
                 return (split.thisAlbum, split.other)
@@ -98,7 +109,16 @@ final class ReleaseList {
         }
     }
 
-    /// Formats the shown book results name, for the chips.
+    /// Platforms of the shown game results, for the chips.
+    var gamePlatforms: [GamePlatform] {
+        cached(\.gamePlatforms) {
+            guard category == .games else { return [] }
+            let groups = bookSplit.thisBook + (showOtherBooks ? bookSplit.other : [])
+            let found = Set(groups.compactMap { GamePlatform.of(release: $0.title, category: $0.category) })
+            return GamePlatform.allCases.filter(found.contains)
+        }
+    }
+
     /// Formats the shown music results name, for the chips.
     var musicFormats: [MusicFileFormat] {
         cached(\.musicFormats) {
@@ -108,6 +128,7 @@ final class ReleaseList {
         }
     }
 
+    /// Formats the shown book results name, for the chips.
     var formats: [BookFileFormat] {
         cached(\.formats) {
             guard category == .books || category == .audiobooks else { return [] }
@@ -121,6 +142,7 @@ final class ReleaseList {
             var shown = bookSplit.thisBook + (showOtherBooks ? bookSplit.other : [])
             if let bookFormat { shown = shown.filter { BookRelease($0).formats.contains(bookFormat) } }
             if let musicFormat { shown = shown.filter { MusicFileFormat.formats(in: $0.title).contains(musicFormat) } }
+            if let gamePlatform { shown = shown.filter { GamePlatform.of(release: $0.title, category: $0.category) == gamePlatform } }
             return filter.apply(to: shown)
         }
     }
@@ -189,7 +211,7 @@ final class ReleaseList {
                 let result = try await route.router.add(try await IndexerTorrent.prepare(route.source), category: category)
                 // From a book's screen: the book it was found for, so the Library shows it without a search.
                 model.library.recordAdded(
-                    AddedHint(releaseName: group.releaseName, book: book?.summary, album: album),
+                    AddedHint(releaseName: group.releaseName, book: book?.summary, album: album, game: game),
                     backend: result.backend, itemIDs: result.itemIDs, infoHash: group.infoHash
                 )
                 // The indexer knows better than the name: adult releases are often unmarked, audiobooks are
@@ -198,7 +220,9 @@ final class ReleaseList {
                     model.library.setKind(book.format == .audiobook ? .audiobooks : .books, backend: result.backend, itemID: result.itemID)
                 } else if album != nil {
                     model.library.setKind(.music, backend: result.backend, itemID: result.itemID)
-                } else if kind == .adult || kind == .audiobooks {
+                } else if game != nil {
+                    model.library.setKind(.games, backend: result.backend, itemID: result.itemID)
+                } else if kind == .adult || kind == .audiobooks || kind == .games {
                     model.library.setKind(kind, backend: result.backend, itemID: result.itemID)
                 }
                 message = model.downloadOnly
@@ -235,6 +259,7 @@ struct ReleaseListSection: View {
             }
             if !list.formats.isEmpty { formatBar }
             if !list.musicFormats.isEmpty { musicFormatBar }
+            if !list.gamePlatforms.isEmpty { gamePlatformBar }
             ForEach(list.visible) { group in
                 OtherResultRow(
                     group: group,
@@ -301,6 +326,20 @@ struct ReleaseListSection: View {
                 ForEach(list.musicFormats, id: \.self) { format in
                     chip(format.displayName, selected: list.musicFormat == format) {
                         list.musicFormat = list.musicFormat == format ? nil : format
+                    }
+                }
+            }
+        }
+        .scrollIndicators(.hidden)
+    }
+
+    private var gamePlatformBar: some View {
+        ScrollView(.horizontal) {
+            HStack(spacing: 8) {
+                chip("All", selected: list.gamePlatform == nil) { list.gamePlatform = nil }
+                ForEach(list.gamePlatforms, id: \.self) { platform in
+                    chip(platform.displayName, selected: list.gamePlatform == platform) {
+                        list.gamePlatform = list.gamePlatform == platform ? nil : platform
                     }
                 }
             }

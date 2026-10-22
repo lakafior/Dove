@@ -4,7 +4,7 @@ import Foundation
 ///
 ///     Books/Andy Weir/Project Hail Mary/Project Hail Mary - Andy Weir.epub
 ///     Audiobooks/Andy Weir/Project Hail Mary/01.mp3 …
-///     Music/<item>/…   Video/<item>/…   Software/…   Adult/…   Other/…
+///     Music/<item>/…   Video/<item>/…   Games/<item>/…   Software/…   Adult/…   Other/…
 ///
 /// One folder per work keeps several formats (EPUB and PDF, a cover later) together and lets Calibre import the
 /// tree. Folder names carry author and title, so the Library reads them back without a search.
@@ -15,6 +15,7 @@ public enum LibraryFolderLayout {
         case .audiobooks: "Audiobooks"
         case .music: "Music"
         case .video: "Video"
+        case .games: "Games"
         case .software: "Software"
         case .adult: "Adult"
         case .other: "Other"

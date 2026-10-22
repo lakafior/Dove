@@ -19,8 +19,8 @@ struct ContentClassifierTests {
         ("Pink Floyd - The Dark Side of the Moon (1973) [FLAC 24bit]", .music),
         ("Artist - Discography 2001-2020 [MP3 320kbps]", .music),
         ("Brandon Sanderson - Mistborn Trilogy (ePub)", .books),
-        ("Cyberpunk 2077 v2.1 - GOG", .software),
-        ("Some.Game-FitGirl.Repack", .software),
+        ("Cyberpunk 2077 v2.1 - GOG", .games),
+        ("Some.Game-FitGirl.Repack", .games),
         ("Ubuntu 24.04 Desktop amd64", .software),
         // Adult markers win over video markers.
         ("Some.Site.24.03.01.Name.XXX.1080p.MP4-GRP", .adult),
@@ -166,7 +166,7 @@ struct AddCategoryTests {
     @Test func categoriesFromSearchAndNames() {
         #expect(AddCategory(mediaType: .movie) == .movies)
         #expect(AddCategory(mediaType: .series) == .tv)
-        #expect([2040, 5030, 3010, 4050, 6010, 7020].compactMap(AddCategory.init(newznabCategory:)) == [.movies, .tv, .audio, .software, .xxx, .books])
+        #expect([2040, 5030, 3010, 4050, 6010, 7020].compactMap(AddCategory.init(newznabCategory:)) == [.movies, .tv, .audio, .games, .xxx, .books])
         #expect(AddCategory(newznabCategory: 3030) == .audiobooks)
         #expect(AddCategory(newznabCategory: 8010) == nil)
         #expect(AddCategory(releaseName: "Pink Floyd - The Wall (1979) [FLAC]") == .audio)

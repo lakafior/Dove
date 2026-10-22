@@ -1,0 +1,141 @@
+{
+ "head": {
+  "vars": [
+   "item",
+   "itemLabel",
+   "itemDescription",
+   "released",
+   "platforms"
+  ]
+ },
+ "results": {
+  "bindings": [
+   {
+    "item": {
+     "type": "uri",
+     "value": "http://www.wikidata.org/entity/Q64826862"
+    },
+    "itemLabel": {
+     "xml:lang": "mul",
+     "type": "literal",
+     "value": "Elden Ring"
+    },
+    "itemDescription": {
+     "xml:lang": "en",
+     "type": "literal",
+     "value": "2022 action role-playing video game developed by FromSoftware"
+    },
+    "released": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#dateTime",
+     "type": "literal",
+     "value": "2022-02-25T00:00:00Z"
+    },
+    "platforms": {
+     "type": "literal",
+     "value": "Microsoft Windows|Microsoft Windows|PlayStation 4|Xbox One|PlayStation 5|Xbox Series X and Series S|Xbox Series X/S|Nintendo Switch 2"
+    }
+   },
+   {
+    "item": {
+     "type": "uri",
+     "value": "http://www.wikidata.org/entity/Q131435228"
+    },
+    "itemLabel": {
+     "xml:lang": "en",
+     "type": "literal",
+     "value": "Elden Ring Nightreign"
+    },
+    "itemDescription": {
+     "xml:lang": "en",
+     "type": "literal",
+     "value": "2025 video game developed by FromSoftware"
+    },
+    "released": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#dateTime",
+     "type": "literal",
+     "value": "2025-05-30T00:00:00Z"
+    },
+    "platforms": {
+     "type": "literal",
+     "value": "Microsoft Windows|Microsoft Windows|PlayStation 4|Xbox One|PlayStation 5|Xbox Series X and Series S|Xbox Series X/S"
+    }
+   },
+   {
+    "item": {
+     "type": "uri",
+     "value": "http://www.wikidata.org/entity/Q128815494"
+    },
+    "itemLabel": {
+     "type": "literal",
+     "value": "The Legend of Zelda: A Link to the Past"
+    },
+    "platforms": {
+     "type": "literal",
+     "value": "Game Boy Advance"
+    }
+   },
+   {
+    "item": {
+     "type": "uri",
+     "value": "http://www.wikidata.org/entity/Q1358804"
+    },
+    "itemLabel": {
+     "type": "literal",
+     "value": "The Legend of Zelda: A Link to the Past and Four Swords"
+    },
+    "itemDescription": {
+     "type": "literal",
+     "value": "2002 video game compilation"
+    },
+    "released": {
+     "type": "literal",
+     "value": "2002-12-02T00:00:00Z"
+    },
+    "platforms": {
+     "type": "literal",
+     "value": "Game Boy Advance"
+    }
+   },
+   {
+    "item": {
+     "type": "uri",
+     "value": "http://www.wikidata.org/entity/Q370055"
+    },
+    "itemLabel": {
+     "type": "literal",
+     "value": "The Legend of Zelda: A Link to the Past"
+    },
+    "itemDescription": {
+     "type": "literal",
+     "value": "1991 video game on the Super Nintendo Entertainment System"
+    },
+    "released": {
+     "type": "literal",
+     "value": "1991-11-21T00:00:00Z"
+    },
+    "platforms": {
+     "type": "literal",
+     "value": "Super Nintendo Entertainment System"
+    }
+   },
+   {
+    "item": {
+     "type": "uri",
+     "value": "http://www.wikidata.org/entity/Q122859939"
+    },
+    "itemLabel": {
+     "type": "literal",
+     "value": "Cyberpunk 2"
+    },
+    "released": {
+     "type": "bnode",
+     "value": "t123"
+    },
+    "platforms": {
+     "type": "literal",
+     "value": ""
+    }
+   }
+  ]
+ }
+}

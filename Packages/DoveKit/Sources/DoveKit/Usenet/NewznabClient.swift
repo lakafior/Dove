@@ -4,6 +4,8 @@ import Foundation
 public enum NewznabCategory: String, CaseIterable, Sendable, Hashable, Codable {
     /// No category: whatever the indexer finds for the words.
     case all
+    /// Consoles (1000) and PC games (4050).
+    case games
     case software
     case music
     case books
@@ -16,6 +18,7 @@ public enum NewznabCategory: String, CaseIterable, Sendable, Hashable, Codable {
     var ids: [Int] {
         switch self {
         case .all: []
+        case .games: [1000, 4050]
         case .software: [4000]
         case .music: [3000]
         case .books: [7000]
@@ -27,6 +30,7 @@ public enum NewznabCategory: String, CaseIterable, Sendable, Hashable, Codable {
     public var displayName: String {
         switch self {
         case .all: "All"
+        case .games: "Games"
         case .software: "Software"
         case .music: "Music"
         case .books: "Books"

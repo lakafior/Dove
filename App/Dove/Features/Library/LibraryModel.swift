@@ -20,6 +20,8 @@ final class LibraryModel {
     private(set) var bookMatches: [String: BookSummary] = [:] { didSet { derived = Derived() } }
     /// Albums for music, keyed by `AlbumGuess.key`.
     private(set) var albumMatches: [String: AlbumSummary] = [:] { didSet { derived = Derived() } }
+    /// Games, keyed by `GameGuess.key`.
+    private(set) var gameMatches: [String: GameSummary] = [:] { didSet { derived = Derived() } }
 
     /// Titles, books, albums and the rest, built once per change of the items or matches. Views read them on
     /// every redraw (the home screen several times, once per keystroke in the search field), and building them
@@ -29,6 +31,7 @@ final class LibraryModel {
         var titles: [LibraryTitle]?
         var books: [BookTitle]?
         var albums: [AlbumTitle]?
+        var games: [GameTitle]?
         var others: [ShelfItem]?
         var heldBooks: HeldBooks?
     }
@@ -37,7 +40,7 @@ final class LibraryModel {
     /// The cached value, or a fresh one. Reads what the value is built from first, so a view stays observing
     /// the items and matches even when the cache answers.
     private func cached<Value>(_ path: WritableKeyPath<Derived, Value?>, build: () -> Value) -> Value {
-        _ = (allItems, showAdult, matches, bookMatches, albumMatches)
+        _ = (allItems, showAdult, matches, bookMatches, albumMatches, gameMatches)
         if let value = derived[keyPath: path] { return value }
         let value = build()
         derived[keyPath: path] = value
@@ -60,6 +63,7 @@ final class LibraryModel {
     private let store = MatchStore(fileURL: URL.applicationSupportDirectory.appending(path: "Dove/library-matches.json"))
     private let bookStore = MetadataStore<BookSummary>(fileURL: URL.applicationSupportDirectory.appending(path: "Dove/library-books.json"))
     private let albumStore = MetadataStore<AlbumSummary>(fileURL: URL.applicationSupportDirectory.appending(path: "Dove/library-albums.json"))
+    private let gameStore = MetadataStore<GameSummary>(fileURL: URL.applicationSupportDirectory.appending(path: "Dove/library-games.json"))
     /// Set by `AppModel.reloadBookMetadata` (region, language, the user's keys).
     var bookMetadata = BookMetadata(configuration: .device())
     /// The last list, shown at once on launch while the services are asked again.
@@ -104,6 +108,10 @@ final class LibraryModel {
         cached(\.albums) { LibraryShelf.albums(items, matches: albumMatches) }
     }
 
+    var games: [GameTitle] {
+        cached(\.games) { LibraryShelf.games(items, matches: gameMatches) }
+    }
+
     /// Software and the rest: listed by name under the posters.
     var others: [ShelfItem] {
         cached(\.others) { LibraryShelf.others(items) }
@@ -139,6 +147,7 @@ final class LibraryModel {
         await matchMissing(using: app.addonSet)
         await matchMissingBooks()
         await matchMissingAlbums(using: app.musicMetadata)
+        await matchMissingGames(using: app.gameMetadata)
     }
 
     /// A kind known when the item was added (an indexer's adult category), kept like the user's choice.
@@ -193,6 +202,10 @@ final class LibraryModel {
         albums.first { $0.id == id }
     }
 
+    func game(id: String) -> GameTitle? {
+        games.first { $0.id == id }
+    }
+
     func artist(id: String) -> ArtistShelf? {
         LibraryShelf.artists(albums).first { $0.id == id }
     }
@@ -204,6 +217,7 @@ final class LibraryModel {
         matches = await store.all().compactMapValues(\.media)
         bookMatches = await bookStore.all().compactMapValues(\.media)
         albumMatches = await albumStore.all().compactMapValues(\.media)
+        gameMatches = await gameStore.all().compactMapValues(\.media)
         await refresh(using: app)
     }
 
@@ -243,10 +257,12 @@ final class LibraryModel {
         matches = await store.all().compactMapValues(\.media)
         bookMatches = await bookStore.all().compactMapValues(\.media)
         albumMatches = await albumStore.all().compactMapValues(\.media)
+        gameMatches = await gameStore.all().compactMapValues(\.media)
         async let titles: Void = matchMissing(using: app.addonSet)
         async let books: Void = matchMissingBooks()
         async let albums: Void = matchMissingAlbums(using: app.musicMetadata)
-        _ = await (titles, books, albums)
+        async let games: Void = matchMissingGames(using: app.gameMetadata)
+        _ = await (titles, books, albums, games)
         // After matching: only matched series have an episode list.
         await app.review.run(using: app)
         await app.watchlist.refresh(using: app)
@@ -262,7 +278,8 @@ final class LibraryModel {
         async let titles: Void = matchMissing(using: app.addonSet, everything: true)
         async let books: Void = matchMissingBooks(everything: true)
         async let albums: Void = matchMissingAlbums(using: app.musicMetadata, everything: true)
-        _ = await (titles, books, albums)
+        async let games: Void = matchMissingGames(using: app.gameMetadata, everything: true)
+        _ = await (titles, books, albums, games)
     }
 
     /// Looks up posters for titles without one, through TMDB or the search addon. Rows update as answers arrive.
@@ -330,6 +347,38 @@ final class LibraryModel {
 
     private func recordAlbum(_ album: AlbumSummary, for key: String) {
         albumMatches[key] = album
+    }
+
+    /// Games through IGDB (with the user's Twitch app) and Wikidata. Two at a time: IGDB allows 4 calls a second
+    /// and Wikidata asks clients to go easy; a failed search is tried again on the next refresh. Collections are
+    /// never looked up.
+    private func matchMissingGames(using metadata: GameMetadata, everything: Bool = false) async {
+        // Games added from a game's screen need no search.
+        for (key, game) in await LibraryMatcher.applyGameHints(items, store: gameStore) { gameMatches[key] = game }
+        var guesses: [String: GameGuess] = [:]
+        for item in items {
+            if let guess = item.gameGuess, guesses[guess.key] == nil { guesses[guess.key] = guess }
+        }
+        await LibraryMatcher.matchMissing(
+            guesses,
+            store: gameStore,
+            everything: everything,
+            concurrency: 2,
+            lookup: { try await metadata.match($0) },
+            onMatch: { key, game in await self.recordGame(game, for: key) }
+        )
+    }
+
+    private func recordGame(_ game: GameSummary, for key: String) {
+        gameMatches[key] = game
+    }
+
+    /// The user's choice for a game; applies to every release with the same guess.
+    func setGameMatch(_ game: GameSummary, for keys: Set<String>) async {
+        for key in keys {
+            await gameStore.set(.manual(game), for: key)
+            gameMatches[key] = game
+        }
     }
 
     /// The user's choice for an album; applies to every release with the same guess.

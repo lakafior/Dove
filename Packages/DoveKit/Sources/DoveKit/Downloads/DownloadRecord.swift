@@ -103,7 +103,7 @@ public struct DownloadDestinations: Codable, Sendable, Hashable {
     public static func standard(for kind: ContentKind) -> FilePlace {
         switch kind {
         case .books, .audiobooks, .music: .iCloud
-        case .video, .software, .adult, .other: .device
+        case .video, .games, .software, .adult, .other: .device
         }
     }
 }

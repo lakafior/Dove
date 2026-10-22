@@ -26,6 +26,9 @@ struct SearchView: View {
     /// Music: MusicBrainz's albums, before any indexer is asked.
     @State private var albums: [AlbumSummary] = []
     @State private var searchedAlbums: String?
+    /// Games: IGDB's and Wikidata's games, before any indexer is asked.
+    @State private var games: [GameSummary] = []
+    @State private var searchedGames: String?
     /// Rows from the plugins that serve the picked category.
     @State private var pluginSearch = PluginSearch()
     @State private var resultsTab = ResultsTab.sources
@@ -61,6 +64,7 @@ struct SearchView: View {
         case .media: "Title, magnet or link"
         case .books, .audiobooks: "Author or title, magnet or link"
         case .music: "Artist or album, magnet or link"
+        case .games: "Game, magnet or link"
         case .software, .adult, .all: "Name, magnet or link"
         }
     }
@@ -70,6 +74,7 @@ struct SearchView: View {
     private var showsResults: Bool {
         isSearching || releases.isSearching || pluginSearch.isSearching || !pluginSearch.answers.isEmpty
             || !results.isEmpty || !releases.isEmpty || !books.isEmpty || !albums.isEmpty || searchedAlbums != nil
+            || !games.isEmpty || searchedGames != nil
             || ((message != nil || releases.message != nil) && !text.isEmpty) || isDescribing || described != nil
     }
 
@@ -135,6 +140,7 @@ struct SearchView: View {
             .navigationDestination(for: BookRoute.self) { BookTitleView(bookID: $0.id) }
             .navigationDestination(for: BookSearchRoute.self) { BookReleasesView(route: $0) }
             .navigationDestination(for: AlbumRoute.self) { AlbumReleasesView(route: $0) }
+            .navigationDestination(for: GameRoute.self) { GameReleasesView(route: $0) }
             .navigationDestination(for: ShelfItem.self) { LibraryItemView(item: $0.item) }
             // The field's clear button and Cancel empty the text: back to the home screen.
             .onChange(of: text) {
@@ -186,12 +192,13 @@ struct SearchView: View {
 
     /// Indexers and plugins both answered something: a tap switches instead of a scroll past every release.
     private var showsResultTabs: Bool {
-        pluginSearch.wasAsked && (!releases.isEmpty || releases.isSearching || !books.isEmpty || !albums.isEmpty || !results.isEmpty)
+        pluginSearch.wasAsked && (!releases.isEmpty || releases.isSearching || !books.isEmpty || !albums.isEmpty || !games.isEmpty || !results.isEmpty)
     }
 
     private var ownResultsTitle: String {
         if !books.isEmpty { return activeCategory == .audiobooks ? "Audiobooks" : "Books" }
         if !albums.isEmpty { return "Albums" }
+        if !games.isEmpty { return "Games" }
         if activeCategory == .media, !results.isEmpty { return "Titles" }
         return "Releases"
     }
@@ -199,6 +206,7 @@ struct SearchView: View {
     private var ownResultsCount: Int? {
         if !books.isEmpty { return books.count }
         if !albums.isEmpty { return albums.count }
+        if !games.isEmpty { return games.count }
         if activeCategory == .media, !results.isEmpty { return visibleResults.count }
         return releases.isSearching ? nil : releases.visible.count
     }
@@ -218,11 +226,14 @@ struct SearchView: View {
         if !albums.isEmpty || searchedAlbums != nil {
             albumsSection
         }
+        if !games.isEmpty || searchedGames != nil {
+            gamesSection
+        }
         if let message = releases.message {
             Section { Text(message).font(.footnote).foregroundStyle(.secondary) }
         }
         if !activeCategory.usesAddons, !releases.isEmpty {
-            ReleaseListSection(list: releases, title: books.isEmpty && albums.isEmpty ? "Releases from your indexers" : "Releases")
+            ReleaseListSection(list: releases, title: books.isEmpty && albums.isEmpty && games.isEmpty ? "Releases from your indexers" : "Releases")
         }
         if !showsResultTabs { PluginResultsSections(search: pluginSearch) }
         siteSearchSection
@@ -357,6 +368,8 @@ struct SearchView: View {
         searchedBooks = nil
         albums = []
         searchedAlbums = nil
+        games = []
+        searchedGames = nil
         message = nil
         typeFilter = nil
     }
@@ -446,6 +459,7 @@ struct SearchView: View {
         SiriSuggestions.searched(query)
         if let format = category.bookFormat { return searchBooks(query, format: format) }
         if category == .music { return searchAlbums(query) }
+        if category == .games { return searchGames(query) }
         // Categories without a title to pick: the plugins answer the words beside the indexers. Books and
         // Movies & TV ask them once a title is picked (its screen), or here when no title is found.
         if category.newznabCategory != nil {
@@ -505,7 +519,7 @@ extension SearchView {
     var siteSearchSection: some View {
         let query = text.trimmingCharacters(in: .whitespacesAndNewlines)
         let browsers = model.plugins.browsers(for: activeCategory)
-        let searched = !results.isEmpty || !releases.isEmpty || !books.isEmpty || !albums.isEmpty || message != nil || releases.message != nil
+        let searched = !results.isEmpty || !releases.isEmpty || !books.isEmpty || !albums.isEmpty || !games.isEmpty || message != nil || releases.message != nil
             || !pluginSearch.answers.isEmpty
         if !query.isEmpty, !browsers.isEmpty, searched, !isSearching, !releases.isSearching {
             Section {
@@ -575,6 +589,50 @@ extension SearchView {
             isSearching = false
             // Nothing MusicBrainz knows (or it is busy): straight to the indexers and plugins.
             if albums.isEmpty {
+                searchReleases()
+                searchPlugins()
+            }
+        }
+    }
+
+    /// Games start from IGDB and Wikidata (no indexer hits): a tap on a game searches the indexers for it.
+    var gamesSection: some View {
+        Section {
+            ForEach(games) { game in
+                NavigationLink(value: GameRoute(game: game)) { GameRow(game: game) }
+            }
+            if let query = searchedGames, releases.isEmpty, !releases.isSearching, pluginSearch.answers.isEmpty {
+                Button("Search releases for \u{201C}\(query)\u{201D}", systemImage: "magnifyingglass") {
+                    searchReleases()
+                    searchPlugins()
+                }
+            }
+        } header: {
+            if !games.isEmpty { Text("Games") }
+        } footer: {
+            if !games.isEmpty {
+                Text(model.igdbCredentials == nil
+                     ? "From Wikidata. Add IGDB in Settings › Game metadata for covers. Pick one to search the indexers for it."
+                     : "From IGDB and Wikidata. Pick one to search the indexers for it.")
+            }
+        }
+    }
+
+    func searchGames(_ query: String) {
+        isSearching = true
+        games = []
+        searchedGames = nil
+        releases.clear()
+        Task {
+            do {
+                games = try await model.gameMetadata.search(query)
+            } catch {
+                message = error.localizedDescription
+            }
+            searchedGames = query
+            isSearching = false
+            // Nothing the services know (ROM hacks, obscure titles): straight to the indexers and plugins.
+            if games.isEmpty {
                 searchReleases()
                 searchPlugins()
             }

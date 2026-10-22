@@ -12,17 +12,21 @@ public struct AddedHint: Codable, Sendable, Hashable {
     public var book: BookSummary?
     /// The album the user was looking at when adding, if any.
     public var album: AlbumSummary?
+    /// The game the user was looking at when adding, if any.
+    public var game: GameSummary?
     public var addedAt: Date
 
-    public init(releaseName: String?, media: MediaSummary? = nil, book: BookSummary? = nil, album: AlbumSummary? = nil, addedAt: Date = .now) {
+    public init(releaseName: String?, media: MediaSummary? = nil, book: BookSummary? = nil, album: AlbumSummary? = nil,
+                game: GameSummary? = nil, addedAt: Date = .now) {
         self.releaseName = releaseName.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.flatMap { $0.isEmpty ? nil : $0 }
         self.media = media
         self.book = book
         self.album = album
+        self.game = game
         self.addedAt = addedAt
     }
 
-    public var isEmpty: Bool { releaseName == nil && media == nil && book == nil && album == nil }
+    public var isEmpty: Bool { releaseName == nil && media == nil && book == nil && album == nil && game == nil }
 }
 
 /// Hints for items Dove added, keyed by `ShelfItem.id` and by info hash: Reinsert and Move give an item a new ID,
