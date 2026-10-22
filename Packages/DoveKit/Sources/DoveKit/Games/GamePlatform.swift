@@ -103,14 +103,29 @@ public enum GamePlatform: String, Codable, Sendable, CaseIterable, Hashable {
         (.arcade, #"\b(mame|arcade)\b"#),
     ]
 
-    /// The platform a release name gives: an extension first, then a marker; nil for PC releases, which rarely say so.
+    /// The platform a release name gives: an extension first, then Dove's own folder name in brackets ("Title
+    /// [SNES]", "[PC]"), then a marker; nil for most PC releases, which rarely say so.
     public init?(releaseName name: String) {
         if let platform = GamePlatform(fileName: name) { self = platform; return }
+        if let bracketed = name.range(of: #"\[([^\]]+)\]\s*$"#, options: .regularExpression),
+           let platform = GamePlatform.allCases.first(where: {
+               $0.displayName.caseInsensitiveCompare(name[bracketed].dropFirst().dropLast().trimmingCharacters(in: .whitespaces)) == .orderedSame
+           }) {
+            self = platform
+            return
+        }
         let text = name.lowercased().replacingOccurrences(of: #"[._\-\[\]\(\)]"#, with: " ", options: .regularExpression)
         guard let found = Self.nameMarkers.first(where: { text.range(of: $0.1, options: .regularExpression) != nil }) else {
             return nil
         }
         self = found.0
+    }
+
+    /// Scene groups and repackers that only release PC games.
+    static func isPCRelease(_ name: String) -> Bool {
+        let text = name.lowercased().replacingOccurrences(of: #"[._\-\[\]\(\)]"#, with: " ", options: .regularExpression)
+        return text.range(of: #"\b(fitgirl|dodi|elamigos|gog|codex|skidrow|plaza|empress|tenoke|rune|flt|razor1911|cpy|hoodlum|darksiders|kaos|chronos|setup exe)\b"#,
+                          options: .regularExpression) != nil
     }
 
     /// A metadata service's platform name: IGDB "PlayStation 2", "Nintendo Switch", "PC (Microsoft Windows)",

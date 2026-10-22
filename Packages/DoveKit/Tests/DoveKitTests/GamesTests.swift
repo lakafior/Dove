@@ -300,3 +300,49 @@ struct GameLibraryTests {
         #expect(await LibraryMatcher.applyGameHints(hinted, store: store).isEmpty, "recorded once")
     }
 }
+
+struct GameFolderTests {
+    @Test func gamesAreFiledByPlatformThenGame() {
+        let zelda = GameSummary(id: "igdb:1026", title: "The Legend of Zelda: A Link to the Past", platforms: [.snes, .gameBoyAdvance])
+        let rom = LibraryFolderLayout.placement(
+            kind: .games, game: zelda, itemName: "Legend of Zelda, The - A Link to the Past (USA).sfc",
+            fileName: "Legend of Zelda, The - A Link to the Past (USA).sfc", singleFile: true
+        )
+        #expect(rom == .init(folder: "Games/SNES/The Legend of Zelda - A Link to the Past", fileName: "Legend of Zelda, The - A Link to the Past (USA).sfc"),
+                "the ROM keeps its name; the folder takes the game's")
+
+        let repack = LibraryFolderLayout.placement(
+            kind: .games, itemName: "Elden Ring - Deluxe Edition [FitGirl Repack]", fileName: "setup-fitgirl-01.bin", singleFile: false
+        )
+        #expect(repack == .init(folder: "Games/PC/Elden Ring", fileName: "setup-fitgirl-01.bin"), "repackers release PC games")
+
+        let switchOnly = GameSummary(id: "igdb:2", title: "Super Mario Odyssey", platforms: [.nintendoSwitch])
+        let fromGame = LibraryFolderLayout.placement(kind: .games, game: switchOnly, itemName: "Super Mario Odyssey", fileName: "smo.bin", singleFile: true)
+        #expect(fromGame.folder == "Games/Switch/Super Mario Odyssey", "a game on one platform")
+
+        let unknown = LibraryFolderLayout.placement(kind: .games, itemName: "Some Game", fileName: "game.iso", singleFile: true)
+        #expect(unknown.folder == "Games/Other Platforms/Some Game")
+
+        let set = LibraryFolderLayout.placement(kind: .games, itemName: "No-Intro SNES Romset", fileName: "Super Metroid (USA).sfc", singleFile: false)
+        #expect(set.folder == "Games/SNES/No-Intro SNES Romset", "a collection keeps its name")
+    }
+
+    @Test func gameFoldersReadBackWithTheirPlatform() async throws {
+        let root = FileManager.default.temporaryDirectory.appending(path: "games-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: root) }
+        let rom = root.appending(path: "Games/SNES/The Legend of Zelda - A Link to the Past/Zelda (USA).sfc")
+        let other = root.appending(path: "Games/Other Platforms/Some Game/game.iso")
+        for url in [rom, other] {
+            try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try Data("x".utf8).write(to: url)
+        }
+        let items = try await FolderBackend(directory: root).items()
+        let zelda = try #require(items.first { $0.id == "folder:Games/SNES/The Legend of Zelda - A Link to the Past" })
+        #expect(zelda.name == "The Legend of Zelda - A Link to the Past [SNES]" && zelda.kindHint == .games)
+        let guess = try #require(ShelfItem(item: zelda).gameGuess)
+        #expect(guess.title == "The Legend of Zelda - A Link to the Past" && guess.platform == .snes)
+        #expect(items.first { $0.id == "folder:Games/Other Platforms/Some Game" }?.name == "Some Game")
+        #expect(GamePlatform(releaseName: "Doom [PC]") == .pc)
+        #expect(GamePlatform(releaseName: "Halo [Xbox 360]") == .xbox360)
+    }
+}

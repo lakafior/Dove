@@ -1,9 +1,9 @@
 import Foundation
 
 /// A folder of the user's shown as a library place: iCloud Drive › Dove, laid out by `LibraryFolderLayout`
-/// (`Books/<Author>/<Title>/…`, `Video/<item>/…`). Each work folder (or loose file) is an item, IDs are its path
+/// (`Books/<Author>/<Title>/…`, `Games/<Platform>/<Game>/…`, `Video/<item>/…`). Each work folder (or loose file) is an item, IDs are its path
 /// (`folder:Books/Andy Weir/Project Hail Mary`), file IDs paths inside it; the kind comes from the top folder and
-/// book names read "Author - Title". Entries at the top that are not kind folders (downloads from before the
+/// book names read "Author - Title", games "Title [Platform]". Entries at the top that are not kind folders (downloads from before the
 /// layout) are items too. Nothing is added here through a service: files arrive as downloads.
 ///
 /// iCloud keeps files it has not downloaded to this device as placeholders (`.Name.epub.icloud`): they are
@@ -41,13 +41,15 @@ public struct FolderBackend: LibraryBackend {
                 continue
             }
             for (entryURL, entry) in Self.entries(of: url) {
-                if LibraryFolderLayout.byAuthor(kind), Self.isDirectory(entryURL) {
-                    // An author's folder: one item per title in it.
+                if LibraryFolderLayout.isTwoLevel(kind), Self.isDirectory(entryURL) {
+                    // An author's (or a platform's) folder: one item per title in it.
                     for (_, title) in Self.entries(of: entryURL) {
                         let workTitle = LibraryFolderLayout.stripExtension(title)
                         items.append(item(
                             at: "\(name)/\(entry)/\(title)",
-                            name: LibraryFolderLayout.itemName(author: entry, title: workTitle),
+                            name: kind == .games
+                                ? LibraryFolderLayout.itemName(platformFolder: entry, title: workTitle)
+                                : LibraryFolderLayout.itemName(author: entry, title: workTitle),
                             kind: kind
                         ))
                     }

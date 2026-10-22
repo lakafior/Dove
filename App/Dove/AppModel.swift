@@ -383,8 +383,8 @@ final class AppModel {
     }
 
     /// Asks the service for a link and starts downloading the file to this device or iCloud Drive. In iCloud
-    /// the file is filed by kind (and author and title for books, from the item's match), and the Library's
-    /// iCloud place gets the same match.
+    /// the file is filed by kind (author and title for books, platform and game for games, from the item's match),
+    /// and the Library's iCloud place gets the same match.
     func download(_ file: LibraryFile, of item: LibraryItem, to destination: DownloadDestination = .device) async throws {
         guard let backend = backend(item.backend) else { return }
         let request = try await backend.downloadRequest(itemID: item.id, fileID: file.id)
@@ -392,20 +392,23 @@ final class AppModel {
         if destination == .iCloud {
             let shelf = library.shelf(item)
             let book = library.bookMatch(for: shelf)
+            let game = library.gameMatch(for: shelf)
             let place = LibraryFolderLayout.placement(
-                kind: shelf.kind, book: book, itemName: shelf.name, fileName: file.name, singleFile: item.files.count <= 1
+                kind: shelf.kind, book: book, game: game, itemName: shelf.name, fileName: file.name, singleFile: item.files.count <= 1
             )
             placement = place
-            rememberICloud(place, book: book, kind: shelf.kind)
+            rememberICloud(place, book: book, game: game, kind: shelf.kind)
         }
         try downloads.start(request, backend: item.backend, itemID: item.id, file: file, destination: destination, placement: placement)
     }
 
-    /// Tells the Library what a file arriving in iCloud Drive will be: the book it was found for.
-    private func rememberICloud(_ place: LibraryFolderLayout.Placement, book: BookSummary?, media: MediaSummary? = nil, kind: ContentKind) {
-        guard book != nil || media != nil else { return }
-        let itemPath = LibraryFolderLayout.byAuthor(kind) ? place.folder : "\(place.folder)/\(place.fileName)"
-        library.recordAdded(AddedHint(releaseName: nil, media: media, book: book), backend: .iCloudDrive, itemIDs: ["folder:\(itemPath)"], infoHash: nil)
+    /// Tells the Library what a file arriving in iCloud Drive will be: the book or game it was found for.
+    private func rememberICloud(
+        _ place: LibraryFolderLayout.Placement, book: BookSummary?, media: MediaSummary? = nil, game: GameSummary? = nil, kind: ContentKind
+    ) {
+        guard book != nil || media != nil || game != nil else { return }
+        let itemPath = LibraryFolderLayout.isTwoLevel(kind) ? place.folder : "\(place.folder)/\(place.fileName)"
+        library.recordAdded(AddedHint(releaseName: nil, media: media, book: book, game: game), backend: .iCloudDrive, itemIDs: ["folder:\(itemPath)"], infoHash: nil)
     }
 
     /// Lists the Library again a moment after files land in iCloud Drive (once for a batch).

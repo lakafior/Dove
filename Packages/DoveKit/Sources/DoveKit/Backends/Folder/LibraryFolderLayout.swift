@@ -4,10 +4,13 @@ import Foundation
 ///
 ///     Books/Andy Weir/Project Hail Mary/Project Hail Mary - Andy Weir.epub
 ///     Audiobooks/Andy Weir/Project Hail Mary/01.mp3 …
-///     Music/<item>/…   Video/<item>/…   Games/<item>/…   Software/…   Adult/…   Other/…
+///     Games/SNES/The Legend of Zelda - A Link to the Past/Legend of Zelda, The - A Link to the Past (USA).sfc
+///     Music/<item>/…   Video/<item>/…   Software/…   Adult/…   Other/…
 ///
 /// One folder per work keeps several formats (EPUB and PDF, a cover later) together and lets Calibre import the
-/// tree. Folder names carry author and title, so the Library reads them back without a search.
+/// tree. Folder names carry author and title, so the Library reads them back without a search. Games go by platform,
+/// then game (the files keep their names: a ROM's says its region and revision), so an emulator's folder can point
+/// at one platform's.
 public enum LibraryFolderLayout {
     public static func folderName(_ kind: ContentKind) -> String {
         switch kind {
@@ -30,6 +33,30 @@ public enum LibraryFolderLayout {
     /// Kinds filed by author, then title.
     public static func byAuthor(_ kind: ContentKind) -> Bool { kind == .books || kind == .audiobooks }
 
+    /// Kinds filed in two levels (author or platform, then the work): each work folder is one Library item.
+    public static func isTwoLevel(_ kind: ContentKind) -> Bool { byAuthor(kind) || kind == .games }
+
+    /// Games whose platform is not known.
+    public static let otherPlatforms = "Other Platforms"
+
+    /// The folder a platform's games go in.
+    public static func folderName(_ platform: GamePlatform?) -> String {
+        platform?.displayName ?? otherPlatforms
+    }
+
+    /// The Library name of a game folder: "Title [SNES]" (`GamePlatform(releaseName:)` reads the platform back).
+    public static func itemName(platformFolder: String, title: String) -> String {
+        platformFolder == otherPlatforms ? title : "\(title) [\(platformFolder)]"
+    }
+
+    /// A game's platform: the release names it (extension, marker), else a PC scene group or repacker says PC,
+    /// else the game is on one platform only.
+    static func platform(game: GameSummary?, names: [String]) -> GamePlatform? {
+        if let named = names.lazy.compactMap(GamePlatform.init(releaseName:)).first { return named }
+        if names.contains(where: GamePlatform.isPCRelease) { return .pc }
+        return game.flatMap { $0.platforms.count == 1 ? $0.platforms.first : nil }
+    }
+
     public static let unknownAuthor = "Unknown Author"
 
     /// Where a download goes, relative to iCloud Drive › Dove.
@@ -43,17 +70,25 @@ public enum LibraryFolderLayout {
     /// - Parameters:
     ///   - kind: what the file is.
     ///   - book: the book it was found for (metadata wins over names).
+    ///   - game: the game it was found for (its title names the folder; the platform comes from the names first).
     ///   - itemName: the release or item it belongs to (author and title are read from it when there is no book).
     ///   - fileName: the file's own name, a path inside the item for many-file items.
     ///   - singleFile: the item is this one file (a book file is then renamed "Title - Author.ext").
     public static func placement(
         kind: ContentKind,
         book: BookSummary? = nil,
+        game: GameSummary? = nil,
         itemName: String,
         fileName: String,
         singleFile: Bool
     ) -> Placement {
         let top = folderName(kind)
+        if kind == .games {
+            let platform = folderName(platform(game: game, names: [itemName, fileName]))
+            let collection = GameGuess.isCollection(name: itemName)
+            let title = collection ? stripExtension(itemName) : (game?.title ?? GameGuess(releaseName: itemName).title)
+            return Placement(folder: [top, component(platform), component(title)].joined(separator: "/"), fileName: cleanPath(fileName))
+        }
         guard byAuthor(kind) else {
             let file = cleanPath(fileName)
             return singleFile

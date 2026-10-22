@@ -178,6 +178,10 @@ final class LibraryModel {
         item.bookGuess.flatMap { bookMatches[$0.key] }
     }
 
+    func gameMatch(for item: ShelfItem) -> GameSummary? {
+        item.gameGuess.flatMap { gameMatches[$0.key] }
+    }
+
     /// Remembers what the search knew about a release Dove just added: its name, and the title it was found for.
     func recordAdded(_ hint: AddedHint, backend: BackendID, itemIDs: [LibraryItem.ID], infoHash: String?) {
         hints.record(hint, backend: backend, itemIDs: itemIDs, infoHash: infoHash)
