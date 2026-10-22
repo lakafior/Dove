@@ -8,10 +8,12 @@ struct MacRootView: View {
     @Environment(AppModel.self) private var model
     @Environment(MacRouter.self) private var router
     @Environment(\.openSettings) private var openSettings
+    /// The sidebar starts hidden: the start page has the search field and the library's shelves.
+    @State private var columns = NavigationSplitViewVisibility.detailOnly
 
     var body: some View {
         @Bindable var router = router
-        NavigationSplitView {
+        NavigationSplitView(columnVisibility: $columns) {
             List(selection: $router.selection) {
                 Section {
                     Label("Search", systemImage: "magnifyingglass").tag(SidebarItem.search)
@@ -42,6 +44,10 @@ struct MacRootView: View {
         } detail: {
             detail
         }
+        .overlay {
+            if router.isQuickSearchPresented { QuickSearchPanel() }
+        }
+        .animation(.easeOut(duration: 0.15), value: router.isQuickSearchPresented)
         .onChange(of: router.settingsRequested) {
             guard router.settingsRequested else { return }
             router.settingsRequested = false
@@ -57,6 +63,8 @@ struct MacRootView: View {
             ServiceStatusPage(backend: backend)
         case .library(let category):
             MacLibraryView(category: category)
+        case .search:
+            MacSearchView()
         case .downloads:
             MacDownloadsView()
         case .onServices:

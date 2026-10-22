@@ -30,6 +30,15 @@ struct DeepLinkTests {
         #expect(id == "book:Lem Solaris")
     }
 
+    @Test func searchLinkCarriesTheWords() throws {
+        let destination = try #require(DeepLink.destination(for: URL(string: "dove://search?q=blade%20runner")!))
+        guard case .search(let words) = destination else {
+            Issue.record("expected a search, got \(destination)")
+            return
+        }
+        #expect(words == "blade runner")
+    }
+
     @Test func linksThatDoMoreThanNavigateHaveNoDestination() {
         #expect(DeepLink.destination(for: URL(string: "dove://listening")!) == nil)
         #expect(DeepLink.destination(for: URL(string: "dove://media?imdb=tt0120338&type=movie")!) == nil)

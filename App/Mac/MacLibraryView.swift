@@ -146,6 +146,7 @@ struct MacLibraryView: View {
 /// Cover grids, one per kind, in the iPhone's order: movies, series, books, audiobooks, music, games, other files.
 private struct MacLibraryTitles: View {
     @Environment(AppModel.self) private var model
+    @Environment(MacRouter.self) private var router
     let filter: LibraryFilter
     let actions: LibraryActions
 
@@ -160,23 +161,23 @@ private struct MacLibraryTitles: View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 28) {
                 grid("Movies", titles.filter { $0.type == .movie }, minimum: 150) { title in
-                    TitleCard(title: title).contextMenu { itemMenu(title.items) }
+                    TitleCard(title: title).onTapGesture { router.openLibrary(.title(title)) }.contextMenu { itemMenu(title.items) }
                 }
                 grid("Series", titles.filter { $0.type == .series }, minimum: 150) { title in
-                    TitleCard(title: title).contextMenu { itemMenu(title.items) }
+                    TitleCard(title: title).onTapGesture { router.openLibrary(.title(title)) }.contextMenu { itemMenu(title.items) }
                 }
                 grid("Books", books.filter { $0.format == .ebook }, minimum: 140) { book in
-                    BookCard(book: book).contextMenu { itemMenu(book.items) }
+                    BookCard(book: book).onTapGesture { router.openLibrary(.book(book)) }.contextMenu { itemMenu(book.items) }
                 }
                 grid("Audiobooks", books.filter { $0.format == .audiobook }, minimum: 180) { book in
-                    BookCard(book: book).contextMenu { itemMenu(book.items) }
+                    BookCard(book: book).onTapGesture { router.openLibrary(.book(book)) }.contextMenu { itemMenu(book.items) }
                 }
                 grid("Music", artists, minimum: 160,
                      count: "\(artists.reduce(0) { $0 + $1.albums.count }) albums") { artist in
-                    ArtistCard(artist: artist).contextMenu { itemMenu(artist.albums.flatMap(\.items)) }
+                    ArtistCard(artist: artist).onTapGesture { router.openLibrary(.artist(artist)) }.contextMenu { itemMenu(artist.albums.flatMap(\.items)) }
                 }
                 grid("Games", games, minimum: 140) { game in
-                    GameCard(game: game).contextMenu { itemMenu(game.items) }
+                    GameCard(game: game).onTapGesture { router.openLibrary(.game(game)) }.contextMenu { itemMenu(game.items) }
                 }
                 if !others.isEmpty {
                     VStack(alignment: .leading, spacing: 0) {

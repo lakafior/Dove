@@ -15,7 +15,7 @@ struct TitleCard: View {
                     ZStack {
                         Rectangle().fill(.quaternary)
                         Text(title.name)
-                            .font(.caption.weight(.semibold))
+                            .scaledFont(.caption, weight: .semibold)
                             .multilineTextAlignment(.center)
                             .padding(6)
                     }
@@ -29,16 +29,16 @@ struct TitleCard: View {
             .overlay(alignment: .topLeading) {
                 if let coverage = title.coverage {
                     Text(coverage)
-                        .font(.caption2.bold())
+                        .scaledFont(.caption2, weight: .bold)
                         .padding(.horizontal, 6)
                         .padding(.vertical, 2)
                         .background(.ultraThinMaterial, in: Capsule())
                         .padding(5)
                 }
             }
-            Text(title.name).font(.caption.weight(.medium)).lineLimit(1)
+            Text(title.name).scaledFont(.caption, weight: .medium).lineLimit(1)
             HStack(spacing: 3) {
-                if let year = title.year { Text(year).font(.caption2).foregroundStyle(.secondary) }
+                if let year = title.year { Text(year).scaledFont(.caption2).foregroundStyle(.secondary) }
                 Spacer(minLength: 2)
                 ForEach(title.backends, id: \.self) { BackendBadge(backend: $0) }
             }
@@ -76,7 +76,7 @@ struct LibraryStatusMark: View {
         case .ready:
             if count > 1 {
                 Text("\(count)")
-                    .font(.caption2.bold())
+                    .scaledFont(.caption2, weight: .bold)
                     .padding(.horizontal, 6)
                     .padding(.vertical, 2)
                     .background(.ultraThinMaterial, in: Capsule())
@@ -96,10 +96,10 @@ struct ShelfItemRow: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text(item.name).font(.subheadline).lineLimit(2)
+            Text(item.name).scaledFont(.subheadline).lineLimit(2)
             if item.isRenamed {
                 // The service's own (random) name, so the item can still be found there.
-                Text(item.item.name).font(.caption2).foregroundStyle(.tertiary).lineLimit(1)
+                Text(item.item.name).scaledFont(.caption2).foregroundStyle(.tertiary).lineLimit(1)
             }
             HStack(spacing: 8) {
                 if showsBackend { BackendBadge(backend: item.item.backend) }
@@ -116,7 +116,7 @@ struct ShelfItemRow: View {
                     SeedingRatio(ratio: seeding.ratio, isActive: seeding.isActive)
                 }
             }
-            .font(.caption)
+            .scaledFont(.caption)
             .foregroundStyle(.secondary)
         }
     }
@@ -145,9 +145,9 @@ struct BookCard: View {
                 BookCover(book: book)
                 LibraryStatusMark(status: book.status, count: book.items.count).padding(5)
             }
-            Text(book.name).font(.caption.weight(.medium)).lineLimit(1)
+            Text(book.name).scaledFont(.caption, weight: .medium).lineLimit(1)
             HStack(spacing: 3) {
-                if let author = book.author { Text(author).font(.caption2).foregroundStyle(.secondary).lineLimit(1) }
+                if let author = book.author { Text(author).scaledFont(.caption2).foregroundStyle(.secondary).lineLimit(1) }
                 Spacer(minLength: 2)
                 ForEach(book.backends, id: \.self) { BackendBadge(backend: $0) }
             }
@@ -169,7 +169,7 @@ struct BookCover: View {
         .overlay(alignment: .bottomLeading) {
             if book.format == .audiobook {
                 Image(systemName: "headphones")
-                    .font(.caption2.bold())
+                    .scaledFont(.caption2, weight: .bold)
                     .padding(5)
                     .background(.ultraThinMaterial, in: Circle())
                     .padding(5)
@@ -231,9 +231,9 @@ struct GameCard: View {
                 GameCover(url: game.cover, title: game.name, isCollection: game.isCollection)
                 LibraryStatusMark(status: game.status, count: game.items.count).padding(5)
             }
-            Text(game.name).font(.caption.weight(.medium)).lineLimit(1)
+            Text(game.name).scaledFont(.caption, weight: .medium).lineLimit(1)
             HStack(spacing: 3) {
-                if let platforms = platformText { Text(platforms).font(.caption2).foregroundStyle(.secondary).lineLimit(1) }
+                if let platforms = platformText { Text(platforms).scaledFont(.caption2).foregroundStyle(.secondary).lineLimit(1) }
                 Spacer(minLength: 2)
                 ForEach(game.backends, id: \.self) { BackendBadge(backend: $0) }
             }
@@ -263,7 +263,7 @@ struct GameCover: View {
                             .font(title == nil ? .body : .title2)
                         if let title {
                             Text(title)
-                                .font(.caption.weight(.semibold))
+                                .scaledFont(.caption, weight: .semibold)
                                 .multilineTextAlignment(.center)
                                 .lineLimit(4)
                                 .minimumScaleFactor(0.8)
@@ -286,9 +286,9 @@ struct ArtistCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             AlbumCover(title: artist.name, artist: nil, url: artist.cover, cornerRadius: 12)
-            Text(artist.name).font(.caption.weight(.medium)).lineLimit(1)
+            Text(artist.name).scaledFont(.caption, weight: .medium).lineLimit(1)
             Text(artist.albums.count == 1 ? "1 album" : "\(artist.albums.count) albums")
-                .font(.caption2)
+                .scaledFont(.caption2)
                 .foregroundStyle(.secondary)
         }
     }
@@ -314,12 +314,12 @@ struct AlbumCover: View {
                     endPoint: .bottomTrailing
                 )
                 Image(systemName: "music.note")
-                    .font(.title2)
+                    .scaledFont(.title2)
                     .foregroundStyle(.white.opacity(0.35))
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(title).font(.caption.weight(.semibold)).lineLimit(3)
-                    if let artist { Text(artist).font(.caption2).opacity(0.8).lineLimit(1) }
+                    Text(title).scaledFont(.caption, weight: .semibold).lineLimit(3)
+                    if let artist { Text(artist).scaledFont(.caption2).opacity(0.8).lineLimit(1) }
                 }
                 .foregroundStyle(.white)
                 .padding(8)

@@ -2,7 +2,7 @@ import DoveKit
 import Foundation
 
 /// `dove://` links from widgets: `dove://watchlist`, `dove://library`, `dove://downloads`, `dove://settings`,
-/// `dove://listening`, `dove://title/<id>`.
+/// `dove://listening`, `dove://title/<id>`, `dove://search?q=<words>`.
 public enum DeepLink {
     public static func url(_ host: String, _ path: String? = nil) -> URL {
         var components = URLComponents()
@@ -22,6 +22,9 @@ public enum DeepLink {
         case "library": return .library(nil)
         case "downloads": return .downloads
         case "settings": return .settings
+        case "search":
+            let words = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?.first { $0.name == "q" }?.value
+            return .search(words?.isEmpty == false ? words : nil)
         case "title":
             let id = String(url.path().dropFirst()).removingPercentEncoding ?? ""
             return id.isEmpty ? nil : .title(id: id)

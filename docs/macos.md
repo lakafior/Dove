@@ -1,6 +1,6 @@
 # Dove for macOS: review and architecture plan
 
-Status (2026-10-22): phases 0 and 1 done; phase 2 in progress (Library and Downloads done and checked; Search next).
+Status (2026-10-22): phases 0 and 1 done; phase 2 in progress (Library, Downloads and Movies & TV search done; the other search categories next).
 
 Goal (owner): a native Mac app that uses what a computer does better, not the iPad app on a Mac and not
 Catalyst. No hurry: the Mac app comes before the release pipeline (#6), which then builds both platforms.
@@ -206,13 +206,49 @@ Split in three: Library, then Downloads, then Search → sources → add.
   Per-kind folders outside `~/Downloads` (a NAS share) still to do: they need a folder picker and security-scoped
   bookmarks.
 
+- **Search, Movies & TV** (built 2026-10-22; title page and sources table seen on the owner's Mac with Interstellar,
+  adding not tried yet): `MacSearchView` (TMDB/addon results as posters, title links
+  open the title; `MacRouter.searchPath`, so `dove://media…`, Spotlight and Siri land there too), `MacTitleView`
+  (header; a movie lists its releases, a series has seasons, episodes and whole-season/whole-series packs on the left
+  and the picked one's releases on the right), `MacSourcesTable` (Recommended order from the saved filter, sortable
+  columns: release, resolution, video, audio, size, seeders, age, cached on, found by; Return or double-click adds
+  (Automatic), context menu Add Only To… with ⚡ for cached services, Copy Name; Download only toggle in the toolbar;
+  sources that did not answer behind a link with a popover). Loading and adding moved from the iPhone's
+  `SourcesView` into `DoveAppCore` (`AppModel.sources(for:)`, `checkingCache`, `add(_:for:only:)`, `SourceQuery`),
+  so both apps use one code path. Layout (owner's call, 2026-10-22, after a toolbar field with a segmented
+  All/Movies/Series, then a sidebar field, both judged weak): Search is the start page and Dove's showpiece. A large
+  Spotlight-style field (`SpotlightField`, Liquid Glass, the category as a menu inside it, `macSearchCategory`) on a
+  soft accent glow; under it, before a search, `MacHomeSections`: service capsules (light, days left; click = the
+  service), In progress (Mac downloads and service items with bars), Recently added (posters; a matched title opens
+  with its sources), Your library (a card per kind with fanned covers; click = that Library category), Recent searches
+  (chips; `HomeModel`, this Mac only). After a search the results replace the sections (All/Movies/Series above
+  them, Home or Esc goes back). ⌘F (Edit › Search…) focuses that field on the Search page and opens the same field
+  floating over any other page (`QuickSearchPanel`; Return searches; Esc clears the words, then closes; a click
+  outside closes). Polish (owner: "all of them", 2026-10-22): suggestions while typing in every category with
+  metadata (`SearchSuggestions`: what the library holds in that category first, then up to six from its services
+  after a pause (300 ms, 500 ms for MusicBrainz): TMDB/addons, `library.searchBooks`, `musicMetadata`,
+  `gameMetadata`; then "Search for …"; Software/Adult/All only the search line; ↑↓ and Return, `MacRouter.open(_:)`;
+  a book, album or game from the services searches its name until its releases screen exists); the backdrop is the newest title's, blurred under the field
+  (`HeroBackdrop`), and follows the poster the pointer rests on in the poster rows (its backdrop, else its cover;
+  150 ms wait so a sweep does not fade through every cover, 0.4 s cross-fade, the last one stays); Recently added mixes every kind (titles, books, albums, games); New episodes and Watchlist rows;
+  service capsules say only what needs attention (offline/free/expired red, under 30 days orange); cards rise under
+  the pointer (`hoverLift`, still with Reduce Motion) and offer Download; Edit › Search In › a category (⌘1…⌘7). Then
+  (owner): covers in a mixed row share one height (square and box covers are wider) so names line up; the sidebar
+  starts hidden; anything the library holds opens through one method, `MacRouter.openLibrary(_:)`, from the start
+  page, the Library's cards and suggestions alike (until phase 3's screens: the Library at its kind); only titles
+  not held (watchlist, search results) open with their sources. The start page follows the window's width (`HomeLayout`): content up to
+  1800 pt, posters, field and shelf cards up to 1.5× on a large window; recent searches have Clear and sit left.
+  Text grows with them: cards and the start page use `scaledFont` (`App/Components/ScaledFont.swift`, an
+  environment `textScale`; at 1, the iPhone and every other page, it is exactly the plain text style). `dove://search?q=`
+  opens a search (both apps). The main window is a `WindowGroup` without File › New Window (a Dock click brings it
+  back; `Window` did not). `LibraryShelfSummary` moved to `App/Components`. Not on the Mac yet: Play, the filter editor (the saved filter applies), plugins'
+  results, the described filter, upgrades.
+
 ## 9. Where to pick up (2026-10-22)
 
-1. **Phase 2c, Search → sources → add**: a Search page (search field in the toolbar, the iPhone's categories, results
-   from TMDB/addons/indexers/book/music/game metadata), a title's sources as a `Table` (resolution, HDR, codec, audio,
-   size, seeders, age, found by, ⚡ per service; sortable; filters in an inspector), Return = add (Automatic), context
-   menu = add only to…, "Download only". Shared logic is already in `DoveAppCore` (`addonSet`, `router`, `newznab`,
-   `getFile`); the iOS views to read first: `SearchView`, `SourcesView`, `ReleaseList`, `HomeView`.
+1. **Phase 2c, the rest of Search**: Books, Audiobooks, Music, Games (metadata first, then the indexers:
+   `BookReleasesView`, `AlbumReleasesView`, `GameReleasesView`, `ReleaseList` on iOS), Software/Adult/All (indexers by
+   name), plugins' results, pasted magnets and links (`AddSourceView`), the source filter editor, Play from a release.
 2. Per-kind download folders outside `~/Downloads` (NAS): folder picker + security-scoped bookmarks, shown in
    Settings › Save to on the Mac.
 3. Phase 3: title, series, book, album and game screens (cards have no click action yet), Play in Infuse/IINA/VLC,

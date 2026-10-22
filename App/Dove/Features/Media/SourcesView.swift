@@ -249,16 +249,9 @@ struct SourcesView: View {
         }
     }
 
-    /// Which files a download-only add fetches: the episode on screen, every video of a pack, or the movie.
-    private var pick: DownloadJob.Pick {
-        if scope != nil { return .allVideos }
-        if type == .movie { return .largestVideo }
-        // Episode IDs are `<series>:<season>:<episode>`.
-        let parts = id.split(separator: ":")
-        if parts.count >= 3, let season = Int(parts[parts.count - 2]), let episode = Int(parts[parts.count - 1]) {
-            return .episode(season: season, episode: episode)
-        }
-        return .allVideos
+    /// What this list is for, as the shared source logic (`AppModel.sources(for:)`, `add(_:for:only:)`) takes it.
+    private var query: SourceQuery {
+        SourceQuery(type: type, id: id, searchTitle: searchTitle, scope: scope, media: media)
     }
 
     @ViewBuilder
@@ -296,21 +289,12 @@ struct SourcesView: View {
     /// first, then the indexers'.
     private func load() async {
         searchPlugins()
-        let newznab = model.newznab
-        let indexers = model.indexerIDs(for: .media)
-        let query = indexers.isEmpty ? nil : NewznabQuery(type: type, id: id, title: searchTitle, wholeSeason: scope != nil)
-        async let addonResult = Self.streams(model.sourceSelection.asksAddons(in: .media) ? model.addonSet : nil, type: type, id: id)
-        async let usenetResult = Self.search(newznab, query, only: indexers)
-        let result = await addonResult
-        let usenet = await usenetResult?.routed(to: model.usenetBackend)
-        let all = StreamGroup.group((result?.candidates ?? []) + (usenet?.candidates ?? []))
-        let shown = scope.map { scope in all.filter(scope.matches) } ?? all
-        groups = shown
-        failures = (result?.failures ?? []) + (usenet?.failures ?? [])
-        let checkers = model.cacheCheckers
-        guard !checkers.isEmpty, shown.contains(where: { $0.infoHash != nil }) else { return }
+        let results = await model.sources(for: query)
+        groups = results.groups
+        failures = results.failures
+        guard results.groups.contains(where: { $0.infoHash != nil }), !model.cacheCheckers.isEmpty else { return }
         isCheckingCache = true
-        groups = await CacheChecker.annotate(shown, using: checkers)
+        if let checked = await model.checkingCache(results.groups) { groups = checked }
         isCheckingCache = false
     }
 
@@ -318,15 +302,6 @@ struct SourcesView: View {
         guard upgradeOver == nil else { return }
         let title = PluginTitle(name: searchTitle ?? media?.name ?? self.title, type: type, streamID: id, media: media, scope: scope)
         pluginSearch.search(title.query, category: .media, title: title, media: media, calls: model.plugins.calls(.search, category: .media))
-    }
-
-    private static func search(_ newznab: NewznabSearch, _ query: NewznabQuery?, only: Set<String>) async -> NewznabSearch.Results? {
-        guard let query else { return nil }
-        return await newznab.search(query, only: only)
-    }
-
-    private static func streams(_ addons: AddonSet?, type: MediaType, id: String) async -> AddonSet.Streams? {
-        await addons?.streams(type: type, id: id)
     }
 
     /// NZBs play through Dove's own nzbdav job when nzbdav is set up: addon play links make players wait
@@ -440,40 +415,13 @@ struct SourcesView: View {
     }
 
     /// Automatic: services that have it cached first, then the user's priority. Or one service only.
-    /// A private tracker's release that a service has cached goes there as a magnet (`AddRoute`).
     private func add(_ group: StreamGroup, only backend: BackendID?) {
-        let router = model.router(preferring: group.cachedBackends())
-        guard let route = backend.map({ group.route(to: $0, through: router) }) ?? group.route(through: router) else { return }
         busy.insert(group.id)
         status = nil
         Task {
             defer { busy.remove(group.id) }
             do {
-                // A Torznab result's .torrent link carries the indexer's key: fetch it here, never hand it over.
-                let source = try await IndexerTorrent.prepare(route.source)
-                let added: BackendID
-                let itemID: LibraryItem.ID
-                var itemIDs: [LibraryItem.ID] = []
-                var skipped: [String] = []
-                // NZBs land in nzbdav's `movies` or `tv` folder.
-                let category = AddCategory(mediaType: type)
-                if let backend, let service = model.backend(backend) {
-                    // An indexer said private: the magnet cannot tell, so the service checks (and TorBox seeds it).
-                    itemID = try await service.add(source, category: category, privateTracker: route.privateTracker)
-                    itemIDs = [itemID]
-                    added = backend
-                } else {
-                    let result = try await route.router.add(source, category: category)
-                    added = result.backend
-                    itemID = result.itemID
-                    itemIDs = result.itemIDs
-                    skipped = result.skipped.map { "\($0.backend.displayName): \($0.error.localizedDescription)" }
-                }
-                remember(group, backend: added, itemIDs: itemIDs)
-                let message = model.downloadOnly
-                    ? await model.startDownloadOnly(itemID, on: added, name: group.folderName ?? group.title, pick: pick)
-                    : "Added to \(added.displayName)."
-                status = Status(text: ([message] + skipped).joined(separator: "\n"), isError: false)
+                status = Status(text: try await model.add(group, for: query, only: backend), isError: false)
             } catch {
                 status = Status(text: error.localizedDescription, isError: true)
             }

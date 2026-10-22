@@ -9,13 +9,21 @@ struct DoveMacApp: App {
     @NSApplicationDelegateAdaptor private var delegate: MacAppDelegate
 
     var body: some Scene {
-        Window("Dove", id: "main") {
+        // A window group (not `Window`), so a click on the Dock icon brings it back after it was closed; File › New
+        // Window is removed and links go to the open window, so there is one.
+        WindowGroup("Dove", id: "main") {
             MacRootView()
                 .environment(delegate.model)
                 .environment(delegate.platform.router)
                 .task { await delegate.start() }
+                .handlesExternalEvents(preferring: ["*"], allowing: ["*"])
         }
         .defaultSize(width: 1100, height: 720)
+        .handlesExternalEvents(matching: ["*"])
+        .commands {
+            CommandGroup(replacing: .newItem) {}
+            SearchCommands(router: delegate.platform.router)
+        }
 
         Settings {
             MacSettingsView()
