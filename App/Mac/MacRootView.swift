@@ -53,6 +53,8 @@ struct MacRootView: View {
         switch router.selection {
         case .service(let backend):
             ServiceStatusPage(backend: backend)
+        case .library(let category):
+            MacLibraryView(category: category)
         case .some(let item):
             ContentUnavailableView(item.title, systemImage: item.symbol,
                                    description: Text("This page comes with the next step of the Mac app."))

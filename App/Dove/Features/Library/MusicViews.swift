@@ -52,58 +52,6 @@ struct MusicPlayButtons: View {
     }
 }
 
-/// Square artwork for an album; until it loads, or when there is none, a tile made from the title.
-struct AlbumCover: View {
-    let title: String
-    let artist: String?
-    let url: URL?
-    var cornerRadius: CGFloat = 8
-
-    private var hue: Double {
-        Double(title.unicodeScalars.reduce(0) { ($0 &* 31 &+ Int($1.value)) & 0xFFFF } % 360) / 360
-    }
-
-    var body: some View {
-        CachedImage(url: url) {
-            ZStack(alignment: .bottomLeading) {
-                LinearGradient(
-                    colors: [Color(hue: hue, saturation: 0.5, brightness: 0.6), Color(hue: hue, saturation: 0.6, brightness: 0.3)],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
-                Image(systemName: "music.note")
-                    .font(.title2)
-                    .foregroundStyle(.white.opacity(0.35))
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(title).font(.caption.weight(.semibold)).lineLimit(3)
-                    if let artist { Text(artist).font(.caption2).opacity(0.8).lineLimit(1) }
-                }
-                .foregroundStyle(.white)
-                .padding(8)
-            }
-        }
-        .frame(minWidth: 0, maxWidth: .infinity)
-        .aspectRatio(1, contentMode: .fit)
-        .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
-    }
-}
-
-/// An artist on the Music shelf: the newest album's cover, the name, how many albums.
-struct ArtistCard: View {
-    let artist: ArtistShelf
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            AlbumCover(title: artist.name, artist: nil, url: artist.cover, cornerRadius: 12)
-            Text(artist.name).font(.caption.weight(.medium)).lineLimit(1)
-            Text(artist.albums.count == 1 ? "1 album" : "\(artist.albums.count) albums")
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-        }
-    }
-}
-
 struct AlbumCard: View {
     let album: AlbumTitle
 

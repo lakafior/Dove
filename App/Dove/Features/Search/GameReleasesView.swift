@@ -132,38 +132,6 @@ struct GameRow: View {
     }
 }
 
-/// A 3:4 box cover; without one (Wikidata never has any), the controller symbol, with the title when there is
-/// room for it (library tiles).
-struct GameCover: View {
-    let url: URL?
-    var title: String?
-    var isCollection = false
-
-    var body: some View {
-        CachedImage(url: url) {
-            RoundedRectangle(cornerRadius: 4).fill(.quaternary)
-                .overlay {
-                    VStack(spacing: 6) {
-                        Image(systemName: isCollection ? "square.stack.3d.up" : "gamecontroller")
-                            .font(title == nil ? .body : .title2)
-                        if let title {
-                            Text(title)
-                                .font(.caption.weight(.semibold))
-                                .multilineTextAlignment(.center)
-                                .lineLimit(4)
-                                .minimumScaleFactor(0.8)
-                        }
-                    }
-                    .foregroundStyle(.secondary)
-                    .padding(6)
-                }
-        }
-        .frame(minWidth: 0, maxWidth: .infinity)
-        .aspectRatio(3 / 4, contentMode: .fit)
-        .clipShape(RoundedRectangle(cornerRadius: 4))
-    }
-}
-
 extension GameSummary {
     /// Who described it, for the link: "IGDB", "Wikidata", or the plugin's name.
     func sourceName(plugins: [PluginManifest] = []) -> String {

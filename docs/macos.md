@@ -1,6 +1,6 @@
 # Dove for macOS: review and architecture plan
 
-Status (2026-10-22): phases 0 and 1 done.
+Status (2026-10-22): phases 0 and 1 done; phase 2 in progress (Library done).
 
 Goal (owner): a native Mac app that uses what a computer does better, not the iPad app on a Mac and not
 Catalyst. No hurry: the Mac app comes before the release pipeline (#6), which then builds both platforms.
@@ -174,3 +174,17 @@ links, title screens); checked briefly on a device by the owner (2026-10-22).
   `/tmp` is unknown to Launch Services: no `dove://` links and no notification permission prompt. Built into Xcode's
   DerivedData it is registered: `dove://settings` opens the Settings window through `MacRouter`. The notifications
   page now shows the error when the system refuses to ask.
+
+## 8. Phase 2 as built so far (2026-10-22)
+
+Split in three: Library, then Downloads, then Search → sources → add.
+
+- **Library** (done): `MacLibraryView` for each sidebar entry (All or a kind). Titles: cover grids in the iPhone's
+  order (movies, series, books, audiobooks, music by artist, games, other files) with larger tiles; Files: a `Table`
+  (name with the service's own name under renamed items, service, kind, status, seeding ratio as its own column, size, added),
+  sortable, several rows selected at once, Copy Name and Delete in the context menu, ⌫ deletes. Filter field in the
+  toolbar, Titles/Files remembered, Refresh (⌘R), "Updated … · N items, size" as the window subtitle, load failures
+  above. Deletes ask first. The cards are the iPhone's, moved to `App/Components/LibraryCards.swift`. Title, book and
+  game screens are phase 3, so a card has no click action yet.
+- Checked on the owner's Mac: the Titles grid with posters, the status line and the Files table. The ratio first sat
+  next to the status and stayed cut to "0…" however wide the column; it is its own column now.

@@ -677,17 +677,6 @@ struct MediaRow: View {
     }
 }
 
-struct PosterImage: View {
-    let url: URL?
-
-    var body: some View {
-        CachedImage(url: url) {
-            Rectangle().fill(.quaternary)
-        }
-        .clipShape(RoundedRectangle(cornerRadius: 6))
-    }
-}
-
 /// The app's add sheet: the shared add screen with the app's configured services and priority.
 struct AddSourceSheet: View {
     @Environment(AppModel.self) private var model

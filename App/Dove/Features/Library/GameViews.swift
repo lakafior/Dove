@@ -7,32 +7,6 @@ struct LibraryGameRoute: Hashable {
     let id: String
 }
 
-/// A library tile: box cover (or a made-up one), status, name, the platforms held and where it lives.
-struct GameCard: View {
-    let game: GameTitle
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            ZStack(alignment: .topTrailing) {
-                GameCover(url: game.cover, title: game.name, isCollection: game.isCollection)
-                LibraryStatusMark(status: game.status, count: game.items.count).padding(5)
-            }
-            Text(game.name).font(.caption.weight(.medium)).lineLimit(1)
-            HStack(spacing: 3) {
-                if let platforms = platformText { Text(platforms).font(.caption2).foregroundStyle(.secondary).lineLimit(1) }
-                Spacer(minLength: 2)
-                ForEach(game.backends, id: \.self) { BackendBadge(backend: $0) }
-            }
-        }
-    }
-
-    private var platformText: String? {
-        let platforms = game.platforms
-        guard !platforms.isEmpty else { return game.year }
-        return platforms.prefix(2).map(\.displayName).joined(separator: ", ") + (platforms.count > 2 ? " +\(platforms.count - 2)" : "")
-    }
-}
-
 /// One game in the library: what IGDB or Wikidata says about it, its releases, and a way to find others.
 struct LibraryGameView: View {
     @Environment(AppModel.self) private var model
