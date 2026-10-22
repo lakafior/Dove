@@ -57,9 +57,11 @@ final class PluginsModel {
         }
     }
 
-    /// Enabled plugins with a search page (`browse`) for a category.
+    /// Enabled plugins with a search page (`browse`) for a category. Only plugins that cannot search in the app:
+    /// the browser is for sites whose results a scripted request cannot list (captchas, bot checks); a plugin
+    /// with `search` shows its rows on the Plugins tab instead.
     func browsers(for category: SearchCategory) -> [PluginCall] {
-        calls(.resolve, category: category).filter { $0.manifest.browse != nil }
+        calls(.resolve, category: category).filter { $0.manifest.browse != nil && !$0.manifest.can(.search) }
     }
 
     /// The plugin that knows a file page's address, and the id it reads from it.

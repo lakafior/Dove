@@ -25,12 +25,18 @@ struct BookMetadataSettingsView: View {
             }
 
             Section {
-                let plugins = model.plugins.calls(.metadata)
+                // The plugins book searches ask (`BookMetadata.sources`): those naming Books or Audiobooks, or no
+                // category; music and game metadata plugins are listed on their own screens.
+                let bookCategories: [SearchCategory] = [.books, .audiobooks]
+                let plugins = model.plugins.calls(.metadata).filter { call in
+                    call.manifest.categories.isEmpty || call.manifest.categories.contains(where: bookCategories.contains)
+                }
                 if plugins.isEmpty {
                     Text("None. Plugins can add more sources: Settings › Plugins.").foregroundStyle(.secondary)
                 }
                 ForEach(plugins, id: \.id) { call in
-                    LabeledContent(call.manifest.name, value: call.manifest.categories.map(\.displayName).joined(separator: ", "))
+                    let categories = call.manifest.categories.filter(bookCategories.contains)
+                    LabeledContent(call.manifest.name, value: (categories.isEmpty ? bookCategories : categories).map(\.displayName).joined(separator: ", "))
                 }
             } header: {
                 Text("From plugins")

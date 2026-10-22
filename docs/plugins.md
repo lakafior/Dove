@@ -102,6 +102,8 @@ manifest: {
 - `settings`: fields the user fills in Settings › Plugins › <plugin>. `secret` values live in the Keychain,
   every value reaches only this plugin (in `ctx.settings`). Types: `text`, `secret`, `toggle`.
 - `browse`: optional URL template; `{query}` is the search words (URL-encoded), other `{name}`s are settings.
+  Only for plugins without `search`: sites whose results a scripted request cannot list (a captcha, a bot
+  check) are searched in Dove's browser instead. Dove ignores `browse` on a plugin that has `search`.
 - `links`: optional regular expressions (JavaScript syntax, `{name}`s replaced with escaped setting values) over
   a full URL; the named group `id` is passed to `resolve`.
 - `harvest`: optional JavaScript expression, evaluated in the browser about once a second on a page `links`
