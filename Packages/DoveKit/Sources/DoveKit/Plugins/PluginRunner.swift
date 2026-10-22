@@ -51,8 +51,11 @@ public struct PluginLink: Codable, Sendable, Hashable {
 
     public init(from decoder: any Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
-        guard let url = c.decodeLenientURL(.url), url.scheme?.lowercased() == "https" || url.scheme?.lowercased() == "http" else {
-            throw PluginError("The plugin answered a link that is not http(s).")
+        // http(s), or a magnet (repack and ROM sites hand out torrents: Dove adds them to a torrent service).
+        guard let url = c.decodeLenientURL(.url),
+              ["https", "http"].contains(url.scheme?.lowercased()) || Self.isMagnet(url)
+        else {
+            throw PluginError("The plugin answered a link that is neither http(s) nor a magnet.")
         }
         self.url = url
         headers = (try? c.decodeIfPresent([String: String].self, forKey: .headers)) ?? [:]
@@ -60,9 +63,25 @@ public struct PluginLink: Codable, Sendable, Hashable {
         size = c.decodeLenientInt64(.size)
     }
 
-    /// The file's name: the plugin's, else the URL's last component.
+    static func isMagnet(_ url: URL) -> Bool {
+        url.scheme?.lowercased() == "magnet" && url.absoluteString.range(of: "xt=urn:btih:", options: .caseInsensitive) != nil
+    }
+
+    /// A magnet or a `.torrent` file's address: Dove adds it to a torrent service instead of downloading it.
+    public var isTorrent: Bool { Self.isMagnet(url) || url.pathExtension.lowercased() == "torrent" }
+
+    /// The magnet as a source to add; nil for a `.torrent` address, which Dove fetches first (`.torrentFile`).
+    public var magnet: Source? { Self.isMagnet(url) ? .magnet(url.absoluteString) : nil }
+
+    /// The file's name: the plugin's, else a magnet's `dn`, else the URL's last component.
     public var name: String {
         if let fileName, !fileName.isEmpty { return DownloadNaming.sanitized(fileName) }
+        if Self.isMagnet(url) {
+            // Magnets write spaces in `dn` as "+", which URLComponents leaves alone.
+            let display = URLComponents(string: url.absoluteString)?.queryItems?.first { $0.name == "dn" }?.value?
+                .replacingOccurrences(of: "+", with: " ")
+            return DownloadNaming.sanitized(display ?? "torrent")
+        }
         let last = url.lastPathComponent.removingPercentEncoding ?? url.lastPathComponent
         return DownloadNaming.sanitized(last)
     }

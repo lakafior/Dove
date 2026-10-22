@@ -837,7 +837,8 @@ final class AppModel {
     var incomingDownloadMessage: String?
 
     /// Asks a plugin for a search row's or file page's file(s) and sends them to a place: downloaded (to iCloud
-    /// Drive filed by `LibraryFolderLayout`), or handed to a service when the links need no headers.
+    /// Drive filed by `LibraryFolderLayout`), or handed to a service when the links need no headers. Torrents
+    /// (magnets, `.torrent` files) go to a torrent service instead (`addTorrents`).
     func getFile(
         from call: PluginCall, id: String, title: String? = nil, kind: ContentKind, book: BookSummary? = nil, media: MediaSummary? = nil,
         to place: FilePlace? = nil
@@ -846,6 +847,9 @@ final class AppModel {
         do {
             // The browser's cookies ride along: a login or a captcha solved in the site's pages reaches the plugin.
             let links = try await PluginRunner(transport: BrowserCookieTransport()).resolve(call.manifest, script: call.script, settings: call.settings, id: id)
+            if links.contains(where: \.isTorrent) {
+                return try await addTorrents(links.filter(\.isTorrent), title: title, kind: kind, book: book, media: media, place: place)
+            }
             switch place {
             case .service(.calibre):
                 // Dove fetches the file (headers and all) and adds it: Calibre cannot fetch links itself.
@@ -902,6 +906,51 @@ final class AppModel {
         } catch {
             return error.localizedDescription
         }
+    }
+
+    /// Torrents from a plugin (repack and ROM sites' magnets, `.torrent` files fetched here with the plugin's
+    /// headers) go to a torrent service like an indexer's release: the picked place's service when it takes them,
+    /// else the debrid priority ("Automatic"). With Download only on and This iPhone picked, Dove then fetches the
+    /// files and removes the item from the service, as it does for search rows.
+    private func addTorrents(
+        _ links: [PluginLink], title: String?, kind: ContentKind, book: BookSummary?, media: MediaSummary?, place: FilePlace
+    ) async throws -> String {
+        var messages: [String] = []
+        for link in links {
+            let source: Source
+            if let magnet = link.magnet {
+                source = magnet
+            } else {
+                let (data, response) = try await URLSession.shared.data(for: Self.request(for: link))
+                guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode), !data.isEmpty else {
+                    throw PluginError("The site did not give the .torrent file.")
+                }
+                source = .torrentFile(data: data, filename: link.name)
+            }
+            let backendID: BackendID
+            let itemIDs: [LibraryItem.ID]
+            if case .service(let serviceID) = place, let backend = backend(serviceID), backend.supports(source) {
+                backendID = serviceID
+                itemIDs = [try await backend.add(source, category: nil)]
+            } else {
+                let result = try await router(preferring: []).add(source)
+                backendID = result.backend
+                itemIDs = result.itemIDs
+            }
+            let hash = link.isTorrent ? InfoHash.fromMagnet(link.url.absoluteString) : nil
+            library.recordAdded(AddedHint(releaseName: title ?? link.name, media: media, book: book), backend: backendID, itemIDs: itemIDs, infoHash: hash)
+            // The plugin's category knows better than a repack's name (games classify as software otherwise).
+            if kind != .other {
+                for itemID in itemIDs { library.setKind(kind, backend: backendID, itemID: itemID) }
+            }
+            if downloadOnly, place == .download(.device) {
+                messages.append(await startDownloadOnly(itemIDs[0], on: backendID, name: title ?? link.name, pick: .allVideos))
+            } else {
+                messages.append("Added to \(backendID.displayName).")
+            }
+        }
+        Task { await library.refresh(using: self, afterChange: true) }
+        return messages.joined(separator: "\n")
     }
 
     /// A fresh link for a retried plugin download (the file id with `#<index>` for one of several files).

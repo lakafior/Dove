@@ -335,3 +335,19 @@ struct GamePluginTests {
         #expect(try await GameMetadata(igdb: nil, catalogs: [catalog], transport: down).search("elden ring").count == 2)
     }
 }
+
+struct PluginTorrentLinkTests {
+    @Test func magnetsAndTorrentFilesAreTorrents() throws {
+        let decoder = JSONDecoder()
+        let magnet = try decoder.decode(PluginLink.self, from: Data(#"{"url":"magnet:?xt=urn:btih:4CC8E331E699748269F6AC1B98B802684F5AC97A&dn=ELDEN+RING+FitGirl"}"#.utf8))
+        #expect(magnet.isTorrent && magnet.isPlain)
+        #expect(magnet.name == "ELDEN RING FitGirl")
+        #expect(magnet.magnet == .magnet("magnet:?xt=urn:btih:4CC8E331E699748269F6AC1B98B802684F5AC97A&dn=ELDEN+RING+FitGirl"))
+        let file = try decoder.decode(PluginLink.self, from: Data(#"{"url":"https://site.test/get/game.torrent","headers":{"Cookie":"a=b"}}"#.utf8))
+        #expect(file.isTorrent && file.magnet == nil && file.name == "game.torrent")
+        let plain = try decoder.decode(PluginLink.self, from: Data(#"{"url":"https://site.test/game.zip"}"#.utf8))
+        #expect(!plain.isTorrent)
+        #expect(throws: PluginError.self) { try decoder.decode(PluginLink.self, from: Data(#"{"url":"magnet:?dn=no+hash"}"#.utf8)) }
+        #expect(throws: PluginError.self) { try decoder.decode(PluginLink.self, from: Data(#"{"url":"ftp://site.test/game.zip"}"#.utf8)) }
+    }
+}

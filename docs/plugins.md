@@ -191,6 +191,12 @@ over Wikidata's.
 A link with `headers` can only be downloaded by Dove (This iPhone, iCloud Drive); one without can also go to a
 service that fetches plain links (Offcloud, TorBox, Premiumize).
 
+`url` may also be a **magnet** (`magnet:?xt=urn:btih:…`), or an http(s) address of a `.torrent` file (Dove fetches
+it with `headers`). Torrents are not downloaded as files: Dove adds them to a torrent service like an indexer's
+release — the picked place's service when it takes torrents, else the user's debrid priority — and, with Download
+only on and This iPhone picked, then fetches the files to the phone and removes them from the service. `fileName`
+names the release (a magnet's `dn` otherwise); avoid `/` in it, which Dove reads as folders.
+
 ## Host API (`dove`)
 
 | Function | Does |
