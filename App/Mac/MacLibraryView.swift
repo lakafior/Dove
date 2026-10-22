@@ -1,3 +1,4 @@
+import AppKit
 import DoveAppCore
 import DoveKit
 import SwiftUI
@@ -12,6 +13,7 @@ struct MacLibraryView: View {
     @AppStorage("macLibraryMode") private var mode: Mode = .titles
     @State private var query = ""
     @State private var pendingDelete: [ShelfItem] = []
+    @State private var message: String?
 
     enum Mode: String {
         case titles, files
@@ -31,9 +33,9 @@ struct MacLibraryView: View {
             if library.items.isEmpty {
                 emptyState
             } else if mode == .titles {
-                MacLibraryTitles(filter: filter, onDelete: { pendingDelete = $0 })
+                MacLibraryTitles(filter: filter, actions: actions)
             } else {
-                MacLibraryFiles(items: filter.apply(to: library.items), onDelete: { pendingDelete = $0 })
+                MacLibraryFiles(items: filter.apply(to: library.items), actions: actions)
             }
         }
         .navigationTitle(category?.title ?? "Library")
@@ -75,6 +77,43 @@ struct MacLibraryView: View {
         } message: {
             Text("They are deleted on the services that hold them.")
         }
+        .alert(message ?? "", isPresented: Binding(get: { message != nil }, set: { if !$0 { message = nil } })) {
+            Button("OK") {}
+        }
+    }
+
+    private var actions: LibraryActions {
+        LibraryActions(download: download, reveal: reveal, delete: { pendingDelete = $0 })
+    }
+
+    /// Items already on this Mac (iCloud Drive) in the Finder: their files, fetched from iCloud first if needed.
+    private func reveal(_ items: [ShelfItem]) {
+        Task {
+            var files: [URL] = []
+            for item in items {
+                guard let backend = model.backend(item.item.backend) else { continue }
+                do {
+                    let full = item.item.files.isEmpty ? try await backend.item(item.item.id) : item.item
+                    for file in full.files {
+                        if let url = try await backend.downloadRequest(itemID: full.id, fileID: file.id).url { files.append(url) }
+                    }
+                } catch {
+                    message = error.localizedDescription
+                }
+            }
+            if !files.isEmpty { NSWorkspace.shared.activateFileViewerSelecting(files) }
+        }
+    }
+
+    /// Every file of each ready item, to the place its kind goes; what could not start is said at the end.
+    private func download(_ items: [ShelfItem]) {
+        Task {
+            var failures: [String] = []
+            for item in items {
+                do { try await model.downloadItem(item) } catch { failures.append(error.localizedDescription) }
+            }
+            if !failures.isEmpty { message = failures.joined(separator: "\n") }
+        }
     }
 
     /// "Updated 2 minutes ago · 46 items, 1.1 TB", like the iPhone's status line.
@@ -108,7 +147,7 @@ struct MacLibraryView: View {
 private struct MacLibraryTitles: View {
     @Environment(AppModel.self) private var model
     let filter: LibraryFilter
-    let onDelete: ([ShelfItem]) -> Void
+    let actions: LibraryActions
 
     private var library: LibraryModel { model.library }
 
@@ -121,23 +160,23 @@ private struct MacLibraryTitles: View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 28) {
                 grid("Movies", titles.filter { $0.type == .movie }, minimum: 150) { title in
-                    TitleCard(title: title).contextMenu { deleteButton(title.items) }
+                    TitleCard(title: title).contextMenu { itemMenu(title.items) }
                 }
                 grid("Series", titles.filter { $0.type == .series }, minimum: 150) { title in
-                    TitleCard(title: title).contextMenu { deleteButton(title.items) }
+                    TitleCard(title: title).contextMenu { itemMenu(title.items) }
                 }
                 grid("Books", books.filter { $0.format == .ebook }, minimum: 140) { book in
-                    BookCard(book: book).contextMenu { deleteButton(book.items) }
+                    BookCard(book: book).contextMenu { itemMenu(book.items) }
                 }
                 grid("Audiobooks", books.filter { $0.format == .audiobook }, minimum: 180) { book in
-                    BookCard(book: book).contextMenu { deleteButton(book.items) }
+                    BookCard(book: book).contextMenu { itemMenu(book.items) }
                 }
                 grid("Music", artists, minimum: 160,
                      count: "\(artists.reduce(0) { $0 + $1.albums.count }) albums") { artist in
-                    ArtistCard(artist: artist).contextMenu { deleteButton(artist.albums.flatMap(\.items)) }
+                    ArtistCard(artist: artist).contextMenu { itemMenu(artist.albums.flatMap(\.items)) }
                 }
                 grid("Games", games, minimum: 140) { game in
-                    GameCard(game: game).contextMenu { deleteButton(game.items) }
+                    GameCard(game: game).contextMenu { itemMenu(game.items) }
                 }
                 if !others.isEmpty {
                     VStack(alignment: .leading, spacing: 0) {
@@ -147,7 +186,7 @@ private struct MacLibraryTitles: View {
                                 .frame(maxWidth: .infinity, alignment: .leading)
                                 .padding(.vertical, 6)
                                 .contentShape(Rectangle())
-                                .contextMenu { deleteButton([item]) }
+                                .contextMenu { itemMenu([item]) }
                             Divider()
                         }
                     }
@@ -179,8 +218,9 @@ private struct MacLibraryTitles: View {
         }
     }
 
-    private func deleteButton(_ items: [ShelfItem]) -> some View {
-        Button("Delete…", systemImage: "trash", role: .destructive) { onDelete(items) }
+    @ViewBuilder
+    private func itemMenu(_ items: [ShelfItem]) -> some View {
+        actions.menu(items)
     }
 }
 
@@ -189,7 +229,7 @@ private struct MacLibraryTitles: View {
 /// Every item as a table: sortable columns, several selected at once, actions in the context menu.
 private struct MacLibraryFiles: View {
     let items: [ShelfItem]
-    let onDelete: ([ShelfItem]) -> Void
+    let actions: LibraryActions
 
     @State private var selection = Set<ShelfItem.ID>()
     @State private var order = [KeyPathComparator(\FileRow.added, order: .reverse)]
@@ -245,15 +285,41 @@ private struct MacLibraryFiles: View {
                     NSPasteboard.general.setString(chosen.map(\.name).joined(separator: "\n"), forType: .string)
                 }
                 Divider()
-                Button(chosen.count == 1 ? "Delete…" : "Delete \(chosen.count) Items…", systemImage: "trash", role: .destructive) {
-                    onDelete(chosen)
-                }
+                actions.menu(chosen)
             }
         }
         .onDeleteCommand {
             let chosen = items.filter { selection.contains($0.id) }
-            if !chosen.isEmpty { onDelete(chosen) }
+            if !chosen.isEmpty { actions.delete(chosen) }
         }
+    }
+}
+
+/// What a card or a row offers: download its files, delete it on its services.
+@MainActor
+private struct LibraryActions {
+    let download: @MainActor ([ShelfItem]) -> Void
+    let reveal: @MainActor ([ShelfItem]) -> Void
+    let delete: @MainActor ([ShelfItem]) -> Void
+
+    /// Items on a service are downloaded; items already on this Mac (iCloud Drive) are shown in the Finder.
+    @ViewBuilder
+    func menu(_ items: [ShelfItem]) -> some View {
+        let local = items.filter(\.item.backend.isOnDevice)
+        let ready = items.filter { item in
+            guard !item.item.backend.isOnDevice else { return false }
+            if case .ready = item.item.status { return true }
+            return false
+        }
+        if !ready.isEmpty || local.isEmpty {
+            Button(ready.count > 1 ? "Download \(ready.count) Items" : "Download", systemImage: "arrow.down.circle") { download(ready) }
+                .disabled(ready.isEmpty)
+        }
+        if !local.isEmpty {
+            Button("Show in Finder", systemImage: "folder") { reveal(local) }
+        }
+        Divider()
+        Button(items.count > 1 ? "Delete \(items.count) Items…" : "Delete…", systemImage: "trash", role: .destructive) { delete(items) }
     }
 }
 

@@ -80,3 +80,46 @@ extension AppModel {
         return iCloudChecked ? "Not available" : "Checking…"
     }
 }
+
+// MARK: - Whole items
+
+extension AppModel {
+    /// Downloads every file of a ready library item to the place its kind goes (Settings › Save to; iCloud Drive
+    /// keeps its own layout): one file on its own, several in a folder named after the item. Services that list
+    /// items without files are asked for them first. Returns how many files started.
+    @discardableResult
+    public func downloadItem(_ shelf: ShelfItem) async throws -> Int {
+        var item = shelf.item
+        // iCloud Drive's files are on this device already: there is nothing to fetch (and URLSession refuses file URLs).
+        guard !item.backend.isOnDevice else {
+            throw BackendError.api(message: "\(shelf.name) is already on this device, in \(item.backend.displayName).")
+        }
+        guard case .ready = item.status else {
+            throw BackendError.api(message: "\(shelf.name) is not ready on \(item.backend.displayName) yet.")
+        }
+        guard let backend = backend(item.backend) else {
+            throw BackendError.api(message: "\(item.backend.displayName) is no longer configured.")
+        }
+        if item.files.isEmpty { item = try await backend.item(item.id) }
+        guard !item.files.isEmpty else {
+            throw BackendError.api(message: "\(item.backend.displayName) lists no files for \(shelf.name).")
+        }
+        let destination: DownloadDestination = if case .download(let chosen) = place(for: shelf.kind), isAvailable(.download(chosen)) {
+            chosen
+        } else {
+            .device
+        }
+        for file in item.files {
+            if destination == .iCloud {
+                try await download(file, of: item, to: .iCloud)
+                continue
+            }
+            let request = try await backend.downloadRequest(itemID: item.id, fileID: file.id)
+            let placement = item.files.count > 1
+                ? LibraryFolderLayout.Placement(folder: LibraryFolderLayout.component(shelf.name), fileName: LibraryFolderLayout.cleanPath(file.name))
+                : nil
+            try downloads.start(request, backend: item.backend, itemID: item.id, file: file, destination: .device, placement: placement)
+        }
+        return item.files.count
+    }
+}

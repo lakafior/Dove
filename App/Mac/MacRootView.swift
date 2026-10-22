@@ -24,8 +24,10 @@ struct MacRootView: View {
                     }
                 }
                 Section("Activity") {
-                    Label("Downloads", systemImage: "arrow.down.circle").tag(SidebarItem.downloads)
+                    // The tag goes last: a modifier after it (the badge) hides it from the list's selection.
+                    Label("Downloads", systemImage: "arrow.down.circle")
                         .badge(model.downloads.records.filter { $0.state == .downloading }.count)
+                        .tag(SidebarItem.downloads)
                     Label("On services", systemImage: "icloud.and.arrow.down").tag(SidebarItem.onServices)
                 }
                 if !services.isEmpty {
@@ -55,6 +57,10 @@ struct MacRootView: View {
             ServiceStatusPage(backend: backend)
         case .library(let category):
             MacLibraryView(category: category)
+        case .downloads:
+            MacDownloadsView()
+        case .onServices:
+            MacOnServicesView()
         case .some(let item):
             ContentUnavailableView(item.title, systemImage: item.symbol,
                                    description: Text("This page comes with the next step of the Mac app."))

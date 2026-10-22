@@ -4,11 +4,12 @@ import DoveKit
 import Foundation
 import MediaPlayer
 
-/// The Mac side of `AppPlatform`. Owns the router the window follows. Finder, Spotlight, widgets and Dock
-/// progress come in later phases (`docs/macos.md`); until then those hooks do nothing.
+/// The Mac side of `AppPlatform`. Owns the router the window follows and the Dock icon's download progress. Finder,
+/// Spotlight and widgets come in later phases (`docs/macos.md`); until then those hooks do nothing.
 @MainActor
 final class MacPlatform: AppPlatform {
     let router = MacRouter()
+    private let dock = DockProgress()
 
     /// The user's own Downloads folder, not the sandbox container's: the downloads-folder entitlement opens it, and
     /// files there show in the Dock's Downloads stack.
@@ -31,7 +32,7 @@ final class MacPlatform: AppPlatform {
 
     func accountsUpdated(_ app: AppModel) {}
 
-    func downloadsChanged(_ records: [DownloadRecord]) {}
+    func downloadsChanged(_ records: [DownloadRecord]) { dock.update(records) }
 
     func audiobookStarted() {}
 

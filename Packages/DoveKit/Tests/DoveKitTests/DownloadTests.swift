@@ -148,6 +148,20 @@ struct DownloadManagerTests {
         #expect(!FileManager.default.fileExists(atPath: file.path))
     }
 
+    @Test func removeCanKeepTheFile() async throws {
+        let (manager, _) = try makeManager()
+        let source = url("b.mkv")
+        StubProtocol.set(source, status: 200, body: Data("b".utf8))
+        let id = try manager.start(URLRequest(url: source), backend: .torBox, itemID: "torrent:2", file: LibraryFile(id: "1", name: "b.mkv"))
+        try await waitUntil { manager[id]?.state == .finished }
+        let file = try #require(manager[id].flatMap(manager.fileURL))
+
+        manager.remove(id, deletingFile: false)
+
+        #expect(manager.records.isEmpty)
+        #expect(FileManager.default.fileExists(atPath: file.path))
+    }
+
     @Test func tooBigForTheDiskIsRefusedUpFront() throws {
         let (manager, _) = try makeManager()
         #expect(throws: BackendError.self) {

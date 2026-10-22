@@ -2,14 +2,18 @@ import Foundation
 
 /// Where a downloaded file is kept.
 public enum DownloadDestination: String, Codable, Sendable, Hashable, CaseIterable {
-    /// Dove's Documents on this device (Files › On My iPhone › Dove).
+    /// This device: Dove's Documents on iOS (Files › On My iPhone › Dove), the Downloads folder on the Mac.
     case device
     /// iCloud Drive › Dove: on the user's other devices too, and listed in the Library as a place.
     case iCloud
 
     public var displayName: String {
         switch self {
+        #if os(macOS)
+        case .device: "Downloads"
+        #else
         case .device: "This iPhone"
+        #endif
         case .iCloud: "iCloud Drive"
         }
     }

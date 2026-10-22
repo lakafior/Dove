@@ -1,6 +1,6 @@
 # Dove for macOS: review and architecture plan
 
-Status (2026-10-22): phases 0 and 1 done; phase 2 in progress (Library done).
+Status (2026-10-22): phases 0 and 1 done; phase 2 in progress (Library and Downloads done, Search next).
 
 Goal (owner): a native Mac app that uses what a computer does better, not the iPad app on a Mac and not
 Catalyst. No hurry: the Mac app comes before the release pipeline (#6), which then builds both platforms.
@@ -188,3 +188,19 @@ Split in three: Library, then Downloads, then Search → sources → add.
   game screens are phase 3, so a card has no click action yet.
 - Checked on the owner's Mac: the Titles grid with posters, the status line and the Files table. The ratio first sat
   next to the status and stayed cut to "0…" however wide the column; it is its own column now.
+- **Downloads** (built, not yet tried with a real file): `MacDownloadsView`, a table of this Mac's downloads (name
+  with its folder, source, progress with bytes, place, added); double-click opens the file; context menu Open, Show
+  in Finder, Pause, Resume/Retry, Remove from List (the file stays: `DownloadManager.remove(_:deletingFile:)`), Move to
+  Trash, Cancel Download; ⌫ removes from the list; toolbar Show Downloads Folder and Clear Finished. A release starts
+  from the Library (cards and Files rows: Download): `AppModel.downloadItem` takes every file of a ready item (services
+  that list no files are asked), to the kind's place from Settings › Save to (`DownloadDestination.device` is
+  `~/Downloads` on the Mac and is named "Downloads" there; books, audiobooks and music default to iCloud Drive), one
+  file loose, several in a folder named after the item. `MacOnServicesView`: what the services are still fetching
+  and failures of the last 3 days as a table with progress, speed and time left, re-listed every 20 s while open.
+  Dock icon: a badge with the running count and a bar for their bytes (`DockProgress`, redrawn per percent).
+  Download notices show as banners in front too; a click opens Downloads. Download-only jobs poll from launch.
+  iCloud Drive items are already on the Mac: their menu says Show in Finder instead of Download (the first try sent
+  their `file://` URL to URLSession: "unsupported URL"). The sidebar's Downloads row could not be selected while its
+  `.badge` came after `.tag`; the tag goes last.
+  Per-kind folders outside `~/Downloads` (a NAS share) still to do: they need a folder picker and security-scoped
+  bookmarks.

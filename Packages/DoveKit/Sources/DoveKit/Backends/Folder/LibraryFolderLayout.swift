@@ -65,6 +65,11 @@ public enum LibraryFolderLayout {
         public var folder: String
         /// The file's name in it (may hold a subfolder for files inside a many-file item: `CD1/01.mp3`).
         public var fileName: String
+
+        public init(folder: String, fileName: String) {
+            self.folder = folder
+            self.fileName = fileName
+        }
     }
 
     /// - Parameters:
@@ -140,7 +145,7 @@ public enum LibraryFolderLayout {
     }
 
     /// A relative path with every component made safe.
-    static func cleanPath(_ path: String) -> String {
+    public static func cleanPath(_ path: String) -> String {
         path.split(separator: "/").map { component(String($0)) }.joined(separator: "/")
     }
 

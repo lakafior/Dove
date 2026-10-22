@@ -170,11 +170,13 @@ public final class DownloadManager: NSObject {
         run(session.downloadTask(with: request), for: id)
     }
 
-    /// Stops the transfer if any and deletes the record, its resume data and the downloaded file.
-    public func remove(_ id: DownloadRecord.ID) {
+    /// Stops the transfer if any and deletes the record, its resume data and the downloaded file. With
+    /// `deletingFile` false a finished file stays where it is (the Mac's "Remove from List": files in Downloads are
+    /// the user's).
+    public func remove(_ id: DownloadRecord.ID, deletingFile: Bool = true) {
         tasks.removeValue(forKey: id)?.cancel()
         store.setResumeData(nil, for: id)
-        if let url = self[id].flatMap(fileURL) { try? FileManager.default.removeItem(at: url) }
+        if deletingFile, let url = self[id].flatMap(fileURL) { try? FileManager.default.removeItem(at: url) }
         records.removeAll { $0.id == id }
         save()
     }
