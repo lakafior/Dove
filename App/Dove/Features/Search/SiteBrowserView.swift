@@ -9,7 +9,7 @@ struct SiteBrowserView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
     let start: URL
-    /// What the page was opened for: picks the default place for downloads (Settings › Downloads).
+    /// What the page was opened for: picks the default place for downloads (Settings › Save to).
     var category: SearchCategory = .books
     /// The book the page was opened for: files it fetches into iCloud Drive are filed and matched as this book.
     var book: BookSummary?

@@ -7,7 +7,7 @@ public struct BackendRouter: Sendable {
     public var backends: [any LibraryBackend]
     /// Highest priority first. Backends missing from the list keep their relative order after the listed ones.
     public var order: [BackendID]
-    /// Priority for NZBs (Settings › Usenet › Priority). Empty: nzbdav first, then `order`.
+    /// Priority for NZBs (Settings › Order and fallback › NZBs). Empty: nzbdav first, then `order`.
     public var usenetOrder: [BackendID]
     /// Only services that seed: for releases an indexer says come from a private tracker, which may arrive
     /// as a bare magnet that `TorrentFile.isPrivate` cannot see.

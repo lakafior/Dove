@@ -31,7 +31,7 @@ enum FilesLocation {
         libraryChanged()
     }
 
-    /// Settings › Files: drops everything Files knows about the location (stuck jobs, old errors) and
+    /// Settings › Storage and Files: drops everything Files knows about the location (stuck jobs, old errors) and
     /// registers it again. iOS asks the user to turn it on afterwards. (The system also keeps a default,
     /// non-replicated domain for every extension; it cannot be removed and is harmless.)
     static func reset() async throws {

@@ -7,7 +7,7 @@ struct GameMetadataSettingsView: View {
     @Environment(AppModel.self) private var model
     @State private var clientID = ""
     @State private var clientSecret = ""
-    @State private var status: String?
+    @State private var status: SettingsStatus?
     @State private var saving = false
 
     var body: some View {
@@ -65,7 +65,7 @@ struct GameMetadataSettingsView: View {
                     }
                 }
                 .disabled(saving)
-                if let status { Text(status).font(.footnote) }
+                if let status { SettingsStatusView(status: status) }
             } header: {
                 Text("IGDB")
             } footer: {
@@ -93,9 +93,9 @@ struct GameMetadataSettingsView: View {
         Task {
             do {
                 try await model.saveIGDB(clientID: clientID, clientSecret: clientSecret)
-                status = clientID.isEmpty && clientSecret.isEmpty ? "Removed." : "✅ IGDB works."
+                status = clientID.isEmpty && clientSecret.isEmpty ? .note("Removed.") : .success("IGDB works.")
             } catch {
-                status = "❌ \(error.localizedDescription)"
+                status = SettingsStatus(error)
             }
             saving = false
         }

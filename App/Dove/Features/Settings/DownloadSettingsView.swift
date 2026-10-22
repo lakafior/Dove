@@ -1,8 +1,7 @@
 import DoveKit
 import SwiftUI
 
-/// Where downloads of each kind go by default (a long press on Download picks another place), and whether this
-/// device can use iCloud Drive › Dove.
+/// Settings › Save to: where downloads of each kind go by default (a long press on Download picks another place).
 struct DownloadSettingsView: View {
     @Environment(AppModel.self) private var model
 
@@ -11,15 +10,11 @@ struct DownloadSettingsView: View {
     }
 
     var body: some View {
+        @Bindable var model = model
         Form {
             Section {
-                LabeledContent("iCloud Drive", value: iCloudState)
-            } footer: {
-                Text("Files kept in iCloud Drive › Dove reach your iPhone, iPad and Mac, open in Files and Apple Books, and show in the Library as their own place. Without iCloud Drive, every download stays on this iPhone.")
-            }
-            Section {
                 ForEach(kinds, id: \.self) { kind in
-                    Picker(selection: binding(for: kind)) {
+                    Picker(selection: $model[destinationFor: kind]) {
                         ForEach(model.places(for: kind), id: \.self) { place in
                             Text(place.displayName).tag(place)
                         }
@@ -28,25 +23,11 @@ struct DownloadSettingsView: View {
                     }
                     .disabled(model.places(for: kind).count < 2)
                 }
-            } header: {
-                Text("Download to")
             } footer: {
-                Text("Downloads from plugins use these; a long press on Download picks another place for one file. Offcloud, TorBox and Premiumize fetch the file into their cloud (Real-Debrid, AllDebrid and Debrid-Link only take hosters they list). Calibre takes books: Dove downloads the file and adds it with the book's details.")
+                Text("Downloads from plugins use these; a long press on Download picks another place for one file. Offcloud, TorBox and Premiumize fetch the file into their cloud (Real-Debrid, AllDebrid and Debrid-Link only take hosters they list). Calibre takes books: Dove downloads the file and adds it with the book's details. iCloud Drive: \(model.iCloudState).")
             }
         }
-        .navigationTitle("Downloads")
+        .navigationTitle("Save to")
         .navigationBarTitleDisplayMode(.inline)
-    }
-
-    private var iCloudState: String {
-        if model.iCloudFolder != nil { return "On" }
-        return model.iCloudChecked ? "Not available" : "Checking…"
-    }
-
-    private func binding(for kind: ContentKind) -> Binding<FilePlace> {
-        Binding(
-            get: { model.place(for: kind) },
-            set: { model.downloadDestinations.set($0, for: kind) }
-        )
     }
 }

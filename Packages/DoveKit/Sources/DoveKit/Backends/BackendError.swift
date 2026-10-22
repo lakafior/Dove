@@ -22,7 +22,7 @@ public enum BackendError: Error, Sendable, Equatable, LocalizedError {
         case .http(let status): "Server returned HTTP \(status)."
         case .api(let message): message
         case .invalidResponse: "Unexpected response from server."
-        case .privateTorrent: "This torrent is from a private tracker. Only a service that seeds (Debrid-Link, or TorBox on a paid plan) and is chosen in Settings › Debrid › Private trackers may take it: the others would get your tracker account banned."
+        case .privateTorrent: "This torrent is from a private tracker. Only a service that seeds (Debrid-Link, or TorBox on a paid plan) and is chosen in Settings › Order and fallback › Private trackers may take it: the others would get your tracker account banned."
         }
     }
 }

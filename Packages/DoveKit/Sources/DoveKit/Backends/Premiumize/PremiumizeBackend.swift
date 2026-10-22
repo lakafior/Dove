@@ -5,7 +5,7 @@ import Foundation
 ///
 /// - Auth: `Authorization: Bearer <key>` (the `apikey` parameter is legacy and would put the key in URLs).
 /// - Add: `POST transfer/create` with `src` (magnet, link or NZB link) or a multipart `src` file, and `password` for
-///   protected hoster links. Answers `id`. NZBs only with `usenet` on (Settings › Usenet › Premiumize Usenet).
+///   protected hoster links. Answers `id`. NZBs only with `usenet` on (Settings › Premiumize › Usenet).
 /// - Library: unfinished transfers (`GET transfer/list`: `status` queued/waiting/running/finished/seeding/error/
 ///   timeout/banned/deleted, `progress` 0…1, `message`) plus the cloud's root (`GET folder/list`). A finished
 ///   transfer points at its own folder (`folder_id`) or file (`file_id`), which the root then lists, so finished

@@ -10,7 +10,7 @@ struct AppleMusicCatalog: AlbumCatalog {
     let name = "Apple Music"
 
     func owns(_ albumID: String) -> Bool { albumID.hasPrefix("am:") }
-    /// Settings › Music metadata (this device: the permission is per device too).
+    /// Settings › Music (this device: the permission is per device too).
     static let preferenceKey = "appleMusicMetadata"
 
     /// On, and allowed.
@@ -71,7 +71,7 @@ struct AppleMusicCatalog: AlbumCatalog {
     private static func readable(_ error: any Error) -> any Error {
         if error is CancellationError { return error }
         if MusicAuthorization.currentStatus != .authorized {
-            return BackendError.api(message: "Apple Music is not allowed for Dove: Settings › Search and metadata › Music metadata.")
+            return BackendError.api(message: "Apple Music is not allowed for Dove: Settings › Music.")
         }
         // Apple's token service answers 404 "Client not found" until the App ID that signed this build has the
         // MusicKit App Service, and for a while after it is turned on.

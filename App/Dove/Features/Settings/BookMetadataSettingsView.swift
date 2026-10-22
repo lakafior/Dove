@@ -7,8 +7,8 @@ struct BookMetadataSettingsView: View {
     @Environment(AppModel.self) private var model
     @State private var googleKey = ""
     @State private var hardcoverToken = ""
-    @State private var googleStatus: String?
-    @State private var hardcoverStatus: String?
+    @State private var googleStatus: SettingsStatus?
+    @State private var hardcoverStatus: SettingsStatus?
     @State private var saving: Set<String> = []
 
     var body: some View {
@@ -73,7 +73,7 @@ struct BookMetadataSettingsView: View {
         title: String,
         placeholder: String,
         value: Binding<String>,
-        status: String?,
+        status: SettingsStatus?,
         footer: String,
         save: @escaping () -> Void
     ) -> some View {
@@ -89,7 +89,7 @@ struct BookMetadataSettingsView: View {
                 }
             }
             .disabled(saving.contains(title))
-            if let status { Text(status).font(.footnote) }
+            if let status { SettingsStatusView(status: status) }
         } header: {
             Text(title)
         } footer: {
@@ -105,15 +105,15 @@ struct BookMetadataSettingsView: View {
         run("Hardcover", value: hardcoverToken, status: { hardcoverStatus = $0 }) { try await model.saveHardcoverToken($0) }
     }
 
-    private func run(_ name: String, value: String, status: @escaping (String?) -> Void, save: @escaping (String) async throws -> Void) {
+    private func run(_ name: String, value: String, status: @escaping (SettingsStatus?) -> Void, save: @escaping (String) async throws -> Void) {
         saving.insert(name)
         status(nil)
         Task {
             do {
                 try await save(value)
-                status(value.isEmpty ? "Removed." : "✅ \(name) works.")
+                status(value.isEmpty ? .note("Removed.") : .success("\(name) works."))
             } catch {
-                status("❌ \(error.localizedDescription)")
+                status(SettingsStatus(error))
             }
             saving.remove(name)
         }

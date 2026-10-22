@@ -142,7 +142,7 @@ final class AppModel {
         }
     }
 
-    /// Where private trackers' torrents go (Settings › Debrid › Private trackers).
+    /// Where private trackers' torrents go (Settings › Order and fallback › Private trackers).
     var privateTrackers: PrivateTrackerTarget = .automatic {
         didSet {
             guard privateTrackers != oldValue else { return }
@@ -192,7 +192,7 @@ final class AppModel {
         didSet { savePreferences() }
     }
 
-    /// Where "Read" sends ebooks (Settings › Books); nil asks every time.
+    /// Where "Read" sends ebooks (Settings › Reading); nil asks every time.
     var readIn: ReadingTarget? = nil {
         didSet { savePreferences() }
     }
@@ -523,6 +523,12 @@ final class AppModel {
     }
 
     /// The places for one kind: Calibre takes ebooks too (Dove downloads the file and adds it there).
+    /// `place(for:)` to read, the user's choice to write: what Settings › Save to binds to.
+    subscript(destinationFor kind: ContentKind) -> FilePlace {
+        get { place(for: kind) }
+        set { downloadDestinations.set(newValue, for: kind) }
+    }
+
     func places(for kind: ContentKind) -> [FilePlace] {
         places + (kind == .books && backend(.calibre) != nil ? [.service(.calibre)] : [])
     }
@@ -682,6 +688,12 @@ final class AppModel {
     /// Both seeding services are set up, so the user picks where private trackers' torrents go.
     var canChoosePrivateTrackers: Bool {
         isConfigured(.debridLink) && torBoxSeeds
+    }
+
+    /// The Private trackers picker: Automatic sends them to Debrid-Link, so it shows as that.
+    var privateTrackersChoice: PrivateTrackerTarget {
+        get { privateTrackers == .automatic ? .debridLink : privateTrackers }
+        set { privateTrackers = newValue }
     }
 
     /// Services that take private trackers' torrents, in priority order.
@@ -1033,7 +1045,7 @@ final class AppModel {
     var hardcoverToken: String { (try? keychain.get(.hardcoverToken)) ?? "" }
 
     /// Album search for Music: MusicBrainz, plus the plugins with music metadata (they name `music` among their
-    /// categories), plus Apple Music when it is on and allowed (Settings › Music metadata).
+    /// categories), plus Apple Music when it is on and allowed (Settings › Music).
     var musicMetadata: MusicMetadata {
         let plugins: [any AlbumCatalog] = plugins.calls(.metadata, category: .music)
             .filter { $0.manifest.categories.contains(.music) }

@@ -8,7 +8,7 @@ struct CalibreSettingsView: View {
     @State private var remoteURL = ""
     @State private var user = ""
     @State private var password = ""
-    @State private var status: String?
+    @State private var status: SettingsStatus?
     @State private var isTesting = false
 
     var body: some View {
@@ -49,7 +49,7 @@ struct CalibreSettingsView: View {
                     }
                 }
                 .disabled(isTesting)
-                if let status { Text(status).font(.footnote) }
+                if let status { SettingsStatusView(status: status) }
             }
         }
         .textInputAutocapitalization(.never)
@@ -83,27 +83,27 @@ struct CalibreSettingsView: View {
             try model.keychain.set(trimmedUser.isEmpty ? nil : trimmedUser, for: .calibreUser)
             try model.keychain.set(password.isEmpty ? nil : password, for: .calibrePassword)
         } catch {
-            status = "Keychain error: \(error)"
+            status = .failure("Keychain error: \(error)")
             return
         }
         url = home
         remoteURL = away
         model.reloadBackends()
         guard let calibre = model.backend(.calibre) else {
-            status = home.isEmpty && away.isEmpty ? "Calibre removed." : "Enter an address like http://192.168.1.10:8888."
+            status = home.isEmpty && away.isEmpty ? .note("Calibre removed.") : .failure("Enter an address like http://192.168.1.10:8888.")
             Task { await model.library.refresh(using: model) }
             return
         }
-        status = "Testing…"
+        status = .testing
         isTesting = true
         Task {
             defer { isTesting = false }
             do {
                 try await calibre.validateCredentials()
-                status = "Connected."
+                status = .success("Connected.")
                 await model.library.refresh(using: model)
             } catch {
-                status = error.localizedDescription
+                status = SettingsStatus(error)
             }
         }
     }

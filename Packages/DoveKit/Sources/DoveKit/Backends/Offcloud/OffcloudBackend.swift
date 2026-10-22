@@ -6,7 +6,7 @@ import Foundation
 ///
 /// - Auth: `Authorization: Bearer <key>`. `?key=` / `?apiKey=` are legacy, and query strings end up in logs.
 /// - Add magnet, torrent URL, hoster or NZB link: `POST /cloud` with JSON `{"url": …}`; `.torrent`/`.nzb` bytes as
-///   multipart `file`. NZBs only with `usenet` on (Settings › Usenet › Offcloud Usenet).
+///   multipart `file`. NZBs only with `usenet` on (Settings › Offcloud › Usenet).
 ///   A cached magnet answers `status: "downloaded"` at once. Offcloud accepts invalid magnets and never finishes
 ///   them, so the info hash is validated first.
 /// - List: `GET /cloud/history` (active transfers; `progress` 0…1 and `message`, no sizes). Account: `GET /account/info`.

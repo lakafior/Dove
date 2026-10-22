@@ -85,13 +85,13 @@ final class PlaybackModel {
         guard !entries.isEmpty else { return }
         let chosen = chosen ?? player
         if chosen == .kodi {
-            guard let kodi else { throw BackendError.api(message: "Set up Kodi in Settings › Playback.") }
+            guard let kodi else { throw BackendError.api(message: "Set up Kodi in Settings › Player.") }
             try await KodiClient(server: kodi).play(entries)
             return
         }
         guard let url = chosen.link(for: entries, customTemplate: customTemplate) else {
             throw BackendError.api(message: chosen == .custom
-                ? "The custom player template needs {url} or {encodedUrl} (Settings › Playback)."
+                ? "The custom player template needs {url} or {encodedUrl} (Settings › Player)."
                 : "Could not build a link for \(chosen.displayName).")
         }
         guard await UIApplication.shared.open(url) else {

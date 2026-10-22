@@ -119,7 +119,7 @@ struct LibraryGameView: View {
                     Text("A collection of games: not looked up.").font(.footnote).foregroundStyle(.secondary)
                 } else if game.game == nil {
                     Text(model.igdbCredentials == nil
-                         ? "No game found yet. Wikidata is searched on refresh; IGDB (Settings › Game metadata) finds more."
+                         ? "No game found yet. Wikidata is searched on refresh; IGDB (Settings › Games) finds more."
                          : "No game found yet. IGDB and Wikidata are searched on refresh.")
                         .font(.footnote)
                         .foregroundStyle(.secondary)

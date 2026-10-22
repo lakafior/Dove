@@ -69,7 +69,7 @@ struct SourceFilterSheet: View {
 private extension SourceFilter.Dimension {
     var hint: String? {
         switch self {
-        case .privacy: "Private and semi-private trackers want seeding back: Dove adds those only to a service that seeds (Settings › Debrid › Private trackers)."
+        case .privacy: "Private and semi-private trackers want seeding back: Dove adds those only to a service that seeds (Settings › Order and fallback › Private trackers)."
         case .provider: "The addon or indexer that answered Dove (inside AIOStreams: the addon that found it)."
         case .tracker: "The tracker or Usenet indexer behind the result, when the source names it."
         default: nil

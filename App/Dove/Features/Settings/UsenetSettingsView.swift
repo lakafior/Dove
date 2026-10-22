@@ -9,7 +9,7 @@ struct NzbdavSettingsView: View {
     @State private var user = ""
     @State private var password = ""
     @State private var frontendKey = ""
-    @State private var status: String?
+    @State private var status: SettingsStatus?
     @State private var isTesting = false
 
     var body: some View {
@@ -55,7 +55,7 @@ struct NzbdavSettingsView: View {
                     }
                 }
                 .disabled(isTesting)
-                if let status { Text(status).font(.footnote) }
+                if let status { SettingsStatusView(status: status) }
             }
         }
         .textInputAutocapitalization(.never)
@@ -82,49 +82,27 @@ struct NzbdavSettingsView: View {
             try model.keychain.set(password, for: .nzbdavWebDAVPassword)
             try model.keychain.set(frontendKey.trimmingCharacters(in: .whitespacesAndNewlines), for: .nzbdavFrontendKey)
         } catch {
-            status = "Keychain error: \(error)"
+            status = .failure("Keychain error: \(error)")
             return
         }
         model.reloadBackends()
         guard let nzbdav = model.backend(.nzbdav) else {
-            status = trimmedURL.isEmpty && apiKey.isEmpty ? "nzbdav removed." : "Fill in the server, API key and WebDAV login."
+            status = trimmedURL.isEmpty && apiKey.isEmpty ? .note("nzbdav removed.") : .failure("Fill in the server, API key and WebDAV login.")
             return
         }
-        status = "Testing…"
+        status = .testing
         isTesting = true
         Task {
             defer { isTesting = false }
             do {
                 try await nzbdav.validateCredentials()
                 status = frontendKey.isEmpty
-                    ? "✅ Connected: API key and WebDAV login work."
-                    : "✅ Connected: API key, WebDAV login and frontend key work."
+                    ? .success("Connected: API key and WebDAV login work.")
+                    : .success("Connected: API key, WebDAV login and frontend key work.")
             } catch {
-                status = "❌ \(error.localizedDescription)"
+                status = SettingsStatus(error)
             }
         }
-    }
-}
-
-/// "NZBs may go to this debrid" (TorBox with a Usenet plan, Offcloud): after nzbdav, in the priority order.
-struct DebridUsenetToggle: View {
-    let backend: BackendID
-    @Environment(AppModel.self) private var model
-
-    var body: some View {
-        Toggle(isOn: Binding { model.usenetEnabled(backend) } set: { model.setUsenet(backend, enabled: $0) }) {
-            Label {
-                Text("\(backend.displayName) Usenet")
-            } icon: {
-                SettingsIcon(symbol: "newspaper.fill", color: backend.settingsColor)
-            }
-        }
-            .disabled(!model.isConfigured(backend) || planWithoutUsenet)
-    }
-
-    /// TorBox on a known plan other than Pro.
-    private var planWithoutUsenet: Bool {
-        backend == .torBox && model.torBoxPlan.plan.map { !$0.includesUsenet } == true
     }
 }
 
@@ -236,7 +214,7 @@ private struct NewznabIndexerEditor: View {
     @State private var apiKey = ""
     @State private var limit = ""
     @State private var enabled = true
-    @State private var status: String?
+    @State private var status: SettingsStatus?
     @State private var isTesting = false
 
     var body: some View {
@@ -269,7 +247,7 @@ private struct NewznabIndexerEditor: View {
                     }
                 }
                 .disabled(isTesting || draft == nil)
-                if let status { Text(status).font(.footnote) }
+                if let status { SettingsStatusView(status: status) }
                 if let draft, let twin = draft.sameFeed(in: model.newznabIndexers) {
                     Label("\(twin.name) already asks this feed: both would return the same results under two names.",
                           systemImage: "exclamationmark.triangle.fill")
@@ -322,24 +300,24 @@ private struct NewznabIndexerEditor: View {
     }
 
     /// Names the trackers behind the answer: a Jackett or Prowlarr feed pasted under the wrong name shows here.
-    static func describe(_ result: NewznabSearch.TestResult) -> String {
-        guard result.results > 0 else { return "✅ The indexer answered (no results for the test search)." }
+    static func describe(_ result: NewznabSearch.TestResult) -> SettingsStatus {
+        guard result.results > 0 else { return .success("The indexer answered (no results for the test search).") }
         let count = "\(result.results) result\(result.results == 1 ? "" : "s")"
-        guard !result.trackers.isEmpty else { return "✅ The indexer answered a search: \(count)." }
-        return "✅ \(count) from \(result.trackers.joined(separator: ", "))."
+        guard !result.trackers.isEmpty else { return .success("The indexer answered a search: \(count).") }
+        return .success("\(count) from \(result.trackers.joined(separator: ", ")).")
     }
 
     private func test() {
         guard let draft else { return }
         isTesting = true
-        status = "Testing…"
+        status = .testing
         Task {
             defer { isTesting = false }
             do {
                 let result = try await model.newznab.test(draft)
                 status = Self.describe(result)
             } catch {
-                status = "❌ \(error.localizedDescription)"
+                status = SettingsStatus(error)
             }
         }
     }

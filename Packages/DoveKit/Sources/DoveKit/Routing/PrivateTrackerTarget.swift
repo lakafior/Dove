@@ -1,6 +1,6 @@
 import Foundation
 
-/// Where torrents from private trackers go (Settings › Debrid › Private trackers). Only services that keep
+/// Where torrents from private trackers go (Settings › Order and fallback › Private trackers). Only services that keep
 /// seeding may take them: Debrid-Link always, TorBox on a plan that seeds. Stored in the Keychain
 /// (`CredentialKey.privateTrackers`) so the share extension routes the same way.
 public enum PrivateTrackerTarget: String, Sendable, CaseIterable, Identifiable {

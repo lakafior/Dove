@@ -74,7 +74,7 @@ private struct KodiSettingsView: View {
     @State private var port = String(KodiServer.defaultPort)
     @State private var username = "kodi"
     @State private var password = ""
-    @State private var status: String?
+    @State private var status: SettingsStatus?
     @State private var isSaving = false
 
     var body: some View {
@@ -105,7 +105,7 @@ private struct KodiSettingsView: View {
                     }
                 }
                 .disabled(isSaving || host.trimmingCharacters(in: .whitespaces).isEmpty)
-                if let status { Text(status).font(.footnote) }
+                if let status { SettingsStatusView(status: status) }
             }
             if model.playback.kodi != nil {
                 Section {
@@ -145,9 +145,9 @@ private struct KodiSettingsView: View {
         Task {
             do {
                 try await model.playback.saveKodi(server)
-                status = "✅ Kodi answered."
+                status = .success("Kodi answered.")
             } catch {
-                status = "❌ \(error.localizedDescription)"
+                status = SettingsStatus(error)
             }
             isSaving = false
         }
