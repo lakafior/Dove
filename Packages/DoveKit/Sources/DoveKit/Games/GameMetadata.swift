@@ -44,7 +44,8 @@ public struct GameSummary: Identifiable, Sendable, Hashable, Codable {
     /// Whether it is the game itself, not an add-on to one.
     public var isMainGame: Bool {
         guard let type = type?.lowercased() else { return true }
-        return !["dlc", "addon", "add-on", "expansion", "bundle", "compilation", "pack", "update", "mod", "episode", "season"]
+        return !["dlc", "addon", "add-on", "expansion", "bundle", "compilation", "pack", "update", "mod", "episode", "season",
+                 "soundtrack", "demo"]
             .contains { type.contains($0) }
     }
 
@@ -384,8 +385,9 @@ public enum GameMatcher {
 
     /// One row per game: IGDB's, with the others' description, platforms and cover when it lacks them (plugins come
     /// before Wikidata, so theirs win); games only the others know are added. The same game = a name in common and years at most one apart (or one unknown).
-    /// Wikidata also lists ports under the original's name (A Link to the Past for SNES, 1991, and for GBA, no date):
-    /// one of them stays, the one with a year, so the answer does not depend on which came first.
+    /// Wikidata and plugins also list ports under the original's name (A Link to the Past for SNES, 1991, for GBA with
+    /// no date, a 2022 PC port): one of them stays, the earliest dated one (the original), so the answer does not
+    /// depend on which came first.
     public static func merge(_ igdb: [GameSummary], _ others: [GameSummary]) -> [GameSummary] {
         var kept: [GameSummary] = []
         for game in others {
@@ -394,7 +396,7 @@ public enum GameMatcher {
                 continue
             }
             let cover = kept[index].cover ?? game.cover
-            if kept[index].year == nil, game.year != nil { kept[index] = game }
+            if let year = game.year, kept[index].year.map({ year < $0 }) ?? true { kept[index] = game }
             kept[index].cover = cover
         }
         var merged = igdb

@@ -346,3 +346,17 @@ struct GameFolderTests {
         #expect(GamePlatform(releaseName: "Halo [Xbox 360]") == .xbox360)
     }
 }
+
+struct GameMergeTests {
+    @Test func theOriginalBeatsLaterPortsAndSoundtracksSink() {
+        let port = GameSummary(id: "plugin:lb:1", title: "The Legend of Zelda: A Link to the Past", year: 2022, platforms: [.pc], type: "Homebrew")
+        let original = GameSummary(id: "plugin:lb:2", title: "The Legend of Zelda: A Link to the Past", year: 1991, platforms: [.snes], cover: nil)
+        let merged = GameMatcher.merge([], [port, original])
+        #expect(merged.map(\.id) == ["plugin:lb:2"], "the earliest dated one")
+
+        let soundtrack = GameSummary(id: "s:2", title: "Hollow Knight Official Soundtrack", type: "Soundtrack")
+        let game = GameSummary(id: "s:1", title: "Hollow Knight Silksong")
+        #expect(!soundtrack.isMainGame)
+        #expect(GameMatcher.rank([soundtrack, game], for: "hollow knight").first == game)
+    }
+}
