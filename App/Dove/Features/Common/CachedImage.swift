@@ -37,12 +37,25 @@ struct CachedImage<Placeholder: View>: View {
             return
         }
         image = nil
+        // On disk (every launch after the first): shown as it is, so it does not look downloaded again.
+        if let stored = await decodeImage(ImageCache.shared.stored(url)) {
+            DecodedImages.shared.insert(stored, for: url)
+            image = stored
+            return
+        }
         guard let data = try? await ImageCache.shared.data(for: url),
-              let decoded = await UIImage(data: data)?.byPreparingForDisplay()
+              let decoded = await decodeImage(data)
         else { return }
         DecodedImages.shared.insert(decoded, for: url)
         withAnimation(.easeOut(duration: 0.15)) { image = decoded }
     }
+}
+
+/// Reads and decodes off the main actor (a grid of covers at launch is read in parallel). Outside `CachedImage`:
+/// a function of the generic view would carry its `Placeholder` into the concurrent context.
+private nonisolated func decodeImage(_ data: @autoclosure @Sendable () -> Data?) async -> UIImage? {
+    guard let data = data() else { return nil }
+    return await UIImage(data: data)?.byPreparingForDisplay()
 }
 
 /// Decoded images by URL. `NSCache` is thread-safe and drops entries under memory pressure.

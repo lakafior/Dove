@@ -113,7 +113,7 @@ enum SpotlightIndex {
                 attributes.lastUsedDate = entry.date
                 attributes.contentCreationDate = entry.date
                 // Artwork the image cache already holds; Spotlight is no reason to download posters.
-                if let poster = entry.poster, await ImageCache.shared.contains(poster) {
+                if let poster = entry.poster, ImageCache.shared.contains(poster) {
                     attributes.thumbnailData = try? await ImageCache.shared.data(for: poster)
                 }
                 items.append(CSSearchableItem(uniqueIdentifier: entry.id, domainIdentifier: entry.domain, attributeSet: attributes))

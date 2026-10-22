@@ -35,9 +35,6 @@ struct SourcesView: View {
     @State private var tab = ResultsTab.sources
     /// A described filter ("4K DV, no Atmos, under 20 GB") on top of the saved one, for this list only.
     @State private var request: SourceRequest?
-    @State private var description = ""
-    @State private var isDescribing = false
-    @State private var describeError: String?
 
     struct UsenetJob: Equatable {
         let backend: BackendID
@@ -76,7 +73,9 @@ struct SourcesView: View {
     }
 
     var body: some View {
-        List {
+        // Filtering and ranking every group is the costly part of a redraw: once per body, not once per use.
+        let visible = visible
+        return List {
             if let status {
                 Text(status.text)
                     .font(.footnote)
@@ -106,7 +105,7 @@ struct SourcesView: View {
                     .foregroundStyle(.secondary)
                 }
                 if OnDeviceModel.isAvailable, !groups.isEmpty {
-                    describeRow(total: groups.count)
+                    describeRow(total: groups.count, shown: visible.count, groups: groups)
                 }
                 if model.sourceFilter.isActive, !groups.isEmpty {
                     Button {
@@ -177,13 +176,13 @@ struct SourcesView: View {
 
     /// The field for a described filter, or what it understood with a button to clear it.
     @ViewBuilder
-    private func describeRow(total: Int) -> some View {
+    private func describeRow(total: Int, shown: Int, groups: [StreamGroup]) -> some View {
         if let request {
             HStack(alignment: .firstTextBaseline) {
                 Label {
                     VStack(alignment: .leading, spacing: 2) {
                         Text("\u{201C}\(request.text)\u{201D}")
-                        Text("\(request.summary) · \(visible.count) of \(total)")
+                        Text("\(request.summary) · \(shown) of \(total)")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
@@ -194,41 +193,13 @@ struct SourcesView: View {
                 Spacer()
                 Button("Clear", systemImage: "xmark.circle.fill") {
                     self.request = nil
-                    description = ""
                 }
                 .labelStyle(.iconOnly)
                 .foregroundStyle(.secondary)
                 .buttonStyle(.borderless)
             }
         } else {
-            VStack(alignment: .leading, spacing: 4) {
-                HStack {
-                    Image(systemName: "sparkles").foregroundStyle(.secondary)
-                    TextField("Describe it: 4K DV, no Atmos, under 20 GB", text: $description)
-                        .submitLabel(.search)
-                        .onSubmit(describe)
-                        .disabled(isDescribing)
-                    if isDescribing { ProgressView() }
-                }
-                if let describeError {
-                    Text(describeError).font(.caption).foregroundStyle(.red)
-                }
-            }
-        }
-    }
-
-    private func describe() {
-        let text = description.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !text.isEmpty, let groups else { return }
-        isDescribing = true
-        describeError = nil
-        Task {
-            defer { isDescribing = false }
-            do {
-                request = try await DescribedFilter.request(for: text, groups: groups)
-            } catch {
-                describeError = error.localizedDescription
-            }
+            DescribeSourcesField(groups: groups) { request = $0 }
         }
     }
 
@@ -722,4 +693,44 @@ struct FlowLayout: Layout {
 
 private extension String {
     var nilIfEmpty: String? { isEmpty ? nil : self }
+}
+
+/// The described filter's field, with its own state: typing redraws this row, not the whole source list.
+private struct DescribeSourcesField: View {
+    let groups: [StreamGroup]
+    let onRequest: (SourceRequest) -> Void
+    @State private var description = ""
+    @State private var isDescribing = false
+    @State private var describeError: String?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack {
+                Image(systemName: "sparkles").foregroundStyle(.secondary)
+                TextField("Describe it: 4K DV, no Atmos, under 20 GB", text: $description)
+                    .submitLabel(.search)
+                    .onSubmit(describe)
+                    .disabled(isDescribing)
+                if isDescribing { ProgressView() }
+            }
+            if let describeError {
+                Text(describeError).font(.caption).foregroundStyle(.red)
+            }
+        }
+    }
+
+    private func describe() {
+        let text = description.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else { return }
+        isDescribing = true
+        describeError = nil
+        Task {
+            defer { isDescribing = false }
+            do {
+                onRequest(try await DescribedFilter.request(for: text, groups: groups))
+            } catch {
+                describeError = error.localizedDescription
+            }
+        }
+    }
 }

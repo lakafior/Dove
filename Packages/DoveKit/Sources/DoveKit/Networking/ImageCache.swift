@@ -27,10 +27,21 @@ public actor ImageCache {
         self.transport = transport
     }
 
-    /// The image's bytes: from disk when Dove has them, otherwise downloaded and stored.
-    public func data(for url: URL) async throws -> Data {
-        let file = file(for: url)
-        if let stored = try? Data(contentsOf: file) { return stored }
+    /// The image's bytes: from disk when Dove has them, otherwise downloaded and stored. Disk reads run off the
+    /// actor, so a screen of covers at launch is read in parallel instead of one file after another.
+    public nonisolated func data(for url: URL) async throws -> Data {
+        if let stored = stored(url) { return stored }
+        return try await download(url)
+    }
+
+    /// The bytes on disk, without waiting for the actor or downloading.
+    public nonisolated func stored(_ url: URL) -> Data? {
+        try? Data(contentsOf: file(for: url))
+    }
+
+    private func download(_ url: URL) async throws -> Data {
+        // Another request may have stored it while this one waited for the actor.
+        if let stored = stored(url) { return stored }
         if let running = inFlight[url] { return try await running.value }
         let transport = transport
         let resolver = url.scheme.flatMap { resolvers[$0] }
@@ -45,7 +56,7 @@ public actor ImageCache {
         defer { inFlight[url] = nil }
         let data = try await task.value
         try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        try? data.write(to: file, options: .atomic)
+        try? data.write(to: file(for: url), options: .atomic)
         return data
     }
 
@@ -55,7 +66,7 @@ public actor ImageCache {
     }
 
     /// Whether the image is on disk (no download).
-    public func contains(_ url: URL) -> Bool {
+    public nonisolated func contains(_ url: URL) -> Bool {
         FileManager.default.fileExists(atPath: file(for: url).path())
     }
 
@@ -70,7 +81,7 @@ public actor ImageCache {
     }
 
     /// One file per URL, named by its hash (URLs are long and full of slashes).
-    func file(for url: URL) -> URL {
+    nonisolated func file(for url: URL) -> URL {
         let digest = SHA256.hash(data: Data(url.absoluteString.utf8))
         return directory.appending(path: digest.map { String(format: "%02x", $0) }.joined())
     }

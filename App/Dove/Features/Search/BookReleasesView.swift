@@ -30,7 +30,7 @@ struct BookReleasesView: View {
             Section {
                 header
                 // Already in the library (Calibre, or a service): its screen has Read and Download.
-                if let held = HeldBooks(model.library.books).held(route.book, format: format) {
+                if let held = model.library.heldBooks.held(route.book, format: format) {
                     NavigationLink(value: BookRoute(id: held.id)) {
                         Label {
                             VStack(alignment: .leading, spacing: 2) {

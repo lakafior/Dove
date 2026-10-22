@@ -7,19 +7,42 @@ import Observation
 @Observable
 final class LibraryModel {
     /// Everything the services listed. Views read `items`, which leaves adult content out unless it is shown.
-    private var allItems: [ShelfItem] = []
+    private var allItems: [ShelfItem] = [] { didSet { derived = Derived() } }
     /// Set by `AppModel` from the synced preference.
-    var showAdult = false
+    var showAdult = false { didSet { derived = Derived() } }
 
     var items: [ShelfItem] {
-        showAdult ? allItems : allItems.filter { $0.kind != .adult }
+        cached(\.items) { showAdult ? allItems : allItems.filter { $0.kind != .adult } }
     }
     private(set) var failures: [String] = []
-    private(set) var matches: [String: MediaSummary] = [:]
+    private(set) var matches: [String: MediaSummary] = [:] { didSet { derived = Derived() } }
     /// Covers for books and audiobooks, keyed by `BookGuess.key`.
-    private(set) var bookMatches: [String: BookSummary] = [:]
+    private(set) var bookMatches: [String: BookSummary] = [:] { didSet { derived = Derived() } }
     /// Albums for music, keyed by `AlbumGuess.key`.
-    private(set) var albumMatches: [String: AlbumSummary] = [:]
+    private(set) var albumMatches: [String: AlbumSummary] = [:] { didSet { derived = Derived() } }
+
+    /// Titles, books, albums and the rest, built once per change of the items or matches. Views read them on
+    /// every redraw (the home screen several times, once per keystroke in the search field), and building them
+    /// parses every item's name: thousands of items made typing stutter.
+    private struct Derived {
+        var items: [ShelfItem]?
+        var titles: [LibraryTitle]?
+        var books: [BookTitle]?
+        var albums: [AlbumTitle]?
+        var others: [ShelfItem]?
+        var heldBooks: HeldBooks?
+    }
+    @ObservationIgnored private var derived = Derived()
+
+    /// The cached value, or a fresh one. Reads what the value is built from first, so a view stays observing
+    /// the items and matches even when the cache answers.
+    private func cached<Value>(_ path: WritableKeyPath<Derived, Value?>, build: () -> Value) -> Value {
+        _ = (allItems, showAdult, matches, bookMatches, albumMatches)
+        if let value = derived[keyPath: path] { return value }
+        let value = build()
+        derived[keyPath: path] = value
+        return value
+    }
     private(set) var isLoading = false
     /// Something to show: the cached list from the last launch, or a finished refresh.
     private(set) var hasLoaded = false
@@ -70,20 +93,25 @@ final class LibraryModel {
     }
 
     var titles: [LibraryTitle] {
-        LibraryShelf.titles(items, matches: matches)
+        cached(\.titles) { LibraryShelf.titles(items, matches: matches) }
     }
 
     var books: [BookTitle] {
-        LibraryShelf.books(items, matches: bookMatches)
+        cached(\.books) { LibraryShelf.books(items, matches: bookMatches) }
     }
 
     var albums: [AlbumTitle] {
-        LibraryShelf.albums(items, matches: albumMatches)
+        cached(\.albums) { LibraryShelf.albums(items, matches: albumMatches) }
     }
 
     /// Software and the rest: listed by name under the posters.
     var others: [ShelfItem] {
-        LibraryShelf.others(items)
+        cached(\.others) { LibraryShelf.others(items) }
+    }
+
+    /// The books index for "In Calibre" / "In library" marks on search results.
+    var heldBooks: HeldBooks {
+        cached(\.heldBooks) { HeldBooks(books) }
     }
 
     /// Re-classifies an item from the files its detail call returned, and remembers the answer.

@@ -5,10 +5,15 @@ import SwiftUI
 /// library's shelves by kind, and recent searches. Everything here comes from the library already loaded (or its
 /// cache) and this device's own history: opening the home screen costs no extra calls, and a new kind of content
 /// gets its shelf by itself.
-struct HomeView: View {
+struct HomeView: View, @MainActor Equatable {
     @Environment(AppModel.self) private var model
     let home: HomeModel
     let onSearch: (HomeModel.RecentSearch) -> Void
+
+    /// The search field redraws its screen on every keystroke and hands over a new `onSearch` each time; with
+    /// `.equatable()` the home screen skips those redraws. What it shows comes from the models it observes,
+    /// which still redraw it when they change.
+    static func == (lhs: HomeView, rhs: HomeView) -> Bool { lhs.home === rhs.home }
 
     private var library: LibraryModel { model.library }
 

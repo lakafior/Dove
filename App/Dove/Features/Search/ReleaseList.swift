@@ -5,7 +5,7 @@ import SwiftUI
 /// its filters (type, private, who found it; the book kind and format for books) and adding a row.
 @MainActor @Observable
 final class ReleaseList {
-    private(set) var groups: [StreamGroup] = []
+    private(set) var groups: [StreamGroup] = [] { didSet { derived = Derived() } }
     private(set) var isSearching = false
     var message: String?
     private(set) var busy: Set<StreamGroup.ID> = []
@@ -14,18 +14,39 @@ final class ReleaseList {
         var filter = SourceFilter()
         filter.sort = .addon
         return filter
-    }()
+    }() { didSet { derived = Derived() } }
     /// Books and Audiobooks: show the other kind the indexers filed in the category too.
-    var showOtherBookKind = false
+    var showOtherBookKind = false { didSet { derived = Derived() } }
     /// Books and Audiobooks: only releases that name this format.
-    var bookFormat: BookFileFormat?
+    var bookFormat: BookFileFormat? { didSet { derived = Derived() } }
     /// Music: only releases that name this format (FLAC, Hi-Res, MP3…).
-    var musicFormat: MusicFileFormat?
+    var musicFormat: MusicFileFormat? { didSet { derived = Derived() } }
     /// A book's screen: the rest of the indexers' answer, not this book.
-    var showOtherBooks = false
+    var showOtherBooks = false { didSet { derived = Derived() } }
 
     /// The category searched, for the book kind split.
-    private(set) var category: SearchCategory = .all
+    private(set) var category: SearchCategory = .all { didSet { derived = Derived() } }
+
+    /// The splits and filters below, built once per change. Each reads release names (book kind, formats), and
+    /// views read them several times a redraw, the search field's on every keystroke.
+    private struct Derived {
+        var kindSplit: (matching: [StreamGroup], other: [StreamGroup])?
+        var bookSplit: (thisBook: [StreamGroup], other: [StreamGroup])?
+        var visible: [StreamGroup]?
+        var formats: [BookFileFormat]?
+        var musicFormats: [MusicFileFormat]?
+    }
+    @ObservationIgnored private var derived = Derived()
+
+    /// The cached value, or a fresh one. Reads what the values are built from first, so a view stays observing
+    /// them even when the cache answers.
+    private func cached<Value>(_ path: WritableKeyPath<Derived, Value?>, build: () -> Value) -> Value {
+        _ = (groups, filter, showOtherBookKind, bookFormat, musicFormat, showOtherBooks, category)
+        if let value = derived[keyPath: path] { return value }
+        let value = build()
+        derived[keyPath: path] = value
+        return value
+    }
     /// Set on a book's screen: releases of this book come first.
     let book: (summary: BookSummary, format: BookFormat)?
     /// Set on an album's screen, the same way.
@@ -54,8 +75,10 @@ final class ReleaseList {
 
     /// Books searches hide audiobooks the indexers filed under Books, and the other way round (`BookRelease`).
     var kindSplit: (matching: [StreamGroup], other: [StreamGroup]) {
-        guard let newznab = category.newznabCategory else { return (groups, []) }
-        return StreamGroup.splitByBookKind(groups, for: newznab)
+        cached(\.kindSplit) {
+            guard let newznab = category.newznabCategory else { return (groups, []) }
+            return StreamGroup.splitByBookKind(groups, for: newznab)
+        }
     }
 
     /// The right kind (and, when shown, the other one).
@@ -65,33 +88,41 @@ final class ReleaseList {
 
     /// On a book's or album's screen: its releases, and the rest.
     var bookSplit: (thisBook: [StreamGroup], other: [StreamGroup]) {
-        if let album {
-            let split = StreamGroup.split(ofKind, for: album)
-            return (split.thisAlbum, split.other)
+        cached(\.bookSplit) {
+            if let album {
+                let split = StreamGroup.split(ofKind, for: album)
+                return (split.thisAlbum, split.other)
+            }
+            guard let book else { return (ofKind, []) }
+            return StreamGroup.split(ofKind, for: book.summary, format: book.format)
         }
-        guard let book else { return (ofKind, []) }
-        return StreamGroup.split(ofKind, for: book.summary, format: book.format)
     }
 
     /// Formats the shown book results name, for the chips.
     /// Formats the shown music results name, for the chips.
     var musicFormats: [MusicFileFormat] {
-        guard category == .music else { return [] }
-        let groups = bookSplit.thisBook + (showOtherBooks ? bookSplit.other : [])
-        return Set(groups.flatMap { MusicFileFormat.formats(in: $0.title) }).sorted()
+        cached(\.musicFormats) {
+            guard category == .music else { return [] }
+            let groups = bookSplit.thisBook + (showOtherBooks ? bookSplit.other : [])
+            return Set(groups.flatMap { MusicFileFormat.formats(in: $0.title) }).sorted()
+        }
     }
 
     var formats: [BookFileFormat] {
-        guard category == .books || category == .audiobooks else { return [] }
-        let groups = bookSplit.thisBook + (showOtherBooks ? bookSplit.other : [])
-        return Set(groups.flatMap { BookRelease($0).formats }).sorted()
+        cached(\.formats) {
+            guard category == .books || category == .audiobooks else { return [] }
+            let groups = bookSplit.thisBook + (showOtherBooks ? bookSplit.other : [])
+            return Set(groups.flatMap { BookRelease($0).formats }).sorted()
+        }
     }
 
     var visible: [StreamGroup] {
-        var shown = bookSplit.thisBook + (showOtherBooks ? bookSplit.other : [])
-        if let bookFormat { shown = shown.filter { BookRelease($0).formats.contains(bookFormat) } }
-        if let musicFormat { shown = shown.filter { MusicFileFormat.formats(in: $0.title).contains(musicFormat) } }
-        return filter.apply(to: shown)
+        cached(\.visible) {
+            var shown = bookSplit.thisBook + (showOtherBooks ? bookSplit.other : [])
+            if let bookFormat { shown = shown.filter { BookRelease($0).formats.contains(bookFormat) } }
+            if let musicFormat { shown = shown.filter { MusicFileFormat.formats(in: $0.title).contains(musicFormat) } }
+            return filter.apply(to: shown)
+        }
     }
 
     // MARK: Search

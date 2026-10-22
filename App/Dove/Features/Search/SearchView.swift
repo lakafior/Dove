@@ -102,6 +102,7 @@ struct SearchView: View {
                                 // A category change searches by itself (`onChange(of: category)`).
                                 if category == search.category { handleSubmit() } else { category = search.category }
                             }
+                            .equatable()
                         }
                     }
                 }
@@ -478,7 +479,7 @@ extension SearchView {
     /// Books and Audiobooks start from Open Library and Apple Books (no indexer hits): a tap on a book searches
     /// the indexers for it. "Search releases" keeps the name search for what the services do not know.
     var booksSection: some View {
-        let held = HeldBooks(model.library.books)
+        let held = model.library.heldBooks
         return Section {
             ForEach(books) { book in
                 NavigationLink(value: BookSearchRoute(book: book, category: activeCategory)) {
