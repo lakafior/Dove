@@ -1,6 +1,6 @@
 # Dove for macOS: review and architecture plan
 
-Status (2026-10-22): phases 0 and 1 done; phase 2 in progress (Library and Downloads done, Search next).
+Status (2026-10-22): phases 0 and 1 done; phase 2 in progress (Library and Downloads done and checked; Search next).
 
 Goal (owner): a native Mac app that uses what a computer does better, not the iPad app on a Mac and not
 Catalyst. No hurry: the Mac app comes before the release pipeline (#6), which then builds both platforms.
@@ -188,7 +188,8 @@ Split in three: Library, then Downloads, then Search → sources → add.
   game screens are phase 3, so a card has no click action yet.
 - Checked on the owner's Mac: the Titles grid with posters, the status line and the Files table. The ratio first sat
   next to the status and stayed cut to "0…" however wide the column; it is its own column now.
-- **Downloads** (built, not yet tried with a real file): `MacDownloadsView`, a table of this Mac's downloads (name
+- **Downloads** (checked by the owner, 2026-10-22: an EPUB from Calibre and one from Offcloud landed in `~/Downloads`;
+  iCloud Drive items show their files in the Finder): `MacDownloadsView`, a table of this Mac's downloads (name
   with its folder, source, progress with bytes, place, added); double-click opens the file; context menu Open, Show
   in Finder, Pause, Resume/Retry, Remove from List (the file stays: `DownloadManager.remove(_:deletingFile:)`), Move to
   Trash, Cancel Download; ⌫ removes from the list; toolbar Show Downloads Folder and Clear Finished. A release starts
@@ -204,3 +205,16 @@ Split in three: Library, then Downloads, then Search → sources → add.
   `.badge` came after `.tag`; the tag goes last.
   Per-kind folders outside `~/Downloads` (a NAS share) still to do: they need a folder picker and security-scoped
   bookmarks.
+
+## 9. Where to pick up (2026-10-22)
+
+1. **Phase 2c, Search → sources → add**: a Search page (search field in the toolbar, the iPhone's categories, results
+   from TMDB/addons/indexers/book/music/game metadata), a title's sources as a `Table` (resolution, HDR, codec, audio,
+   size, seeders, age, found by, ⚡ per service; sortable; filters in an inspector), Return = add (Automatic), context
+   menu = add only to…, "Download only". Shared logic is already in `DoveAppCore` (`addonSet`, `router`, `newznab`,
+   `getFile`); the iOS views to read first: `SearchView`, `SourcesView`, `ReleaseList`, `HomeView`.
+2. Per-kind download folders outside `~/Downloads` (NAS): folder picker + security-scoped bookmarks, shown in
+   Settings › Save to on the Mac.
+3. Phase 3: title, series, book, album and game screens (cards have no click action yet), Play in Infuse/IINA/VLC,
+   the audiobook and music player.
+4. Not yet checked: the Dock progress bar and the download notice banner with a big file.
