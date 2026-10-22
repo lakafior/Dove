@@ -91,7 +91,7 @@ struct GameReleasesView: View {
                         .foregroundStyle(.secondary)
                 }
                 if let link = game.link {
-                    Link(game.sourceName, destination: link).font(.caption)
+                    Link(game.sourceName(plugins: model.plugins.manifests()), destination: link).font(.caption)
                 }
             }
         }
@@ -105,6 +105,7 @@ struct GameReleasesView: View {
 }
 
 struct GameRow: View {
+    @Environment(AppModel.self) private var model
     let game: GameSummary
 
     var body: some View {
@@ -121,6 +122,7 @@ struct GameRow: View {
                              + (game.platforms.count > 4 ? " +\(game.platforms.count - 4)" : ""))
                             .lineLimit(1)
                     }
+                    if game.id.hasPrefix("plugin:") { Text(game.sourceName(plugins: model.plugins.manifests())) }
                 }
                 .font(.caption)
                 .foregroundStyle(.secondary)
@@ -162,6 +164,13 @@ struct GameCover: View {
 }
 
 extension GameSummary {
-    /// Who described it, for the link: "IGDB", "Wikidata".
-    var sourceName: String { id.hasPrefix("wd:") ? "Wikidata" : "IGDB" }
+    /// Who described it, for the link: "IGDB", "Wikidata", or the plugin's name.
+    func sourceName(plugins: [PluginManifest] = []) -> String {
+        if id.hasPrefix("wd:") { return "Wikidata" }
+        if id.hasPrefix("plugin:") {
+            let pluginID = id.split(separator: ":").dropFirst().first.map(String.init)
+            return plugins.first { $0.id == pluginID }?.name ?? "Plugin"
+        }
+        return "IGDB"
+    }
 }

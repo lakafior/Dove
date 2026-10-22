@@ -69,7 +69,9 @@ public struct GameSummary: Identifiable, Sendable, Hashable, Codable {
 /// | IGDB (`api.igdb.com/v4/games`) | the user's own Twitch app (Client ID + secret, client-credentials token) | the main source: retro and modern, platforms, alternative names, covers (`images.igdb.com/…/t_cover_big_2x/<id>.jpg`); free for non-commercial use under Twitch's Developer Services Agreement; 4 requests a second |
 /// | Wikidata (`query.wikidata.org/sparql`, full-text search of video game items) | none | works before any setup: title, year, platforms, description; no covers |
 ///
-/// Both are asked at once; one failing is fine while the other answers. The same game from both is IGDB's row.
+/// | `GameCatalog`s the app passes (plugins with game `metadata`) | the plugin's | asked at the same time; the same game from IGDB and a plugin is IGDB's row, with the plugin's cover when IGDB has none |
+///
+/// All are asked at once; one failing is fine while another answers. The same game from several is IGDB's row.
 public struct GameMetadata: Sendable {
     public struct IGDBCredentials: Sendable, Hashable {
         public var clientID: String
@@ -90,16 +92,20 @@ public struct GameMetadata: Sendable {
 
     public let igdb: IGDBCredentials?
     public let usesWikidata: Bool
+    public let catalogs: [any GameCatalog]
     private let transport: any HTTPTransport
     private let tokens: TwitchTokens
 
-    public init(igdb: IGDBCredentials?, usesWikidata: Bool = true, transport: any HTTPTransport = URLSession.shared) {
-        self.init(igdb: igdb, usesWikidata: usesWikidata, transport: transport, tokens: .shared)
+    public init(
+        igdb: IGDBCredentials?, usesWikidata: Bool = true, catalogs: [any GameCatalog] = [], transport: any HTTPTransport = URLSession.shared
+    ) {
+        self.init(igdb: igdb, usesWikidata: usesWikidata, catalogs: catalogs, transport: transport, tokens: .shared)
     }
 
-    init(igdb: IGDBCredentials?, usesWikidata: Bool = true, transport: any HTTPTransport, tokens: TwitchTokens) {
+    init(igdb: IGDBCredentials?, usesWikidata: Bool = true, catalogs: [any GameCatalog] = [], transport: any HTTPTransport, tokens: TwitchTokens) {
         self.igdb = igdb
         self.usesWikidata = usesWikidata
+        self.catalogs = catalogs
         self.transport = transport
         self.tokens = tokens
     }
@@ -110,10 +116,18 @@ public struct GameMetadata: Sendable {
         guard !words.isEmpty else { return [] }
         async let fromIGDB = Self.result { igdb == nil ? [] : try await searchIGDB(words) }
         async let fromWikidata = Self.result { usesWikidata ? try await searchWikidata(words) : [] }
-        let results = [await fromIGDB, await fromWikidata]
-        let found = results.compactMap { try? $0.get() }
-        if found.allSatisfy(\.isEmpty), let failure = results.lazy.compactMap(\.failure).first { throw failure }
-        return GameMatcher.rank(GameMatcher.merge(found.first ?? [], found.dropFirst().first ?? []), for: words)
+        var fromCatalogs: [Result<[GameSummary], any Error>] = []
+        await withTaskGroup(of: Result<[GameSummary], any Error>.self) { group in
+            for catalog in catalogs {
+                group.addTask { await Self.result { try await catalog.games(matching: words) } }
+            }
+            for await result in group { fromCatalogs.append(result) }
+        }
+        let igdbResult = await fromIGDB, wikidataResult = await fromWikidata
+        let results = [igdbResult, wikidataResult] + fromCatalogs
+        if results.allSatisfy({ (try? $0.get())?.isEmpty ?? true }), let failure = results.lazy.compactMap(\.failure).first { throw failure }
+        let others = fromCatalogs.flatMap { (try? $0.get()) ?? [] } + ((try? wikidataResult.get()) ?? [])
+        return GameMatcher.rank(GameMatcher.merge((try? igdbResult.get()) ?? [], others), for: words)
     }
 
     /// Checks IGDB credentials: a token, then one search.
@@ -368,18 +382,20 @@ public enum GameMatcher {
             .map(\.game)
     }
 
-    /// One row per game: IGDB's, with Wikidata's description and platforms when it lacks them; games only Wikidata
-    /// knows are added. The same game = a name in common and years at most one apart (or one unknown).
+    /// One row per game: IGDB's, with the others' description, platforms and cover when it lacks them (plugins come
+    /// before Wikidata, so theirs win); games only the others know are added. The same game = a name in common and years at most one apart (or one unknown).
     /// Wikidata also lists ports under the original's name (A Link to the Past for SNES, 1991, and for GBA, no date):
     /// one of them stays, the one with a year, so the answer does not depend on which came first.
-    public static func merge(_ igdb: [GameSummary], _ wikidata: [GameSummary]) -> [GameSummary] {
+    public static func merge(_ igdb: [GameSummary], _ others: [GameSummary]) -> [GameSummary] {
         var kept: [GameSummary] = []
-        for game in wikidata {
+        for game in others {
             guard let index = kept.firstIndex(where: { !Set(names($0)).isDisjoint(with: names(game)) }) else {
                 kept.append(game)
                 continue
             }
+            let cover = kept[index].cover ?? game.cover
             if kept[index].year == nil, game.year != nil { kept[index] = game }
+            kept[index].cover = cover
         }
         var merged = igdb
         for game in kept {
@@ -390,6 +406,7 @@ public enum GameMatcher {
             }) {
                 if merged[index].summary == nil { merged[index].summary = game.summary }
                 if merged[index].platforms.isEmpty { merged[index].platforms = game.platforms }
+                if merged[index].cover == nil { merged[index].cover = game.cover }
             } else {
                 merged.append(game)
             }

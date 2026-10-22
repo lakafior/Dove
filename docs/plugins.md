@@ -62,7 +62,7 @@ One JavaScript file (bundle libraries such as an HTML parser into it). It runs i
 ```js
 globalThis.plugin = {
   manifest: { /* see below */ },
-  async metadata({ query, format, category }, ctx) { return [/* Book, or Album when category is "music" */] },
+  async metadata({ query, format, category }, ctx) { return [/* Book; Album when category is "music"; Game when "games" */] },
   async tracks({ id }, ctx) { return [/* Track */] },
   async search({ query, category, book, title, album }, ctx) { return [/* Result */] },
   async resolve({ id }, ctx) { return { url, headers, fileName, size } },
@@ -157,6 +157,21 @@ when both give one): MusicBrainz's, with the plugin's cover.
 
 `Track` (from `tracks`, for an `Album`'s `id`): `{ id, title, disc, position, duration }`, `duration` in seconds;
 only `title` is required.
+
+`Game` (from `metadata` for Games; Dove asks only plugins that name `games` among their `categories`):
+
+```js
+{ id, title, year, platforms: ["…"], cover, summary, genres: ["…"], aliases: ["…"], type, link }
+```
+
+Only `id` and `title` (or `name`) are required. `year` may be a date ("2022-02-25"). `platform` (one) or
+`platforms`, named as Dove does (`snes`, "SNES", `ps2`, "Switch"), as IGDB does ("Super Nintendo Entertainment
+System", "PC (Microsoft Windows)") or as release names do ("PS2", "Nintendo 64"); platforms Dove has no case for are
+left out. `summary` or `description`; `aliases` or `alternative_names`: other titles it is known by (regional names,
+abbreviations), used to match release names. `type`: `game`, `dlc`, `expansion`, `mod`, `compilation`… (add-ons sink
+below games). `cover` is a box cover, 3:4 at best. The same game from IGDB and a plugin is one row (a name in common,
+years at most one apart): IGDB's, with the plugin's cover when IGDB has none; without IGDB the plugin's row is kept
+over Wikidata's.
 
 `Result` (from `search`):
 

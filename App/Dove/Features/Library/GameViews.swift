@@ -113,7 +113,7 @@ struct LibraryGameView: View {
                     ForEach(game.backends, id: \.self) { BackendBadge(backend: $0) }
                 }
                 if let link = game.game?.link, let summary = game.game {
-                    Link(summary.sourceName, destination: link).font(.caption)
+                    Link(summary.sourceName(plugins: model.plugins.manifests()), destination: link).font(.caption)
                 }
                 if game.isCollection {
                     Text("A collection of games: not looked up.").font(.footnote).foregroundStyle(.secondary)

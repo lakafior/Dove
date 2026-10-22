@@ -1028,8 +1028,14 @@ final class AppModel {
         return id.isEmpty || secret.isEmpty ? nil : GameMetadata.IGDBCredentials(clientID: id, clientSecret: secret)
     }
 
-    /// Game search for Games: IGDB with the user's Twitch app, and Wikidata, which needs no key.
-    var gameMetadata: GameMetadata { GameMetadata(igdb: igdbCredentials) }
+    /// Game search for Games: IGDB with the user's Twitch app, Wikidata, which needs no key, and the plugins with
+    /// game metadata (they name `games` among their categories).
+    var gameMetadata: GameMetadata {
+        let plugins: [any GameCatalog] = plugins.calls(.metadata, category: .games)
+            .filter { $0.manifest.categories.contains(.games) }
+            .map { PluginGameCatalog(call: $0) }
+        return GameMetadata(igdb: igdbCredentials, catalogs: plugins)
+    }
 
     /// Checks the Twitch app with a token and one IGDB search before keeping it. Both empty removes it.
     func saveIGDB(clientID: String, clientSecret: String) async throws {

@@ -202,7 +202,7 @@ public struct PluginRunner: Sendable {
         return many
     }
 
-    private func call(
+    func call(
         _ plugin: PluginManifest, script: String, settings: [String: SettingValue], function: String, argument: [String: Any]
     ) async throws -> String {
         let values = Self.values(of: plugin, settings: settings)
@@ -235,7 +235,7 @@ public struct PluginRunner: Sendable {
         return values
     }
 
-    private func decodeList<T: Decodable>(_ type: T.Type, _ json: String) throws -> [T] {
+    func decodeList<T: Decodable>(_ type: T.Type, _ json: String) throws -> [T] {
         guard let items = try? JSONSerialization.jsonObject(with: Data(json.utf8)) as? [Any] else {
             if json == "null" { return [] }
             throw PluginError("The plugin answered something other than a list.")

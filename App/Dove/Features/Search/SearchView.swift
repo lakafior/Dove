@@ -611,9 +611,10 @@ extension SearchView {
             if !games.isEmpty { Text("Games") }
         } footer: {
             if !games.isEmpty {
+                let sources = (model.igdbCredentials == nil ? [] : ["IGDB"]) + ["Wikidata"] + model.gameMetadata.catalogs.map(\.name)
                 Text(model.igdbCredentials == nil
-                     ? "From Wikidata. Add IGDB in Settings › Game metadata for covers. Pick one to search the indexers for it."
-                     : "From IGDB and Wikidata. Pick one to search the indexers for it.")
+                     ? "From \(sources.formatted(.list(type: .and))). Add IGDB in Settings › Game metadata for covers. Pick one to search the indexers for it."
+                     : "From \(sources.formatted(.list(type: .and))). Pick one to search the indexers for it.")
             }
         }
     }

@@ -294,3 +294,44 @@ struct PluginTests {
         #expect(store.script(for: plugin) == nil)
     }
 }
+
+struct GamePluginTests {
+    @Test func gameMetadataFromPluginsJoinsIGDBAndWikidata() async throws {
+        let script = #"""
+        globalThis.plugin = { manifest: { id: "games.test", name: "Games test", capabilities: ["metadata"], categories: ["games"] },
+          async metadata({ query, category }) {
+            if (category !== "games") return []
+            return [
+              { id: 1942, title: "Elden Ring", year: "2022-02-25", platforms: ["PC", "PlayStation 5", "xboxSeries", "Atari 2600"],
+                cover: "https://img.test/er.jpg", type: "game", aliases: ["ER"] },
+              { id: "m1", name: "Elden Ring Reforged", platform: "pc", type: "mod", description: "A mod." },
+              { title: "no id" },
+            ]
+          },
+        }
+        """#
+        let runner = PluginRunner(transport: MockTransport())
+        let call = PluginCall(manifest: try await runner.manifest(of: script), script: script, settings: [:])
+        let catalog = PluginGameCatalog(call: call, transport: MockTransport())
+
+        let games = try await catalog.games(matching: "elden ring")
+        #expect(games.map(\.id) == ["plugin:games.test:1942", "plugin:games.test:m1"], "a row without an id is skipped")
+        #expect(games[0].year == 2022 && games[0].platforms == [.pc, .ps5, .xboxSeries], "unknown platforms are left out")
+        #expect(games[0].isMainGame && games[0].alternativeNames == ["ER"])
+        #expect(games[1].title == "Elden Ring Reforged" && games[1].type == "Mod" && !games[1].isMainGame && games[1].summary == "A mod.")
+
+        // Without IGDB: the plugin's row (with its cover) and Wikidata's one game become one.
+        let wikidata = MockTransport()
+        await wikidata.stub("/sparql", body: try Fixture.data("wikidata_games"))
+        let merged = try await GameMetadata(igdb: nil, catalogs: [catalog], transport: wikidata).search("elden ring")
+        let elden = merged.filter { $0.title == "Elden Ring" }
+        #expect(elden.count == 1 && elden.first?.cover?.absoluteString == "https://img.test/er.jpg")
+        #expect(merged.first?.title == "Elden Ring")
+        #expect(merged.contains { $0.title == "Elden Ring Nightreign" })
+
+        // Wikidata down: the plugin still answers.
+        let down = MockTransport()
+        await down.stub("/sparql", status: 500, json: "{}")
+        #expect(try await GameMetadata(igdb: nil, catalogs: [catalog], transport: down).search("elden ring").count == 2)
+    }
+}

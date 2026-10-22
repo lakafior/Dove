@@ -22,6 +22,20 @@ struct GameMetadataSettingsView: View {
             }
 
             Section {
+                let plugins = model.gameMetadata.catalogs
+                if plugins.isEmpty {
+                    Text("None. Plugins can add more sources: Settings › Plugins.").foregroundStyle(.secondary)
+                }
+                ForEach(plugins.map(\.name), id: \.self) { name in
+                    Text(name)
+                }
+            } header: {
+                Text("From plugins")
+            } footer: {
+                Text("Asked with IGDB and Wikidata. The same game from several sources is one row: IGDB's, with a plugin's cover when IGDB has none.")
+            }
+
+            Section {
                 step(1, "Sign in at dev.twitch.tv with a Twitch account (a free one is fine) and turn on two-factor authentication in Twitch › Settings › Security.")
                 step(2, "Open Your Console › Applications › Register Your Application.")
                 step(3, "Name: anything (Twitch wants it unique, e.g. \u{201C}Dove\u{201D} plus your name). OAuth Redirect URL: http://localhost. Category: Application Integration. Client Type: Confidential.")
