@@ -10,9 +10,8 @@ struct SpotlightSuggestion: Identifiable, Hashable {
         case held(MacRouter.LibraryTarget)
         /// A movie or series from TMDB or the metadata addons: opens with its sources.
         case media(MediaSummary)
-        /// A book, album or game from the metadata services: its releases (the next step on the Mac; until then a
-        /// search for its name).
-        case book(BookSummary)
+        /// A book, album or game from the metadata services: opens its releases.
+        case book(BookSummary, BookFormat)
         case album(AlbumSummary)
         case game(GameSummary)
         /// Search for the words (the last line).
@@ -82,7 +81,7 @@ final class SearchSuggestions {
             guard let found = try? await model.library.searchBooks(words, format: format) else { return nil }
             return BookSummary.unique(found).map { book in
                 SpotlightSuggestion(
-                    id: "book:\(book.id)", target: .book(book), title: book.title,
+                    id: "book:\(book.id)", target: .book(book, format), title: book.title,
                     subtitle: [book.authors.first, book.year.map(String.init)].compactMap { $0 }.joined(separator: " · "),
                     image: book.cover, ratio: format.coverRatio, symbol: category.symbolName
                 )

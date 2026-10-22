@@ -71,16 +71,22 @@ final class MacRouter {
             show(.media(media))
         case .held(let target):
             openLibrary(target)
-        // A book's, album's or game's releases are the next step on the Mac; until then its name is searched.
-        case .book(let book):
-            show(.search(book.title))
+        case .book(let book, let format):
+            showReleases(.book(book, format))
         case .album(let album):
-            show(.search([album.artists.first, album.title].compactMap { $0 }.joined(separator: " ")))
+            showReleases(.album(album))
         case .game(let game):
-            show(.search(game.title))
+            showReleases(.game(game))
         case .search(let words):
             show(.search(words))
         }
+    }
+
+    /// A book's, album's or game's releases, on the Search page.
+    func showReleases(_ target: ReleaseTarget) {
+        searchPath = NavigationPath()
+        searchPath.append(target)
+        selection = .search
     }
 
     /// Return in the ⌘F panel: the Search page searches the words, whatever page was open.

@@ -225,7 +225,7 @@ struct SourceRowValues: Identifiable {
 }
 
 /// The services a release is known on, ⚡ where it is cached.
-private struct CachedOn: View {
+struct CachedOn: View {
     let group: StreamGroup
 
     var body: some View {

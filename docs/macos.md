@@ -1,6 +1,6 @@
 # Dove for macOS: review and architecture plan
 
-Status (2026-10-22): phases 0 and 1 done; phase 2 in progress (Library, Downloads and Movies & TV search done; the other search categories next).
+Status (2026-10-22): phases 0 and 1 done; phase 2 done except pasted magnets/links, Play and the filter editor (see §9).
 
 Goal (owner): a native Mac app that uses what a computer does better, not the iPad app on a Mac and not
 Catalyst. No hurry: the Mac app comes before the release pipeline (#6), which then builds both platforms.
@@ -243,6 +243,16 @@ Split in three: Library, then Downloads, then Search → sources → add.
   opens a search (both apps). The main window is a `WindowGroup` without File › New Window (a Dock click brings it
   back; `Window` did not). `LibraryShelfSummary` moved to `App/Components`. Not on the Mac yet: Play, the filter editor (the saved filter applies), plugins'
   results, the described filter, upgrades.
+
+- **Search, every category** (2026-10-22): `ReleaseList` and `PluginSearch` moved from the iPhone's views into
+  `DoveAppCore` (both apps use them). Books, Audiobooks, Music, Games: the category's metadata services answer with
+  covers (`CoverResult`), a click (or a suggestion) opens `MacReleasesView` (`ReleaseTarget`: header with cover and
+  description; the iPhone's queries: `t=book`/`t=music` where indexers know them, the game's title; this item's
+  releases first, "Show N other results"; `MacReleasesTable`: format column (book formats, music formats, game
+  platform), size, seeders, age, found by; Return/double-click adds through `ReleaseList.add`, which records the hint
+  and the kind; a Plugins tab when plugins answer, Get to the kind's place). "Search releases for …" and categories
+  without metadata (Software, Adult, All), or nothing found, show the indexers by name as a table with the plugins
+  under it. Music covers seen on the owner's Mac ("green day dookie"); the releases page not opened yet.
 
 ## 9. Where to pick up (2026-10-22)
 
