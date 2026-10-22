@@ -1,3 +1,4 @@
+import DoveAppCore
 import SwiftUI
 
 /// The one switch for adult content: Library, Search, Downloads and plugins all follow it.

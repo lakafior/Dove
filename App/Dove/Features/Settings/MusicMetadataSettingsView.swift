@@ -1,3 +1,4 @@
+import DoveAppCore
 import DoveKit
 import MusicKit
 import SwiftUI

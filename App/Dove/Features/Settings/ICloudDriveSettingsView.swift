@@ -1,3 +1,4 @@
+import DoveAppCore
 import DoveKit
 import SwiftUI
 
@@ -27,10 +28,3 @@ struct ICloudDriveSettingsView: View {
     }
 }
 
-extension AppModel {
-    /// "On", "Not available" or "Checking…".
-    var iCloudState: String {
-        if iCloudFolder != nil { return "On" }
-        return iCloudChecked ? "Not available" : "Checking…"
-    }
-}

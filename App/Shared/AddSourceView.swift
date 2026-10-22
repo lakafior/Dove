@@ -1,16 +1,6 @@
 import DoveKit
 import SwiftUI
 
-/// Sources picked up together (one, or a pasted list of links), for `.sheet(item:)`.
-struct SourceBatch: Identifiable {
-    let id = UUID()
-    var sources: [Source]
-
-    init(_ sources: [Source]) {
-        self.sources = sources
-    }
-}
-
 /// "Automatic" walks the priority list (falling through on any error); "Only to" sends to one service.
 /// Used by the app's add sheet and by the share extension, so both behave the same. Takes one source or a list:
 /// a list is added one by one, each with its own fallback. Hoster links go only to services that unlock the site

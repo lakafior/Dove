@@ -1,3 +1,4 @@
+import DoveAppCore
 import DoveKit
 import SwiftUI
 
@@ -7,6 +8,7 @@ import SwiftUI
 /// list is refreshed every `ServiceActivity.pollInterval`.
 struct DownloadsView: View {
     @Environment(AppModel.self) private var model
+    @Environment(AppRouter.self) private var router
     @Environment(\.scenePhase) private var scenePhase
     @State private var message: String?
     @State private var cancelling: DownloadJob?
@@ -21,7 +23,7 @@ struct DownloadsView: View {
 
     /// Polls only while there is something to wait for and someone to see it.
     private var polls: Bool {
-        scenePhase == .active && model.selectedTab == .downloads && !activity.active.isEmpty
+        scenePhase == .active && router.selectedTab == .downloads && !activity.active.isEmpty
     }
 
     var body: some View {

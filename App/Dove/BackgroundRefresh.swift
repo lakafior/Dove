@@ -1,4 +1,5 @@
 import BackgroundTasks
+import DoveAppCore
 import DoveKit
 import Foundation
 

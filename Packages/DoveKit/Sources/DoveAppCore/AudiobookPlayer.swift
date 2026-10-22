@@ -2,7 +2,6 @@ import AVFoundation
 import DoveKit
 import MediaPlayer
 import Observation
-import UIKit
 
 /// Dove's own audio player. Video goes to Infuse and friends, but no app takes an audiobook as a link and keeps
 /// its place, so audio plays here: one `AVPlayer`, track after track (a single `.m4b`, or a release of many `.mp3`
@@ -14,33 +13,33 @@ import UIKit
 /// place, no speed.
 @MainActor
 @Observable
-final class AudiobookPlayer {
-    struct Session: Equatable {
-        enum Kind: Equatable { case audiobook, music }
+public final class AudiobookPlayer {
+    public struct Session: Equatable {
+        public enum Kind: Equatable { case audiobook, music }
 
         /// One file to play and the service item it belongs to; music tracks carry their own names and cover.
-        struct Entry: Equatable, Identifiable {
-            let item: LibraryItem
-            let track: AudiobookTrack
-            var title: String
-            var artist: String?
-            var album: String?
-            var cover: URL?
-            var id: String { "\(item.backend.rawValue)/\(item.id)/\(track.fileID)" }
+        public struct Entry: Equatable, Identifiable {
+            public let item: LibraryItem
+            public let track: AudiobookTrack
+            public var title: String
+            public var artist: String?
+            public var album: String?
+            public var cover: URL?
+            public var id: String { "\(item.backend.rawValue)/\(item.id)/\(track.fileID)" }
         }
 
         /// Tells sessions apart while their queue changes (music appends albums as their files arrive, shuffle).
-        let id = UUID()
-        let kind: Kind
+        public let id = UUID()
+        public let kind: Kind
         /// Audiobooks: `BookGuess.key` (positions follow the book, not the release). Music: what is playing.
-        let key: String
-        let title: String
-        let author: String?
-        let cover: URL?
-        var queue: [Entry]
+        public let key: String
+        public let title: String
+        public let author: String?
+        public let cover: URL?
+        public var queue: [Entry]
 
         /// An audiobook: one release's files.
-        init(key: String, title: String, author: String?, cover: URL?, item: LibraryItem, tracks: [AudiobookTrack]) {
+        public init(key: String, title: String, author: String?, cover: URL?, item: LibraryItem, tracks: [AudiobookTrack]) {
             kind = .audiobook
             self.key = key
             self.title = title
@@ -50,7 +49,7 @@ final class AudiobookPlayer {
         }
 
         /// Music: a queue named after what was played ("Dookie", "Green Day", "All music").
-        init(music key: String, title: String, cover: URL?, queue: [Entry]) {
+        public init(music key: String, title: String, cover: URL?, queue: [Entry]) {
             kind = .music
             self.key = key
             self.title = title
@@ -59,28 +58,28 @@ final class AudiobookPlayer {
             self.queue = queue
         }
 
-        var tracks: [AudiobookTrack] { queue.map(\.track) }
+        public var tracks: [AudiobookTrack] { queue.map(\.track) }
         /// The audiobook's release (music sessions span several).
-        var item: LibraryItem? { queue.first?.item }
-        var isMusic: Bool { kind == .music }
+        public var item: LibraryItem? { queue.first?.item }
+        public var isMusic: Bool { kind == .music }
     }
 
-    private(set) var session: Session?
-    private(set) var trackIndex = 0
+    public private(set) var session: Session?
+    public private(set) var trackIndex = 0
     /// Music: the queue is played in random order; the albums' order comes back when it is turned off.
-    private(set) var isShuffled = false
+    public private(set) var isShuffled = false
     /// Music: the queue in album order, for turning shuffle off.
     @ObservationIgnored private var orderedQueue: [Session.Entry] = []
-    private(set) var elapsed: Double = 0
-    private(set) var duration: Double?
-    private(set) var isPlaying = false
-    private(set) var isLoading = false
-    var error: String?
+    public private(set) var elapsed: Double = 0
+    public private(set) var duration: Double?
+    public private(set) var isPlaying = false
+    public private(set) var isLoading = false
+    public var error: String?
     /// The full-screen player.
-    var isPresented = false
+    public var isPresented = false
 
     /// Per device, like the chosen video player. Audiobooks only: music always plays at 1×.
-    var rate: Float {
+    public var rate: Float {
         didSet {
             UserDefaults.standard.set(rate, forKey: Self.rateKey)
             player.defaultRate = playbackRate
@@ -91,8 +90,8 @@ final class AudiobookPlayer {
 
     private var playbackRate: Float { session?.isMusic == true ? 1 : rate }
 
-    private(set) var sleepTimer: SleepTimer?
-    private(set) var sleepDeadline: Date?
+    public private(set) var sleepTimer: SleepTimer?
+    public private(set) var sleepDeadline: Date?
     /// The chapter "end of chapter" waits for.
     private var sleepChapter: AudiobookChapter?
 
@@ -101,10 +100,11 @@ final class AudiobookPlayer {
 
     /// Opens a track: the downloaded copy when there is one, else the service's link (with its headers, e.g.
     /// nzbdav's WebDAV login). Set by `AppModel`.
-    @ObservationIgnored var assetProvider: (@MainActor (LibraryItem, AudiobookTrack) async throws -> AVURLAsset)?
+    @ObservationIgnored public var assetProvider: (@MainActor (LibraryItem, AudiobookTrack) async throws -> AVURLAsset)?
 
     @ObservationIgnored private let player = AVPlayer()
     @ObservationIgnored private let keychain: KeychainStore
+    @ObservationIgnored private let platform: any AppPlatform
     @ObservationIgnored private var positions: AudiobookPositions
     @ObservationIgnored private var timeObserver: Any?
     @ObservationIgnored private var endObserver: NSObjectProtocol?
@@ -117,15 +117,16 @@ final class AudiobookPlayer {
     @ObservationIgnored private var commandsInstalled = false
 
     private static let rateKey = "audiobookRate"
-    static let rates: [Float] = [0.8, 1, 1.1, 1.2, 1.3, 1.5, 1.75, 2, 2.5, 3]
+    public static let rates: [Float] = [0.8, 1, 1.1, 1.2, 1.3, 1.5, 1.75, 2, 2.5, 3]
 
     /// Reads saved places from the Keychain again (after a settings import).
-    func reloadPositions() {
+    public func reloadPositions() {
         positions = SharedConfiguration.audiobookPositions(from: keychain)
     }
 
-    init(keychain: KeychainStore) {
+    public init(keychain: KeychainStore, platform: any AppPlatform) {
         self.keychain = keychain
+        self.platform = platform
         positions = SharedConfiguration.audiobookPositions(from: keychain)
         let stored = UserDefaults.standard.float(forKey: Self.rateKey)
         rate = stored > 0 ? stored : 1
@@ -133,41 +134,43 @@ final class AudiobookPlayer {
         timeObserver = player.addPeriodicTimeObserver(forInterval: CMTime(seconds: 0.5, preferredTimescale: 600), queue: .main) { [weak self] time in
             MainActor.assumeIsolated { self?.tick(time) }
         }
+        #if os(iOS)
         interruptionObserver = NotificationCenter.default.addObserver(
             forName: AVAudioSession.interruptionNotification, object: nil, queue: .main
         ) { [weak self] _ in
             MainActor.assumeIsolated { self?.syncPlayingState() }
         }
+        #endif
     }
 
     // MARK: - State
 
-    var currentTrack: AudiobookTrack? {
+    public var currentTrack: AudiobookTrack? {
         currentEntry?.track
     }
 
-    var currentEntry: Session.Entry? {
+    public var currentEntry: Session.Entry? {
         session.flatMap { $0.queue.indices.contains(trackIndex) ? $0.queue[trackIndex] : nil }
     }
 
     /// Every chapter of the book: m4b marks where the track was opened, else one per track.
-    var chapters: [AudiobookChapter] {
+    public var chapters: [AudiobookChapter] {
         guard let session else { return [] }
         return session.tracks.indices.flatMap { index in
             trackChapters[index] ?? [AudiobookChapter(trackIndex: index, title: session.tracks[index].title, start: 0, duration: nil)]
         }
     }
 
-    var currentChapter: AudiobookChapter? {
+    public var currentChapter: AudiobookChapter? {
         AudiobookChapter.current(in: chapters, trackIndex: trackIndex, seconds: elapsed)
     }
 
     /// Bumped whenever the saved positions change in a way lists show (a book started, cleared or finished), so
     /// "Listening" on the home screen updates without redrawing on every tick.
-    private(set) var positionsRevision = 0
+    public private(set) var positionsRevision = 0
 
     /// Books being listened to, last played first; the current one with its live position.
-    func listening() -> [(key: String, position: AudiobookPosition)] {
+    public func listening() -> [(key: String, position: AudiobookPosition)] {
         _ = positionsRevision
         var list = positions.listening
         if let session, !session.isMusic, let live = savedPosition(for: session.key) {
@@ -178,7 +181,7 @@ final class AudiobookPlayer {
     }
 
     /// Forgets where the book was: off "Listening", and Play starts from the beginning. Stops it if it is playing.
-    func clearPosition(for key: String) {
+    public func clearPosition(for key: String) {
         if session?.key == key { stop(saving: false) }
         positions.set(nil, for: key)
         SharedConfiguration.saveAudiobookPositions(positions, to: keychain)
@@ -186,7 +189,7 @@ final class AudiobookPlayer {
     }
 
     /// Where this book was left, for "Continue" on its screen.
-    func savedPosition(for key: String) -> AudiobookPosition? {
+    public func savedPosition(for key: String) -> AudiobookPosition? {
         _ = positionsRevision
         if session?.key == key, let track = currentTrack {
             return AudiobookPosition(trackPath: track.path, trackIndex: trackIndex, seconds: elapsed)
@@ -197,7 +200,7 @@ final class AudiobookPlayer {
     // MARK: - Playing
 
     /// Starts a book where it was left (or plays/pauses it when it is already the current one).
-    func start(_ session: Session) {
+    public func start(_ session: Session) {
         if !session.isMusic, self.session?.key == session.key, self.session?.item?.id == session.item?.id {
             if !isPlaying { play() }
             return
@@ -210,7 +213,7 @@ final class AudiobookPlayer {
     }
 
     /// Plays a music queue from one of its tracks; shuffled, that track plays first and the rest in random order.
-    func startMusic(_ session: Session, at index: Int = 0, shuffled: Bool = false) {
+    public func startMusic(_ session: Session, at index: Int = 0, shuffled: Bool = false) {
         guard session.isMusic, session.queue.indices.contains(index) else { return }
         begin(session)
         orderedQueue = session.queue
@@ -239,7 +242,7 @@ final class AudiobookPlayer {
 
     /// Music: more tracks for the queue (albums whose files arrived after playback started). Shuffled, they go
     /// to random places after the current track.
-    func append(_ entries: [Session.Entry], to sessionID: UUID) {
+    public func append(_ entries: [Session.Entry], to sessionID: UUID) {
         guard var session, session.id == sessionID, session.isMusic, !entries.isEmpty else { return }
         orderedQueue += entries
         if isShuffled {
@@ -256,7 +259,7 @@ final class AudiobookPlayer {
 
     /// Music: shuffle on (the current track stays, the rest in random order) or off (album order, from the
     /// current track).
-    func setShuffle(_ on: Bool) {
+    public func setShuffle(_ on: Bool) {
         guard var session, session.isMusic, on != isShuffled else { return }
         let current = currentEntry
         if on {
@@ -276,18 +279,18 @@ final class AudiobookPlayer {
     }
 
     /// Music: plays a track of the queue.
-    func playEntry(at index: Int) {
+    public func playEntry(at index: Int) {
         guard let session, session.queue.indices.contains(index) else { return }
         load(index, at: 0, autoplay: true)
     }
 
-    func nextTrack() {
+    public func nextTrack() {
         guard let session else { return }
         if trackIndex + 1 < session.queue.count { load(trackIndex + 1, at: 0, autoplay: true) }
     }
 
     /// The start of this track, or the one before when it just started.
-    func previousTrack() {
+    public func previousTrack() {
         if elapsed > 3 || trackIndex == 0 {
             seek(to: 0)
         } else {
@@ -295,7 +298,7 @@ final class AudiobookPlayer {
         }
     }
 
-    func play() {
+    public func play() {
         guard session != nil else { return }
         if player.currentItem == nil {
             load(trackIndex, at: elapsed, autoplay: true)
@@ -306,18 +309,18 @@ final class AudiobookPlayer {
         syncPlayingState()
     }
 
-    func pause() {
+    public func pause() {
         player.pause()
         syncPlayingState()
         savePosition(force: true)
     }
 
-    func togglePlayPause() {
+    public func togglePlayPause() {
         isPlaying ? pause() : play()
     }
 
     /// Ends the session: the place is kept for next time.
-    func stop(saving: Bool = true) {
+    public func stop(saving: Bool = true) {
         if saving { savePosition(force: true) }
         player.pause()
         player.replaceCurrentItem(with: nil)
@@ -329,11 +332,13 @@ final class AudiobookPlayer {
         orderedQueue = []
         cancelSleepTimer()
         MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
+        #if os(iOS)
         try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+        #endif
     }
 
     /// Seconds within the current track; past the end goes on to the next track.
-    func seek(to seconds: Double) {
+    public func seek(to seconds: Double) {
         if let duration, seconds >= duration - 0.5 {
             advance()
             return
@@ -347,7 +352,7 @@ final class AudiobookPlayer {
         }
     }
 
-    func skip(by seconds: Double) {
+    public func skip(by seconds: Double) {
         if elapsed + seconds < 0, trackIndex > 0 {
             // Back into the previous part: its end, minus what is left of the jump.
             let overshoot = elapsed + seconds
@@ -357,7 +362,7 @@ final class AudiobookPlayer {
         seek(to: elapsed + seconds)
     }
 
-    func jump(to chapter: AudiobookChapter) {
+    public func jump(to chapter: AudiobookChapter) {
         if chapter.trackIndex == trackIndex, player.currentItem != nil {
             seek(to: chapter.start)
             if !isPlaying { play() }
@@ -366,14 +371,14 @@ final class AudiobookPlayer {
         }
     }
 
-    func nextChapter() {
+    public func nextChapter() {
         let all = chapters
         guard let current = currentChapter, let index = all.firstIndex(of: current), index + 1 < all.count else { return }
         jump(to: all[index + 1])
     }
 
     /// The start of this chapter, or the one before when it just started.
-    func previousChapter() {
+    public func previousChapter() {
         let all = chapters
         guard let current = currentChapter, let index = all.firstIndex(of: current) else { return }
         if elapsed - current.start > 3 || index == 0 {
@@ -385,7 +390,7 @@ final class AudiobookPlayer {
 
     // MARK: - Sleep timer
 
-    func setSleepTimer(_ timer: SleepTimer?) {
+    public func setSleepTimer(_ timer: SleepTimer?) {
         sleepTimer = timer
         switch timer {
         case .minutes(let minutes):
@@ -576,10 +581,13 @@ final class AudiobookPlayer {
 
     // MARK: - System
 
+    /// macOS has no audio session: apps just play.
     private func activateAudioSession() {
+        #if os(iOS)
         let audio = AVAudioSession.sharedInstance()
         try? audio.setCategory(.playback, mode: session?.isMusic == true ? .default : .spokenAudio, policy: .longFormAudio)
         try? audio.setActive(true)
+        #endif
     }
 
     private func loadArtwork(_ url: URL?) {
@@ -588,8 +596,9 @@ final class AudiobookPlayer {
         artwork = nil
         guard let url else { return }
         Task {
-            guard let data = try? await ImageCache.shared.data(for: url), let image = UIImage(data: data), artworkURL == url else { return }
-            artwork = Self.artwork(image)
+            guard let data = try? await ImageCache.shared.data(for: url), artworkURL == url,
+                  let image = platform.nowPlayingArtwork(from: data) else { return }
+            artwork = image
             updateNowPlaying()
         }
     }
@@ -630,12 +639,6 @@ final class AudiobookPlayer {
             info[MPNowPlayingInfoPropertyChapterCount] = session.tracks.count
         }
         MPNowPlayingInfoCenter.default().nowPlayingInfo = info
-    }
-
-    /// Built outside the main actor: the system asks for the image on a background queue, and a closure made in a
-    /// main-actor method would trap there.
-    nonisolated private static func artwork(_ image: UIImage) -> MPMediaItemArtwork {
-        MPMediaItemArtwork(boundsSize: image.size) { @Sendable _ in image }
     }
 
     private func installRemoteCommands() {

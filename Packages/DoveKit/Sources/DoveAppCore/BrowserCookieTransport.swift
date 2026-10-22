@@ -6,14 +6,14 @@ import WebKit
 /// on the site (the browser keeps its cookies in the default web data store), so a login, or a captcha
 /// solved there, carries to the plugin's fetches. The hosts are the plugin's own either way (`PluginHostPolicy`
 /// still decides what may be reached), and nothing the plugin's fetches set is written back.
-struct BrowserCookieTransport: HTTPTransport {
-    let wrapped: any HTTPTransport
+public struct BrowserCookieTransport: HTTPTransport {
+    public let wrapped: any HTTPTransport
 
-    init(wrapping wrapped: any HTTPTransport = URLSession.shared) {
+    public init(wrapping wrapped: any HTTPTransport = URLSession.shared) {
         self.wrapped = wrapped
     }
 
-    func send(_ request: URLRequest) async throws -> (Data, HTTPURLResponse) {
+    public func send(_ request: URLRequest) async throws -> (Data, HTTPURLResponse) {
         var request = request
         if let url = request.url, let cookies = await Self.cookies(for: url) {
             let given = request.value(forHTTPHeaderField: "Cookie")
@@ -42,11 +42,11 @@ struct BrowserCookieTransport: HTTPTransport {
 
     /// What a cookie needs to be matched, copied out of WebKit's store.
     private struct Cookie: Sendable {
-        let name: String
-        let value: String
-        let domain: String
-        let path: String
-        let isSecure: Bool
+        public let name: String
+        public let value: String
+        public let domain: String
+        public let path: String
+        public let isSecure: Bool
     }
 
     /// WebKit's cookie store belongs to the main actor: it is read there, and only plain values leave it.

@@ -2,63 +2,58 @@ import AVFoundation
 import DoveKit
 import Foundation
 import Observation
-import SwiftUI
 
 /// App-wide state: which backends are configured and how sources are routed.
 @MainActor
 @Observable
-final class AppModel {
+public final class AppModel {
+    /// The platform the app runs on: system services and the integrations it keeps current.
+    public let platform: any AppPlatform
     /// Shared with the share extension through the `keychain-access-groups` entitlement.
-    let keychain = SharedConfiguration.keychain()
-    let library = LibraryModel()
+    public let keychain = SharedConfiguration.keychain()
+    public let library = LibraryModel()
     /// Plugin repositories and installed plugins (`docs/plugins.md`).
-    let plugins = PluginsModel(store: PluginStore(
+    public let plugins = PluginsModel(store: PluginStore(
         keychain: SharedConfiguration.keychain(),
         scriptsDirectory: URL.applicationSupportDirectory.appending(path: "Dove/Plugins")
     ))
     /// New and missing episodes, and releases worth replacing.
-    let review = LibraryReviewModel()
+    public let review = LibraryReviewModel()
     /// Movies and series saved for later.
-    let watchlist = WatchlistModel(keychain: SharedConfiguration.keychain())
+    public let watchlist = WatchlistModel(keychain: SharedConfiguration.keychain())
     /// Online/offline from library refreshes, and premium days left.
-    let services = ServiceStatusModel()
+    public let services = ServiceStatusModel()
     /// The player links go to (Infuse, VLC, Kodi…).
-    let playback = PlaybackModel(keychain: SharedConfiguration.keychain())
+    public let playback: PlaybackModel
     /// Audiobooks play in Dove (`AudiobookPlayer`); everything else goes to the chosen player.
-    let audiobook = AudiobookPlayer(keychain: SharedConfiguration.keychain())
+    public let audiobook: AudiobookPlayer
     /// Measured download speed per service, on this device.
-    let speed = SpeedTestModel()
-    private(set) var backends: [any LibraryBackend] = []
+    public let speed = SpeedTestModel()
+    public private(set) var backends: [any LibraryBackend] = []
 
     /// A magnet or file opened from another app; RootView shows the add sheet for it.
-    var openedSource: SourceBatch?
-
-    /// The tab on screen, so the home screen can send the user to Downloads or Settings.
-    var selectedTab: AppTab = .search
-    /// A shelf tapped on the home screen: the Library opens filtered to it, then clears this.
-    var libraryCategoryRequest: LibraryFilter.Category?
-    /// Words to search, from Siri, Shortcuts or a Quick Action; the Search tab runs it and clears this.
-    var searchRequest: String?
-    /// The Search tab's stack, so Spotlight and Quick Actions can open a title or the watchlist there.
-    var searchPath = NavigationPath()
+    public var openedSource: SourceBatch?
 
     /// The model of the running app, for App Intents and the scene delegate (Quick Actions), which SwiftUI's
     /// environment does not reach. Set once in `init`; `AppDelegate` keeps it alive.
-    private(set) static weak var current: AppModel?
+    public private(set) static weak var current: AppModel?
 
-    /// Where Siri, Spotlight and Quick Actions send the user.
-    enum Destination {
+    /// Where Siri, Spotlight, Quick Actions, widgets and the home screen send the user.
+    public enum Destination {
         case search(String?)
         case title(id: String)
         case book(id: String)
         case media(MediaSummary)
         case watchlist
         case downloads
+        /// The Library, filtered to a category when one is given (a shelf tapped on the home screen).
+        case library(LibraryFilter.Category?)
+        case settings
     }
 
     /// A link to a title's page (IMDb, Apple TV, Letterboxd…): its screen with sources, or a search for its name
     /// when nothing resolves it.
-    func openTitle(_ link: TitleLink) async {
+    public func openTitle(_ link: TitleLink) async {
         // Opened from the share sheet at launch: the addons (and TMDB) may not be loaded yet.
         if !addonSet.canSearch { await loadAddons() }
         if let media = await addonSet.resolve(link) {
@@ -68,33 +63,13 @@ final class AppModel {
         }
     }
 
-    func show(_ destination: Destination) {
-        switch destination {
-        case .downloads:
-            selectedTab = .downloads
-            return
-        case .search(let text):
-            searchPath = NavigationPath()
-            searchRequest = text
-        case .title(let id):
-            searchPath = NavigationPath()
-            searchPath.append(TitleRoute(id: id))
-        case .book(let id):
-            searchPath = NavigationPath()
-            searchPath.append(BookRoute(id: id))
-        case .media(let media):
-            searchPath = NavigationPath()
-            searchPath.append(media)
-        case .watchlist:
-            searchPath = NavigationPath()
-            searchPath.append(WatchlistRoute())
-        }
-        selectedTab = .search
+    public func show(_ destination: Destination) {
+        platform.show(destination)
     }
 
     /// Handles `onOpenURL`. Copies iOS made into Documents/Inbox are removed once read,
     /// so they do not pile up next to downloads in Files.
-    func open(_ url: URL) {
+    public func open(_ url: URL) {
         if DeepLink.open(url, using: self) { return }
         openedSource = SourceDetector.source(opening: url).map { SourceBatch([$0]) }
         if url.isFileURL, url.deletingLastPathComponent().lastPathComponent == "Inbox",
@@ -103,38 +78,34 @@ final class AppModel {
         }
     }
 
-    static let downloadSessionID = "net.smigi.dove.downloads"
-    /// Finished files go to Documents, which Files shows under On My iPhone › Dove.
-    let downloads = DownloadManager(
-        configuration: DownloadManager.backgroundConfiguration(identifier: AppModel.downloadSessionID),
-        directory: .documentsDirectory,
-        store: DownloadStore(directory: .applicationSupportDirectory.appending(path: "Dove/Downloads"))
-    )
+    public static let downloadSessionID = "net.smigi.dove.downloads"
+    /// Finished files go to the platform's downloads folder (iOS: Documents, shown in Files).
+    public let downloads: DownloadManager
     /// "Download only" adds: wait for the service, download, delete from the service. Set up in `init`.
-    private(set) var downloadJobs: DownloadJobs!
+    public private(set) var downloadJobs: DownloadJobs!
     /// Notifications and the Live Activity for phone downloads. Set up in `init`.
     @ObservationIgnored private var downloadAlerts: DownloadAlerts?
 
     /// Adds from search and the add sheet go through `downloadJobs` instead of staying in the library.
-    var downloadOnly = false {
+    public var downloadOnly = false {
         didSet { savePreferences() }
     }
 
     /// Debrid priority, highest first. "Automatic" adds try them in this order and fall through on any error.
     /// NZBs follow `usenetOrder`. Not a secret; in the Keychain so the share extension and iCloud Keychain see it.
-    var debridOrder: [BackendID] {
+    public var debridOrder: [BackendID] {
         didSet { SharedConfiguration.saveDebridOrder(debridOrder, to: keychain) }
     }
 
     /// NZB priority, highest first: nzbdav, TorBox and Offcloud (the last two only with Usenet on). Stored like
     /// `debridOrder`.
-    var usenetOrder: [BackendID] {
+    public var usenetOrder: [BackendID] {
         didSet { SharedConfiguration.saveUsenetOrder(usenetOrder, to: keychain) }
     }
 
     /// TorBox plan as `user/me` reported it (`refreshAccounts`) or as picked in Settings. Decides TorBox Usenet
     /// and whether TorBox may take private trackers' torrents. Kept in the Keychain for the share extension.
-    var torBoxPlan = TorBoxPlanSetting() {
+    public var torBoxPlan = TorBoxPlanSetting() {
         didSet {
             guard torBoxPlan != oldValue else { return }
             SharedConfiguration.saveTorBoxPlan(torBoxPlan, to: keychain)
@@ -143,7 +114,7 @@ final class AppModel {
     }
 
     /// Where private trackers' torrents go (Settings › Order and fallback › Private trackers).
-    var privateTrackers: PrivateTrackerTarget = .automatic {
+    public var privateTrackers: PrivateTrackerTarget = .automatic {
         didSet {
             guard privateTrackers != oldValue else { return }
             try? keychain.set(privateTrackers == .automatic ? nil : privateTrackers.rawValue, for: .privateTrackers)
@@ -162,12 +133,12 @@ final class AppModel {
     private static let legacyDownloadOnlyKey = "addDownloadOnly"
 
     /// Source list filters. Kept between screens and launches: "PL only, DV" is a standing preference.
-    var sourceFilter = SourceFilter() {
+    public var sourceFilter = SourceFilter() {
         didSet { savePreferences() }
     }
 
     /// AIOStreams config variant for Dove's searches (e.g. one without filters). Not a secret.
-    var aioStreamsVariant: String = "" {
+    public var aioStreamsVariant: String = "" {
         didSet {
             savePreferences()
             rebuildAddonSet()
@@ -175,7 +146,7 @@ final class AppModel {
     }
 
     /// Adult items (Library, Files) and the Adult search category. Hidden by default.
-    var showAdult = false {
+    public var showAdult = false {
         didSet {
             guard showAdult != oldValue else { return }
             library.showAdult = showAdult
@@ -183,36 +154,36 @@ final class AppModel {
             reloadBookMetadata()
             savePreferences()
             // The Files extension re-reads the preference when the working set is signalled.
-            FilesLocation.libraryChanged()
+            platform.libraryChanged()
         }
     }
 
     /// Which sources each search category asks (Search › Sources, and the same button on a source list).
-    var sourceSelection = SourceSelection() {
+    public var sourceSelection = SourceSelection() {
         didSet { savePreferences() }
     }
 
     /// Where "Read" sends ebooks (Settings › Reading); nil asks every time.
-    var readIn: ReadingTarget? = nil {
+    public var readIn: ReadingTarget? = nil {
         didSet { savePreferences() }
     }
 
     /// Send to Kindle address; empty hides Kindle.
-    var kindleAddress = "" {
+    public var kindleAddress = "" {
         didSet { savePreferences() }
     }
 
     /// Send-to-PocketBook address; empty hides PocketBook.
-    var pocketBookAddress = "" {
+    public var pocketBookAddress = "" {
         didSet { savePreferences() }
     }
 
     /// Any other address books are mailed to; empty hides "E-mail".
-    var emailAddress = "" {
+    public var emailAddress = "" {
         didSet { savePreferences() }
     }
 
-    func mailAddress(for target: ReadingTarget) -> String {
+    public func mailAddress(for target: ReadingTarget) -> String {
         switch target {
         case .appleBooks: ""
         case .kindle: kindleAddress
@@ -222,7 +193,7 @@ final class AppModel {
     }
 
     /// Clearing the preferred target's address makes Read ask again.
-    func setMailAddress(_ address: String, for target: ReadingTarget) {
+    public func setMailAddress(_ address: String, for target: ReadingTarget) {
         switch target {
         case .appleBooks: return
         case .kindle: kindleAddress = address
@@ -233,12 +204,12 @@ final class AppModel {
     }
 
     /// Where downloads of each kind go by default (synced).
-    var downloadDestinations = DownloadDestinations() {
+    public var downloadDestinations = DownloadDestinations() {
         didSet { savePreferences() }
     }
 
     /// Mail targets are offered only with an address to send to.
-    var readingTargets: [ReadingTarget] {
+    public var readingTargets: [ReadingTarget] {
         ReadingTarget.allCases.filter { !$0.isMail || !mailAddress(for: $0).isEmpty }
     }
 
@@ -257,25 +228,33 @@ final class AppModel {
         preferences.downloadDestinations = downloadDestinations
         SharedConfiguration.savePreferences(preferences, to: keychain)
     }
-    static let debrids = SharedConfiguration.debrids
+    public static let debrids = SharedConfiguration.debrids
 
     /// Stremio addons in the user's order. Manifests load in the background (`loadAddons`).
-    private(set) var addonEntries: [AddonEntry] = []
-    private(set) var addonSet = AddonSet(addons: [])
+    public private(set) var addonEntries: [AddonEntry] = []
+    public private(set) var addonSet = AddonSet(addons: [])
 
-    struct AddonEntry: Identifiable {
-        let url: URL
-        var addon: StremioAddon?
-        var error: String?
-        var id: String { url.absoluteString }
+    public struct AddonEntry: Identifiable {
+        public let url: URL
+        public var addon: StremioAddon?
+        public var error: String?
+        public var id: String { url.absoluteString }
         /// AIOStreams-shaped URL, and (once the manifest is in) an addon that actually serves streams.
-        var isAIOStreams: Bool {
+        public var isAIOStreams: Bool {
             AIOStreamsSearch.instance(from: url) != nil && (addon?.manifest.provides("stream") ?? true)
         }
     }
 
-    init() {
+    public init(platform: any AppPlatform) {
         defer { Self.current = self }
+        self.platform = platform
+        playback = PlaybackModel(keychain: SharedConfiguration.keychain(), platform: platform)
+        audiobook = AudiobookPlayer(keychain: SharedConfiguration.keychain(), platform: platform)
+        downloads = DownloadManager(
+            configuration: DownloadManager.backgroundConfiguration(identifier: AppModel.downloadSessionID),
+            directory: platform.downloadsDirectory,
+            store: DownloadStore(directory: .applicationSupportDirectory.appending(path: "Dove/Downloads"))
+        )
         // Keys saved before the shared Keychain group existed move into it once, so the extension sees them.
         if SharedConfiguration.keychainGroup != nil, !UserDefaults.standard.bool(forKey: Self.migratedKey) {
             keychain.migrateToAccessGroup()
@@ -321,6 +300,7 @@ final class AppModel {
         }
         // didSet does not run for assignments in init.
         library.showAdult = showAdult
+        library.onChange = { [weak platform] in platform?.libraryChanged() }
         reloadBackends()
         reloadNewznab()
         reloadBookMetadata()
@@ -364,14 +344,14 @@ final class AppModel {
             store: DownloadJobStore(fileURL: .applicationSupportDirectory.appending(path: "Dove/Downloads/jobs.json")),
             downloads: downloads
         ) { [weak self] id in self?.backend(id) }
-        downloadAlerts = DownloadAlerts(downloads: downloads, jobs: downloadJobs)
+        downloadAlerts = DownloadAlerts(downloads: downloads, jobs: downloadJobs, platform: platform)
         downloads.onSettled { [weak self] record in
             if record.state == .finished, record.destination == .iCloud { self?.iCloudFileArrived() }
         }
     }
 
     /// After an add in "download only" mode: hand the item to `downloadJobs`. Returns the message to show.
-    func startDownloadOnly(
+    public func startDownloadOnly(
         _ itemID: LibraryItem.ID,
         on backend: BackendID,
         name: String,
@@ -385,7 +365,7 @@ final class AppModel {
     /// Asks the service for a link and starts downloading the file to this device or iCloud Drive. In iCloud
     /// the file is filed by kind (author and title for books, platform and game for games, from the item's match),
     /// and the Library's iCloud place gets the same match.
-    func download(_ file: LibraryFile, of item: LibraryItem, to destination: DownloadDestination = .device) async throws {
+    public func download(_ file: LibraryFile, of item: LibraryItem, to destination: DownloadDestination = .device) async throws {
         guard let backend = backend(item.backend) else { return }
         let request = try await backend.downloadRequest(itemID: item.id, fileID: file.id)
         var placement: LibraryFolderLayout.Placement?
@@ -426,12 +406,12 @@ final class AppModel {
     // MARK: - Settings file
 
     /// Every Keychain value as a settings file (`SettingsBackup`), with or without keys and passwords.
-    func exportSettings(includeSecrets: Bool) -> SettingsBackup {
+    public func exportSettings(includeSecrets: Bool) -> SettingsBackup {
         SettingsBackup.export(includeSecrets: includeSecrets) { try? keychain.get($0) }
     }
 
     /// Writes a settings file into the Keychain (merging: what the file lacks stays) and loads it everywhere.
-    func importSettings(_ backup: SettingsBackup) async throws -> SettingsBackup.ImportSummary {
+    public func importSettings(_ backup: SettingsBackup) async throws -> SettingsBackup.ImportSummary {
         let keychain = keychain
         let summary = try backup.apply(read: { try? keychain.get($0) }) { try keychain.set($0, for: $1) }
         await reloadFromKeychain()
@@ -471,7 +451,7 @@ final class AppModel {
     }
 
     /// Rebuilds backends from the Keychain. Call after credentials change.
-    func reloadBackends() {
+    public func reloadBackends() {
         let calibre = SharedConfiguration.calibre(from: keychain)
         backends = SharedConfiguration.backends(from: keychain)
             + (iCloudFolder.map { [FolderBackend(directory: $0)] } ?? [])
@@ -484,19 +464,19 @@ final class AppModel {
         let resolver = coverResolver
         Task { await ImageCache.shared.setResolver(for: CalibreBackend.coverScheme, resolver) }
         let hasServices = backends.contains { !$0.id.isStorage }
-        Task { await FilesLocation.update(hasServices: hasServices) }
+        Task { await platform.servicesChanged(hasServices: hasServices) }
     }
 
     // MARK: - iCloud Drive
 
     /// iCloud Drive › Dove on this device: nil until resolved, and when iCloud Drive is off, signed out, or the
     /// build lacks the iCloud entitlement (a sideloaded build signed by another team).
-    private(set) var iCloudFolder: URL?
-    private(set) var iCloudChecked = false
+    public private(set) var iCloudFolder: URL?
+    public private(set) var iCloudChecked = false
 
     /// Looks the container up off the main thread (the lookup may block), then lists it as a library place and
     /// lets downloads go there.
-    func resolveICloud() async {
+    public func resolveICloud() async {
         let folder = await Task.detached(priority: .utility) {
             FileManager.default.url(forUbiquityContainerIdentifier: nil)?.appending(path: "Documents")
         }.value
@@ -510,7 +490,7 @@ final class AppModel {
 
     /// Where a file of this kind goes: the user's default, unless that place is gone (iCloud Drive unavailable,
     /// the service's key removed), then the kind's standard place, then this device.
-    func place(for kind: ContentKind) -> FilePlace {
+    public func place(for kind: ContentKind) -> FilePlace {
         let chosen = downloadDestinations.place(for: kind)
         if isAvailable(chosen) { return chosen }
         let standard = DownloadDestinations.standard(for: kind)
@@ -518,28 +498,28 @@ final class AppModel {
     }
 
     /// Every place a file can go from this device: downloads, then the services that fetch plain links.
-    var places: [FilePlace] {
+    public var places: [FilePlace] {
         [.device] + (iCloudFolder == nil ? [] : [.iCloud]) + directLinkServices.map(FilePlace.service)
     }
 
     /// The places for one kind: Calibre takes ebooks too (Dove downloads the file and adds it there).
     /// `place(for:)` to read, the user's choice to write: what Settings › Save to binds to.
-    subscript(destinationFor kind: ContentKind) -> FilePlace {
+    public subscript(destinationFor kind: ContentKind) -> FilePlace {
         get { place(for: kind) }
         set { downloadDestinations.set(newValue, for: kind) }
     }
 
-    func places(for kind: ContentKind) -> [FilePlace] {
+    public func places(for kind: ContentKind) -> [FilePlace] {
         places + (kind == .books && backend(.calibre) != nil ? [.service(.calibre)] : [])
     }
 
     /// Configured services that fetch any HTTP link into their cloud, in the debrid priority order.
-    var directLinkServices: [BackendID] {
+    public var directLinkServices: [BackendID] {
         let rank = { (id: BackendID) in self.debridOrder.firstIndex(of: id) ?? Int.max }
         return backends.filter(\.acceptsDirectLinks).map(\.id).sorted { rank($0) < rank($1) }
     }
 
-    func isAvailable(_ place: FilePlace) -> Bool {
+    public func isAvailable(_ place: FilePlace) -> Bool {
         switch place {
         case .download(.device): true
         case .download(.iCloud): iCloudFolder != nil
@@ -550,14 +530,14 @@ final class AppModel {
 
     // MARK: - Calibre
 
-    enum CalibreAddOutcome {
+    public enum CalibreAddOutcome {
         case added(format: String)
         /// Added, but Dove's description could not be set (the account may only read, the server failed).
         case addedWithoutDetails(format: String, reason: String)
         /// Calibre holds books it thinks are this one; nothing was added.
         case duplicates([String])
 
-        var message: String {
+        public var message: String {
             switch self {
             case .added(let format): "Added to Calibre as \(format)."
             case .addedWithoutDetails(let format, let reason): "Added to Calibre as \(format), but its details could not be set: \(reason)"
@@ -569,7 +549,7 @@ final class AppModel {
     /// Adds a book file to Calibre, which files it under Author/Title; then the book Dove knows (a book screen's,
     /// a search's) replaces the title, authors and description Calibre read from the file, and its cover too when
     /// the file had none (the file's cover is the edition held). The Library is listed again afterwards.
-    func addToCalibre(file: URL, fileName: String, book: BookSummary?, allowDuplicate: Bool = false) async throws -> CalibreAddOutcome {
+    public func addToCalibre(file: URL, fileName: String, book: BookSummary?, allowDuplicate: Bool = false) async throws -> CalibreAddOutcome {
         guard let calibre = backend(.calibre) as? CalibreBackend else {
             throw BackendError.api(message: "Set up Calibre in Settings › Your libraries first.")
         }
@@ -589,7 +569,7 @@ final class AppModel {
     }
 
     /// "Author - Title.ext" from the book Dove knows, else the file's own name.
-    static func calibreFileName(book: BookSummary?, fileName: String) -> String {
+    public static func calibreFileName(book: BookSummary?, fileName: String) -> String {
         let ext = BookFiles.format(of: fileName)
         guard let book, !ext.isEmpty else { return (fileName as NSString).lastPathComponent }
         let name = book.authors.first.map { LibraryFolderLayout.itemName(author: $0, title: book.title) } ?? book.title
@@ -599,45 +579,45 @@ final class AppModel {
     // MARK: - Newznab indexers
 
     /// Usenet indexers searched from the phone. Their API keys make the list a Keychain item.
-    private(set) var newznabIndexers: [NewznabIndexer] = []
+    public private(set) var newznabIndexers: [NewznabIndexer] = []
     /// Rebuilt whenever the list changes; usage and caps persist in its state file.
-    private(set) var newznab = NewznabSearch(indexers: [], stateURL: nil)
+    public private(set) var newznab = NewznabSearch(indexers: [], stateURL: nil)
     private static let newznabStateURL = URL.applicationSupportDirectory.appending(path: "Dove/newznab.json")
 
-    func reloadNewznab() {
+    public func reloadNewznab() {
         newznabIndexers = SharedConfiguration.newznabIndexers(from: keychain)
         newznab = NewznabSearch(indexers: newznabIndexers, stateURL: Self.newznabStateURL)
     }
 
     /// The indexers a search in this category asks (enabled in Settings and picked in Sources).
-    func indexerIDs(for category: SearchCategory) -> Set<String> {
+    public func indexerIDs(for category: SearchCategory) -> Set<String> {
         sourceSelection.indexerIDs(in: category, from: newznabIndexers)
     }
 
-    func saveNewznabIndexers(_ indexers: [NewznabIndexer]) throws {
+    public func saveNewznabIndexers(_ indexers: [NewznabIndexer]) throws {
         try SharedConfiguration.saveNewznabIndexers(indexers, to: keychain)
         reloadNewznab()
     }
 
-    var router: BackendRouter {
+    public var router: BackendRouter {
         BackendRouter(backends: backends, order: debridOrder, usenetOrder: usenetOrder, hostLists: hostLists)
     }
 
     // MARK: - Hosters
 
     /// Which file hosters each service unlocks; hoster links skip services that do not (`BackendRouter.hostLists`).
-    private(set) var hostLists: [BackendID: HostList] = [:]
+    public private(set) var hostLists: [BackendID: HostList] = [:]
     @ObservationIgnored private let hostCatalog = HostCatalog(fileURL: HostCatalog.defaultURL)
 
     /// Loads the saved lists, then fetches those older than a day. At launch and before a hoster link is added.
-    func refreshHostLists(force: Bool = false) async {
+    public func refreshHostLists(force: Bool = false) async {
         if hostLists.isEmpty { hostLists = await hostCatalog.snapshot }
         hostLists = await hostCatalog.refresh(backends, force: force)
     }
 
     /// Same priority list, but services that already have the release cached go first:
     /// adding there is instant and costs nothing.
-    func router(preferring cached: [BackendID]) -> BackendRouter {
+    public func router(preferring cached: [BackendID]) -> BackendRouter {
         let first = debridOrder.filter(cached.contains)
         return BackendRouter(
             backends: backends,
@@ -648,67 +628,67 @@ final class AppModel {
     }
 
     /// Configured backends that can check cache status without adding anything (TorBox, Offcloud).
-    var cacheCheckers: [any CacheChecking] {
+    public var cacheCheckers: [any CacheChecking] {
         backends.compactMap { $0 as? any CacheChecking }
     }
 
-    func backend(_ id: BackendID) -> (any LibraryBackend)? {
+    public func backend(_ id: BackendID) -> (any LibraryBackend)? {
         backends.first { $0.id == id }
     }
 
     /// Where NZBs go first: the top of `usenetOrder` that takes NZBs (the router's order for NZBs).
-    var usenetBackend: BackendID? {
+    public var usenetBackend: BackendID? {
         nzbBackends.first?.id
     }
 
     /// Configured services that take NZBs, in `usenetOrder`.
-    var nzbBackends: [any LibraryBackend] {
+    public var nzbBackends: [any LibraryBackend] {
         let rank = { (id: BackendID) in self.usenetOrder.firstIndex(of: id) ?? Int.max }
         return backends.filter { $0.supportedSources.contains(.nzb) }.sorted { rank($0.id) < rank($1.id) }
     }
 
-    func isConfigured(_ id: BackendID) -> Bool {
+    public func isConfigured(_ id: BackendID) -> Bool {
         backend(id) != nil
     }
 
     /// Plans and premium days (`ServiceStatusModel`); TorBox's plan also sets its Usenet and seeding.
-    func refreshAccounts(force: Bool = false) async {
+    public func refreshAccounts(force: Bool = false) async {
         await services.loadAccounts(backends, force: force)
         if let account = services.accounts[.torBox], let plan = TorBoxPlan(account: account) {
             torBoxPlan.detected = plan
         }
-        WidgetSnapshotWriter.update(using: self)
+        platform.accountsUpdated(self)
     }
 
     /// TorBox has a key and a plan that keeps seeding.
-    var torBoxSeeds: Bool {
+    public var torBoxSeeds: Bool {
         isConfigured(.torBox) && torBoxPlan.plan?.seedingTime != nil
     }
 
     /// Both seeding services are set up, so the user picks where private trackers' torrents go.
-    var canChoosePrivateTrackers: Bool {
+    public var canChoosePrivateTrackers: Bool {
         isConfigured(.debridLink) && torBoxSeeds
     }
 
     /// The Private trackers picker: Automatic sends them to Debrid-Link, so it shows as that.
-    var privateTrackersChoice: PrivateTrackerTarget {
+    public var privateTrackersChoice: PrivateTrackerTarget {
         get { privateTrackers == .automatic ? .debridLink : privateTrackers }
         set { privateTrackers = newValue }
     }
 
     /// Services that take private trackers' torrents, in priority order.
-    var privateTrackerServices: [BackendID] {
+    public var privateTrackerServices: [BackendID] {
         let allowed = Set(backends.filter(\.takesPrivateTorrents).map(\.id))
         return debridOrder.filter(allowed.contains)
     }
 
     /// Whether the service takes NZBs now (its toggle, and TorBox's plan).
-    func usenetEnabled(_ id: BackendID) -> Bool {
+    public func usenetEnabled(_ id: BackendID) -> Bool {
         backend(id)?.supportedSources.contains(.nzb) == true
     }
 
     /// TorBox stores "0" when turned off, so a Pro plan does not turn it back on; unset follows the plan.
-    func setUsenet(_ id: BackendID, enabled: Bool) {
+    public func setUsenet(_ id: BackendID, enabled: Bool) {
         switch id {
         case .torBox: try? keychain.set(enabled ? "1" : "0", for: .torBoxUsenet)
         case .offcloud: try? keychain.set(enabled ? "1" : nil, for: .offcloudUsenet)
@@ -721,13 +701,13 @@ final class AppModel {
     // MARK: - Re-adding and moving
 
     /// A torrent with its hash, or an NZB its service can hand back (nzbdav with the frontend key).
-    func canReAdd(_ item: LibraryItem) -> Bool {
+    public func canReAdd(_ item: LibraryItem) -> Bool {
         LibraryActions.canReAdd(item, on: backend(item.backend))
     }
 
     /// Services "Move to" can send the item to: they take its kind of source and do not hold it already.
     /// Debrids in priority order; NZBs in the Usenet order (nzbdav, TorBox/Offcloud with Usenet on).
-    func moveTargets(for item: LibraryItem) -> [BackendID] {
+    public func moveTargets(for item: LibraryItem) -> [BackendID] {
         guard canReAdd(item), let kind = LibraryActions.sourceKind(of: item) else { return [] }
         return (kind == .nzb ? nzbBackends : backends(usenet: true) + backends(usenet: false))
             .filter { $0.id != item.backend && $0.supportedSources.contains(kind) }
@@ -736,17 +716,17 @@ final class AppModel {
 
     /// Where an NZB goes when `failing` cannot open its compressed archive: the next Usenet service in
     /// `usenetOrder` that is not a streaming server (nzbdav streams archives instead of unpacking them).
-    func compressedArchiveTarget(after failing: BackendID) -> BackendID? {
+    public func compressedArchiveTarget(after failing: BackendID) -> BackendID? {
         nzbBackends.map(\.id).first { $0 != failing && $0 != .nzbdav }
     }
 
     /// Why none of these items can be added again or moved, for a disabled menu line.
-    func reAddBlocker(_ items: [LibraryItem]) -> String {
+    public func reAddBlocker(_ items: [LibraryItem]) -> String {
         items.count == 1 ? "No magnet or stored NZB: cannot be added again" : "No magnets or stored NZBs: cannot be added again"
     }
 
     /// Configured backends of one family, in priority order.
-    func backends(usenet: Bool) -> [any LibraryBackend] {
+    public func backends(usenet: Bool) -> [any LibraryBackend] {
         let rank = { (id: BackendID) in self.debridOrder.firstIndex(of: id) ?? Int.max }
         return backends.filter { $0.id.isUsenet == usenet }.sorted { rank($0.id) < rank($1.id) }
     }
@@ -754,7 +734,7 @@ final class AppModel {
     // MARK: - Stremio addons
 
     /// Fetches every manifest in parallel. Call on launch and after the list changes.
-    func loadAddons() async {
+    public func loadAddons() async {
         let urls = addonEntries.map(\.url)
         let loaded = await withTaskGroup(of: (URL, Result<StremioAddon, any Error>).self) { group in
             for url in urls {
@@ -778,7 +758,7 @@ final class AppModel {
     }
 
     /// Validates the manifest before saving, so a typo never lands in the list.
-    func addAddon(_ text: String) async throws {
+    public func addAddon(_ text: String) async throws {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
             .replacingOccurrences(of: "stremio://", with: "https://")
         guard let url = URL(string: trimmed), url.scheme == "https" || url.scheme == "http" else {
@@ -791,24 +771,24 @@ final class AppModel {
         rebuildAddonSet()
     }
 
-    func removeAddons(at offsets: IndexSet) {
+    public func removeAddons(at offsets: IndexSet) {
         addonEntries.remove(atOffsets: offsets)
         saveAddonURLs()
         rebuildAddonSet()
     }
 
-    func moveAddons(from source: IndexSet, to destination: Int) {
+    public func moveAddons(from source: IndexSet, to destination: Int) {
         addonEntries.move(fromOffsets: source, toOffset: destination)
         saveAddonURLs()
         rebuildAddonSet()
     }
 
-    var aioStreamsPassword: String {
+    public var aioStreamsPassword: String {
         (try? keychain.get(.aioStreamsPassword)) ?? ""
     }
 
     /// Checks the password against the user's AIOStreams instance before keeping it. Empty removes it.
-    func saveAIOStreamsPassword(_ password: String) async throws {
+    public func saveAIOStreamsPassword(_ password: String) async throws {
         let password = password.trimmingCharacters(in: .whitespacesAndNewlines)
         if !password.isEmpty {
             guard let instance = aioStreamsInstance else {
@@ -822,10 +802,10 @@ final class AppModel {
     }
 
     /// Bumped on every password save, so views that depend on it (the variant list) reload.
-    private(set) var aioStreamsPasswordRevision = 0
+    public private(set) var aioStreamsPasswordRevision = 0
 
     /// Variants defined in the user's AIOStreams configuration (needs the password).
-    func aioStreamsVariants() async throws -> [AIOStreamsSearch.Variant] {
+    public func aioStreamsVariants() async throws -> [AIOStreamsSearch.Variant] {
         let password = aioStreamsPassword
         guard !password.isEmpty,
               let instance = aioStreamsInstance
@@ -834,7 +814,7 @@ final class AppModel {
     }
 
     /// Adds Dove's unfiltered variant to the user's AIOStreams configuration and selects it.
-    func createUnfilteredAIOStreamsVariant() async throws {
+    public func createUnfilteredAIOStreamsVariant() async throws {
         let password = aioStreamsPassword
         guard !password.isEmpty,
               let instance = aioStreamsInstance
@@ -846,12 +826,12 @@ final class AppModel {
     // MARK: - Files from plugins
 
     /// The last file started from outside (a shared file page), shown at the top of Downloads.
-    var incomingDownloadMessage: String?
+    public var incomingDownloadMessage: String?
 
     /// Asks a plugin for a search row's or file page's file(s) and sends them to a place: downloaded (to iCloud
     /// Drive filed by `LibraryFolderLayout`), or handed to a service when the links need no headers. Torrents
     /// (magnets, `.torrent` files) go to a torrent service instead (`addTorrents`).
-    func getFile(
+    public func getFile(
         from call: PluginCall, id: String, title: String? = nil, kind: ContentKind, book: BookSummary? = nil, media: MediaSummary? = nil,
         to place: FilePlace? = nil
     ) async -> String {
@@ -988,7 +968,7 @@ final class AppModel {
     /// Sends a source row's direct link (PenguPlay, AIOStreams HTTP) to a place: downloaded to this iPhone or
     /// iCloud Drive (a retry asks the addon again: links expire within hours), or handed to a service that
     /// fetches plain links. Links that need headers only Dove can download.
-    func getFile(
+    public func getFile(
         _ candidate: StreamCandidate, type: MediaType, streamID: String, media: MediaSummary?, to place: FilePlace? = nil
     ) async -> String {
         guard let file = candidate.directFile else { return "This source can only be played." }
@@ -1041,12 +1021,12 @@ final class AppModel {
 
     // MARK: - Book metadata
 
-    var googleBooksKey: String { (try? keychain.get(.googleBooksAPIKey)) ?? "" }
-    var hardcoverToken: String { (try? keychain.get(.hardcoverToken)) ?? "" }
+    public var googleBooksKey: String { (try? keychain.get(.googleBooksAPIKey)) ?? "" }
+    public var hardcoverToken: String { (try? keychain.get(.hardcoverToken)) ?? "" }
 
     /// Album search for Music: MusicBrainz, plus the plugins with music metadata (they name `music` among their
     /// categories), plus Apple Music when it is on and allowed (Settings › Music).
-    var musicMetadata: MusicMetadata {
+    public var musicMetadata: MusicMetadata {
         let plugins: [any AlbumCatalog] = plugins.calls(.metadata, category: .music)
             .filter { $0.manifest.categories.contains(.music) }
             .map { PluginAlbumCatalog(call: $0) }
@@ -1054,16 +1034,16 @@ final class AppModel {
     }
 
     /// The book metadata sources for this device's region, with the user's keys and plugins.
-    var bookMetadataConfiguration: BookMetadata.Configuration {
+    public var bookMetadataConfiguration: BookMetadata.Configuration {
         .device(googleBooksKey: googleBooksKey, hardcoverToken: hardcoverToken, plugins: plugins.calls(.metadata))
     }
 
-    func reloadBookMetadata() {
+    public func reloadBookMetadata() {
         library.bookMetadata = BookMetadata(configuration: bookMetadataConfiguration)
     }
 
     /// Checks the key with one search before keeping it. Empty removes it.
-    func saveGoogleBooksKey(_ key: String) async throws {
+    public func saveGoogleBooksKey(_ key: String) async throws {
         let key = key.trimmingCharacters(in: .whitespacesAndNewlines)
         if !key.isEmpty { try await BookMetadata().validateGoogleBooks(key: key) }
         try keychain.set(key, for: .googleBooksAPIKey)
@@ -1071,7 +1051,7 @@ final class AppModel {
     }
 
     /// Checks the token (`me`) before keeping it. Empty removes it.
-    func saveHardcoverToken(_ token: String) async throws {
+    public func saveHardcoverToken(_ token: String) async throws {
         let token = token.trimmingCharacters(in: .whitespacesAndNewlines)
         if !token.isEmpty { try await BookMetadata().validateHardcover(token: token) }
         try keychain.set(token, for: .hardcoverToken)
@@ -1080,18 +1060,18 @@ final class AppModel {
 
     // MARK: - Game metadata
 
-    var igdbClientID: String { (try? keychain.get(.igdbClientID)) ?? "" }
-    var igdbClientSecret: String { (try? keychain.get(.igdbClientSecret)) ?? "" }
+    public var igdbClientID: String { (try? keychain.get(.igdbClientID)) ?? "" }
+    public var igdbClientSecret: String { (try? keychain.get(.igdbClientSecret)) ?? "" }
 
     /// The user's Twitch app for IGDB, when both halves are set.
-    var igdbCredentials: GameMetadata.IGDBCredentials? {
+    public var igdbCredentials: GameMetadata.IGDBCredentials? {
         let id = igdbClientID, secret = igdbClientSecret
         return id.isEmpty || secret.isEmpty ? nil : GameMetadata.IGDBCredentials(clientID: id, clientSecret: secret)
     }
 
     /// Game search for Games: IGDB with the user's Twitch app, Wikidata, which needs no key, and the plugins with
     /// game metadata (they name `games` among their categories).
-    var gameMetadata: GameMetadata {
+    public var gameMetadata: GameMetadata {
         let plugins: [any GameCatalog] = plugins.calls(.metadata, category: .games)
             .filter { $0.manifest.categories.contains(.games) }
             .map { PluginGameCatalog(call: $0) }
@@ -1099,7 +1079,7 @@ final class AppModel {
     }
 
     /// Checks the Twitch app with a token and one IGDB search before keeping it. Both empty removes it.
-    func saveIGDB(clientID: String, clientSecret: String) async throws {
+    public func saveIGDB(clientID: String, clientSecret: String) async throws {
         let credentials = GameMetadata.IGDBCredentials(clientID: clientID, clientSecret: clientSecret)
         switch (credentials.clientID.isEmpty, credentials.clientSecret.isEmpty) {
         case (true, true): break
@@ -1112,12 +1092,12 @@ final class AppModel {
 
     // MARK: - TMDB
 
-    var tmdbKey: String {
+    public var tmdbKey: String {
         (try? keychain.get(.tmdbAPIKey)) ?? ""
     }
 
     /// Checks the key (v3 API key or v4 read access token) before keeping it. Empty removes it.
-    func saveTMDBKey(_ key: String) async throws {
+    public func saveTMDBKey(_ key: String) async throws {
         let key = key.trimmingCharacters(in: .whitespacesAndNewlines)
         if !key.isEmpty { try await TMDBMetadata(key: key).validate() }
         try keychain.set(key, for: .tmdbAPIKey)
@@ -1153,8 +1133,4 @@ final class AppModel {
         guard let data = try? JSONEncoder().encode(strings) else { return }
         try? keychain.set(String(decoding: data, as: UTF8.self), for: .stremioAddons)
     }
-}
-
-enum AppTab: Hashable {
-    case search, library, downloads, settings
 }

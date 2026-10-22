@@ -6,19 +6,21 @@ import MusicKit
 /// account, no subscription needed to search, its own quota (not iTunes Search's, which Books uses). Needs the
 /// user's permission (`MusicAuthorization`) and the MusicKit service on Dove's App ID: a build re-signed with
 /// another Apple ID gets no developer token and every request fails.
-struct AppleMusicCatalog: AlbumCatalog {
-    let name = "Apple Music"
+public struct AppleMusicCatalog: AlbumCatalog {
+    public let name = "Apple Music"
 
-    func owns(_ albumID: String) -> Bool { albumID.hasPrefix("am:") }
+    public init() {}
+
+    public func owns(_ albumID: String) -> Bool { albumID.hasPrefix("am:") }
     /// Settings › Music (this device: the permission is per device too).
-    static let preferenceKey = "appleMusicMetadata"
+    public static let preferenceKey = "appleMusicMetadata"
 
     /// On, and allowed.
-    static var isEnabled: Bool {
+    public static var isEnabled: Bool {
         UserDefaults.standard.bool(forKey: preferenceKey) && MusicAuthorization.currentStatus == .authorized
     }
 
-    func albums(matching query: String) async throws -> [AlbumSummary] {
+    public func albums(matching query: String) async throws -> [AlbumSummary] {
         var request = MusicCatalogSearchRequest(term: query, types: [MusicKit.Album.self])
         request.limit = 25
         do {
@@ -28,7 +30,7 @@ struct AppleMusicCatalog: AlbumCatalog {
         }
     }
 
-    func tracks(ofAlbum id: String) async throws -> [AlbumTrack] {
+    public func tracks(ofAlbum id: String) async throws -> [AlbumTrack] {
         guard id.hasPrefix("am:") else { return [] }
         var request = MusicCatalogResourceRequest<MusicKit.Album>(matching: \.id, equalTo: MusicItemID(String(id.dropFirst(3))))
         request.properties = [.tracks]
@@ -49,7 +51,7 @@ struct AppleMusicCatalog: AlbumCatalog {
     }
 
     /// Apple names singles and EPs "Title - Single" / "Title - EP": the suffix becomes the type, as in MusicBrainz.
-    static func summary(_ album: MusicKit.Album) -> AlbumSummary {
+    public static func summary(_ album: MusicKit.Album) -> AlbumSummary {
         var title = album.title
         var type = album.isCompilation == true ? "Compilation" : album.isSingle == true ? "Single" : "Album"
         for (suffix, kind) in [(" - Single", "Single"), (" - EP", "EP")] where title.hasSuffix(suffix) {
@@ -85,7 +87,7 @@ struct AppleMusicCatalog: AlbumCatalog {
 
 extension AlbumSummary {
     /// Where the row came from, for its caption and link: a plugin's entry (`plugin:<id>:…`) takes the plugin's name.
-    func sourceName(plugins: [PluginManifest] = []) -> String {
+    public func sourceName(plugins: [PluginManifest] = []) -> String {
         if id.hasPrefix("am:") { return "Apple Music" }
         if id.hasPrefix("plugin:") {
             let pluginID = id.split(separator: ":").dropFirst().first.map(String.init)

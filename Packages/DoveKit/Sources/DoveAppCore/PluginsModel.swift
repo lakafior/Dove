@@ -5,35 +5,35 @@ import Observation
 /// The user's plugin repositories and installed plugins (`docs/plugins.md`): adding repositories, installing,
 /// updating (only on a tap), settings, and the plugins other screens call.
 @MainActor @Observable
-final class PluginsModel {
-    private(set) var repositories: [URL] = []
-    private(set) var installed: [InstalledPlugin] = []
-    private(set) var settings: [String: [String: SettingValue]] = [:]
+public final class PluginsModel {
+    public private(set) var repositories: [URL] = []
+    public private(set) var installed: [InstalledPlugin] = []
+    public private(set) var settings: [String: [String: SettingValue]] = [:]
     /// The last index each repository answered.
-    private(set) var indexes: [URL: PluginRepositoryIndex] = [:]
-    private(set) var indexErrors: [URL: String] = [:]
+    public private(set) var indexes: [URL: PluginRepositoryIndex] = [:]
+    public private(set) var indexErrors: [URL: String] = [:]
     /// Scripts on this device, by plugin id.
-    private(set) var scripts: [String: String] = [:]
+    public private(set) var scripts: [String: String] = [:]
     /// Plugins being installed or updated, by id.
-    private(set) var busy: Set<String> = []
+    public private(set) var busy: Set<String> = []
     /// Adult plugins show only with the app's adult-content switch.
-    var showAdult = false
+    public var showAdult = false
 
     /// Called after anything a plugin call depends on changed (installs, settings, on/off).
-    @ObservationIgnored var onChange: (() -> Void)?
+    @ObservationIgnored public var onChange: (() -> Void)?
 
     @ObservationIgnored private let store: PluginStore
     @ObservationIgnored private let client = PluginRepositoryClient()
     private static let lastCheckKey = "pluginIndexCheck"
 
-    init(store: PluginStore) {
+    public init(store: PluginStore) {
         self.store = store
         load()
     }
 
     /// Reads everything again (launch, settings import). Scripts missing here (another device installed them,
     /// or the files were cleared) are downloaded again from their repository, checked against the pinned hash.
-    func load() {
+    public func load() {
         repositories = store.repositories()
         installed = store.installed()
         settings = store.settings()
@@ -48,7 +48,7 @@ final class PluginsModel {
     // MARK: - Calls
 
     /// Enabled plugins with a capability, ready to call; `category` keeps those serving it (or naming none).
-    func calls(_ capability: PluginManifest.Capability, category: SearchCategory? = nil) -> [PluginCall] {
+    public func calls(_ capability: PluginManifest.Capability, category: SearchCategory? = nil) -> [PluginCall] {
         installed.compactMap { plugin -> PluginCall? in
             guard plugin.enabled, plugin.manifest.can(capability), showAdult || !plugin.manifest.adult,
                   let script = scripts[plugin.id] else { return nil }
@@ -60,23 +60,23 @@ final class PluginsModel {
     /// Enabled plugins with a search page (`browse`) for a category. Only plugins that cannot search in the app:
     /// the browser is for sites whose results a scripted request cannot list (captchas, bot checks); a plugin
     /// with `search` shows its rows on the Plugins tab instead.
-    func browsers(for category: SearchCategory) -> [PluginCall] {
+    public func browsers(for category: SearchCategory) -> [PluginCall] {
         calls(.resolve, category: category).filter { $0.manifest.browse != nil && !$0.manifest.can(.search) }
     }
 
     /// The plugin that knows a file page's address, and the id it reads from it.
-    func link(for url: URL) -> (call: PluginCall, id: String)? {
+    public func link(for url: URL) -> (call: PluginCall, id: String)? {
         for call in calls(.resolve) {
             if let id = call.linkID(in: url) { return (call, id) }
         }
         return nil
     }
 
-    func manifests() -> [PluginManifest] { installed.map(\.manifest) }
+    public func manifests() -> [PluginManifest] { installed.map(\.manifest) }
 
     // MARK: - Repositories
 
-    func addRepository(_ text: String) async throws {
+    public func addRepository(_ text: String) async throws {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         let full = trimmed.contains("://") ? trimmed : "https://" + trimmed
         guard let url = URL(string: full), url.scheme?.lowercased() == "https", url.host() != nil else {
@@ -90,7 +90,7 @@ final class PluginsModel {
     }
 
     /// Removes the repository; its installed plugins stay (they keep working, without updates).
-    func removeRepository(_ url: URL) {
+    public func removeRepository(_ url: URL) {
         repositories.removeAll { $0 == url }
         indexes[url] = nil
         indexErrors[url] = nil
@@ -98,7 +98,7 @@ final class PluginsModel {
     }
 
     /// Asks every repository again: at launch at most once a day, or now (`force`).
-    func refreshIndexes(force: Bool = false) async {
+    public func refreshIndexes(force: Bool = false) async {
         let defaults = UserDefaults.standard
         if !force, let last = defaults.object(forKey: Self.lastCheckKey) as? Date, Date().timeIntervalSince(last) < 24 * 3600,
            !indexes.isEmpty || repositories.isEmpty {
@@ -116,34 +116,34 @@ final class PluginsModel {
     }
 
     /// Plugins of a repository this build can run and the user may see, not installed yet.
-    func available(in url: URL) -> [PluginRepositoryIndex.Entry] {
+    public func available(in url: URL) -> [PluginRepositoryIndex.Entry] {
         (indexes[url]?.plugins ?? []).filter { entry in
             entry.isSupported && (showAdult || entry.adult != true) && !installed.contains { $0.id == entry.id }
         }
     }
 
     /// A newer version in the plugin's repository, if any.
-    func update(for plugin: InstalledPlugin) -> PluginRepositoryIndex.Entry? {
+    public func update(for plugin: InstalledPlugin) -> PluginRepositoryIndex.Entry? {
         guard let entry = indexes[plugin.repository]?.plugins.first(where: { $0.id == plugin.id }),
               entry.isSupported, entry.isNewer(than: plugin.entry) else { return nil }
         return entry
     }
 
-    var updatesAvailable: Int { installed.filter { update(for: $0) != nil }.count }
+    public var updatesAvailable: Int { installed.filter { update(for: $0) != nil }.count }
 
     // MARK: - Installing
 
     /// A downloaded, verified plugin the user has not accepted yet.
-    struct Pending: Identifiable {
-        let plugin: InstalledPlugin
-        let script: String
+    public struct Pending: Identifiable {
+        public let plugin: InstalledPlugin
+        public let script: String
         /// Hosts the installed version could not reach (all of them for a new plugin).
-        let newHosts: [String]
-        var id: String { plugin.id }
+        public let newHosts: [String]
+        public var id: String { plugin.id }
     }
 
     /// Downloads and checks a plugin (or a newer version); nothing is kept until `accept`.
-    func prepare(_ entry: PluginRepositoryIndex.Entry, from repository: URL) async throws -> Pending {
+    public func prepare(_ entry: PluginRepositoryIndex.Entry, from repository: URL) async throws -> Pending {
         busy.insert(entry.id)
         defer { busy.remove(entry.id) }
         let (plugin, script) = try await client.install(entry, from: repository)
@@ -152,7 +152,7 @@ final class PluginsModel {
     }
 
     /// Keeps a prepared plugin: the user saw its hosts.
-    func accept(_ pending: Pending) throws {
+    public func accept(_ pending: Pending) throws {
         store.removeScripts(of: pending.plugin.id)
         try store.saveScript(pending.script, for: pending.plugin.entry)
         var next = pending.plugin
@@ -173,7 +173,7 @@ final class PluginsModel {
         onChange?()
     }
 
-    func uninstall(_ id: String) {
+    public func uninstall(_ id: String) {
         installed.removeAll { $0.id == id }
         settings[id] = nil
         scripts[id] = nil
@@ -183,18 +183,18 @@ final class PluginsModel {
         onChange?()
     }
 
-    func setEnabled(_ id: String, _ enabled: Bool) {
+    public func setEnabled(_ id: String, _ enabled: Bool) {
         guard let index = installed.firstIndex(where: { $0.id == id }) else { return }
         installed[index].enabled = enabled
         try? store.saveInstalled(installed)
         onChange?()
     }
 
-    func value(_ id: String, _ key: String) -> SettingValue? {
+    public func value(_ id: String, _ key: String) -> SettingValue? {
         settings[id]?[key]
     }
 
-    func setValue(_ value: SettingValue?, for key: String, of id: String) {
+    public func setValue(_ value: SettingValue?, for key: String, of id: String) {
         var values = settings[id] ?? [:]
         values[key] = value
         settings[id] = values.isEmpty ? nil : values

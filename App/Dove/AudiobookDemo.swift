@@ -1,5 +1,6 @@
 #if DEBUG
 import AVFoundation
+import DoveAppCore
 import DoveKit
 import Foundation
 

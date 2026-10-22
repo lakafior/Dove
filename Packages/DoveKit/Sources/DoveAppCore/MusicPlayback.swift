@@ -3,7 +3,7 @@ import Foundation
 
 extension AppModel {
     /// What to play first.
-    enum MusicStart {
+    public enum MusicStart {
         case beginning
         /// A track of the first album, as the metadata lists it (matched to its file by title, else position).
         case track(AlbumTrack)
@@ -15,7 +15,7 @@ extension AppModel {
     /// one when shuffled) starts as soon as its files are known; the others join the queue as theirs arrive
     /// (Offcloud and Real-Debrid list items without files, so each album may cost one detail call). Nothing is
     /// saved: music starts where it is told to. Returns why nothing could play, or nil once something does.
-    func playMusic(_ albums: [AlbumTitle], title: String, cover: URL? = nil, start: MusicStart = .beginning, shuffled: Bool = false) async -> String? {
+    public func playMusic(_ albums: [AlbumTitle], title: String, cover: URL? = nil, start: MusicStart = .beginning, shuffled: Bool = false) async -> String? {
         guard !albums.isEmpty else { return "Nothing to play." }
         var order = albums
         if shuffled, case .beginning = start { order.shuffle() }

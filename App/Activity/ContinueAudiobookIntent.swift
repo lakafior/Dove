@@ -1,4 +1,7 @@
 import AppIntents
+#if !WIDGET_EXTENSION
+import DoveAppCore
+#endif
 
 /// Plays on the audiobook last listened to, from its saved place, without opening Dove. Compiled into the app and
 /// `DoveWidgets` (the Listening widget's Play button); as an `AudioPlaybackIntent` it always runs in the app's

@@ -1,4 +1,5 @@
 import CryptoKit
+import DoveAppCore
 import DoveKit
 import Foundation
 import WidgetKit
@@ -97,49 +98,5 @@ enum WidgetSnapshotWriter {
         }
         guard !Task.isCancelled else { return }
         if (try? snapshot.save(to: container)) == true { WidgetCenter.shared.reloadAllTimelines() }
-    }
-}
-
-/// `dove://` links from widgets: `dove://watchlist`, `dove://library`, `dove://downloads`, `dove://settings`,
-/// `dove://listening`, `dove://title/<id>`.
-enum DeepLink {
-    static func url(_ host: String, _ path: String? = nil) -> URL {
-        var components = URLComponents()
-        components.scheme = "dove"
-        components.host = host
-        if let path { components.path = "/" + path }
-        return components.url!
-    }
-
-    static func title(_ id: String) -> URL { url("title", id) }
-
-    /// True when it was a `dove://` link (handled or not), so it is not taken for a magnet or a file.
-    @MainActor
-    static func open(_ url: URL, using app: AppModel) -> Bool {
-        guard url.scheme == "dove" else { return false }
-        switch url.host() {
-        case "watchlist": app.show(.watchlist)
-        case "library": app.selectedTab = .library
-        case "downloads": app.show(.downloads)
-        case "settings": app.selectedTab = .settings
-        case "listening":
-            if app.audiobook.session != nil { app.audiobook.isPresented = true } else { Task { _ = await app.continueAudiobook() } }
-        case "media":
-            if let link = TitleLink(deepLink: url) { Task { await app.openTitle(link) } }
-        case "title":
-            let id = String(url.path().dropFirst()).removingPercentEncoding ?? ""
-            if !id.isEmpty { app.show(.title(id: id)) }
-        case "plugin-link":
-            // From the share extension: a file page an installed plugin knows.
-            let address = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?.first { $0.name == "url" }?.value
-            app.show(.downloads)
-            if let address, let page = URL(string: address), let link = app.plugins.link(for: page) {
-                Task { app.incomingDownloadMessage = await app.getFile(from: link.call, id: link.id, kind: .books) }
-            } else {
-                app.incomingDownloadMessage = "No installed plugin knows this address."
-            }
-        default: break
-        }
-        return true
     }
 }

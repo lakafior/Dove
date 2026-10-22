@@ -160,14 +160,28 @@ public struct KeychainStore: Sendable {
     }
 
     private func baseQuery(account: String) -> [String: Any] {
-        [
+        var query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
             kSecAttrAccount as String: account,
             // Match synced and device-only copies, so reads find old items and deletes leave no duplicate.
             kSecAttrSynchronizable as String: kSecAttrSynchronizableAny
         ]
+        #if os(macOS)
+        // Access groups and iCloud Keychain exist only in the data protection keychain (the iOS-style one).
+        // Unsigned processes (`swift test`) may not use it and keep the legacy file keychain.
+        if Self.usesDataProtectionKeychain { query[kSecUseDataProtectionKeychain as String] = true }
+        #endif
+        return query
     }
+
+    #if os(macOS)
+    /// Signed apps carry an application identifier, which the data protection keychain requires.
+    private static let usesDataProtectionKeychain: Bool = {
+        guard let task = SecTaskCreateFromSelf(nil) else { return false }
+        return SecTaskCopyValueForEntitlement(task, "com.apple.application-identifier" as CFString, nil) != nil
+    }()
+    #endif
 }
 
 /// Where the app and its extensions meet: the shared Keychain group and the settings both read.

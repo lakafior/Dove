@@ -6,25 +6,25 @@ import Observation
 /// this device (UserDefaults): another network gives other numbers.
 @MainActor
 @Observable
-final class SpeedTestModel {
-    private(set) var samples: [BackendID: SpeedSample]
+public final class SpeedTestModel {
+    public private(set) var samples: [BackendID: SpeedSample]
     /// Why the last test of a service failed.
-    private(set) var failures: [BackendID: String] = [:]
+    public private(set) var failures: [BackendID: String] = [:]
     /// The service being measured now.
-    private(set) var testing: BackendID?
-    private(set) var isRunning = false
+    public private(set) var testing: BackendID?
+    public private(set) var isRunning = false
 
     private static let key = "speedSamples"
     private let meter: any ThroughputMeasuring
 
-    init(meter: any ThroughputMeasuring = URLSessionThroughput()) {
+    public init(meter: any ThroughputMeasuring = URLSessionThroughput()) {
         self.meter = meter
         samples = UserDefaults.standard.data(forKey: Self.key)
             .flatMap { try? JSONDecoder().decode([BackendID: SpeedSample].self, from: $0) } ?? [:]
     }
 
     /// Measures `ids` in order with the library's items. Stops at the first Wi-Fi error: the rest would fail too.
-    func run(_ ids: [BackendID], using model: AppModel) async {
+    public func run(_ ids: [BackendID], using model: AppModel) async {
         guard !isRunning else { return }
         isRunning = true
         defer {
@@ -49,7 +49,7 @@ final class SpeedTestModel {
     }
 
     /// "312 Mb/s · Enough for 4K remux · 5 min ago".
-    func summary(_ id: BackendID) -> String? {
+    public func summary(_ id: BackendID) -> String? {
         guard let sample = samples[id] else { return nil }
         let speed = sample.megabitsPerSecond.formatted(.number.precision(.fractionLength(0)))
         let age = sample.measuredAt.formatted(.relative(presentation: .named))

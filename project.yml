@@ -28,6 +28,8 @@ targets:
       - App/Activity
     dependencies:
       - package: DoveKit
+      - package: DoveKit
+        product: DoveAppCore
       - target: DoveShare
       - target: DoveFiles
       - target: DoveWidgets

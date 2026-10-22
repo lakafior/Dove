@@ -1,3 +1,4 @@
+import DoveAppCore
 import DoveKit
 import SwiftUI
 
@@ -7,6 +8,7 @@ import SwiftUI
 /// gets its shelf by itself.
 struct HomeView: View, @MainActor Equatable {
     @Environment(AppModel.self) private var model
+    @Environment(AppRouter.self) private var router
     let home: HomeModel
     let onSearch: (HomeModel.RecentSearch) -> Void
 
@@ -47,7 +49,7 @@ struct HomeView: View, @MainActor Equatable {
             if !model.addonSet.canSearch {
                 Text("Add a TMDB key or a Stremio addon that can search, so titles can be found here.")
             }
-            Button("Open Settings") { model.selectedTab = .settings }
+            Button("Open Settings") { router.selectedTab = .settings }
                 .buttonStyle(.borderedProminent)
                 .padding(.top, 2)
         }
@@ -93,7 +95,7 @@ struct HomeView: View, @MainActor Equatable {
                         }
                     }
                     if !downloads.isEmpty {
-                        Button { model.selectedTab = .downloads } label: {
+                        Button { router.selectedTab = .downloads } label: {
                             PhoneDownloadsRow(records: downloads)
                         }
                         .buttonStyle(.plain)
@@ -108,7 +110,7 @@ struct HomeView: View, @MainActor Equatable {
                 .background(.background.secondary, in: RoundedRectangle(cornerRadius: 14))
                 .padding(.horizontal)
                 if active.count > 4 {
-                    Button("\(active.count - 4) more in the Library") { model.selectedTab = .library }
+                    Button("\(active.count - 4) more in the Library") { router.selectedTab = .library }
                         .font(.footnote)
                         .padding(.horizontal)
                 }
@@ -214,7 +216,7 @@ struct HomeView: View, @MainActor Equatable {
             .prefix(15)
         if !titles.isEmpty {
             VStack(alignment: .leading, spacing: 10) {
-                HomeHeading("Recently added", action: ("Library", { model.selectedTab = .library }))
+                HomeHeading("Recently added", action: ("Library", { router.selectedTab = .library }))
                 PosterShelf {
                     ForEach(Array(titles)) { title in
                         NavigationLink(value: TitleRoute(id: title.id)) {
@@ -242,8 +244,8 @@ struct HomeView: View, @MainActor Equatable {
                 LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)], spacing: 12) {
                     ForEach(shelves) { shelf in
                         Button {
-                            model.libraryCategoryRequest = shelf.category
-                            model.selectedTab = .library
+                            router.libraryCategoryRequest = shelf.category
+                            router.selectedTab = .library
                         } label: {
                             ShelfTile(shelf: shelf)
                         }
@@ -265,7 +267,7 @@ struct HomeView: View, @MainActor Equatable {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
                     ForEach(configured, id: \.self) { backend in
-                        Button { model.selectedTab = .settings } label: {
+                        Button { router.selectedTab = .settings } label: {
                             ServiceChip(
                                 name: backend.displayName,
                                 light: model.services.light(backend),

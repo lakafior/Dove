@@ -1,3 +1,4 @@
+import DoveAppCore
 import DoveKit
 import SwiftUI
 
@@ -6,6 +7,7 @@ import SwiftUI
 /// software and the rest are listed by name under the shelves. Filters: services, category, status, text.
 struct LibraryView: View {
     @Environment(AppModel.self) private var model
+    @Environment(AppRouter.self) private var router
     @AppStorage("libraryMode") private var mode: Mode = .titles
     @State private var filter = LibraryFilter()
     /// A described filter ("series from the 80s in 4K"), on top of `filter`, until cleared.
@@ -148,12 +150,12 @@ struct LibraryView: View {
             }
             .onChange(of: mode) { endSelecting() }
             // A shelf tapped on the home screen: just that kind, other filters cleared.
-            .onChange(of: model.libraryCategoryRequest, initial: true) {
-                guard let category = model.libraryCategoryRequest else { return }
+            .onChange(of: router.libraryCategoryRequest, initial: true) {
+                guard let category = router.libraryCategoryRequest else { return }
                 filter = LibraryFilter()
                 filter.category = category
                 mode = .titles
-                model.libraryCategoryRequest = nil
+                router.libraryCategoryRequest = nil
             }
             .navigationDestination(for: TitleRoute.self) { LibraryTitleView(titleID: $0.id) }
             .navigationDestination(for: BookRoute.self) { BookTitleView(bookID: $0.id) }

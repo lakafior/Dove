@@ -1,3 +1,4 @@
+import DoveAppCore
 import DoveKit
 import SwiftUI
 import UIKit
@@ -11,6 +12,7 @@ struct DoveApp: App {
         WindowGroup {
             RootView()
                 .environment(delegate.model)
+                .environment(delegate.platform.router)
                 .task {
                     let model = delegate.model
                     async let accounts: Void = model.refreshAccounts()
@@ -28,7 +30,14 @@ struct DoveApp: App {
 
 /// Owns the model so a relaunch for background downloads finds the session already recreated.
 final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDelegate {
-    let model = AppModel()
+    let platform: IOSPlatform
+    let model: AppModel
+
+    override init() {
+        platform = IOSPlatform()
+        model = AppModel(platform: platform)
+        super.init()
+    }
 
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
         // Download notices show as banners while Dove is open too (`DownloadAlerts`).
@@ -77,6 +86,6 @@ extension AppDelegate {
 
     @MainActor
     private func showDownloads() {
-        model.selectedTab = .downloads
+        model.show(.downloads)
     }
 }

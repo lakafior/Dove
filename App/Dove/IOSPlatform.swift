@@ -1,51 +1,51 @@
 import ActivityKit
+import DoveAppCore
 import DoveKit
 import Foundation
+import MediaPlayer
+import UIKit
 
-/// Tells the user about phone downloads: a local notification when a file or a download-only job ends
-/// (`DownloadNotices`), and one Live Activity while files are downloading.
-///
-/// No push and no server: the background `URLSession` wakes the app when a file finishes, which is when the
-/// notification is posted and the activity updated. While iOS keeps the app suspended mid-download, the session
-/// reports no progress, so the activity's bar moves while Dove is open and jumps when a file finishes.
+/// The iOS side of `AppPlatform`: system services through UIKit, and the integrations iOS has (the Files location,
+/// Spotlight, widgets, the downloads' Live Activity, Siri suggestions). Owns the router the tabs follow.
 @MainActor
-final class DownloadAlerts {
-    private let downloads: DownloadManager
-    private let jobs: DownloadJobs
+final class IOSPlatform: AppPlatform {
+    let router = AppRouter()
     private let activity = DownloadActivityController()
 
-    init(downloads: DownloadManager, jobs: DownloadJobs) {
-        self.downloads = downloads
-        self.jobs = jobs
-        downloads.onSettled { [weak self] record in self?.settled(record) }
-        jobs.onEnded = { [weak self] job, outcome in self?.post(DownloadNotices.notice(for: job, outcome: outcome), kind: .downloadOnly) }
-        observe()
+    /// Documents, which Files shows under On My iPhone › Dove.
+    var downloadsDirectory: URL { .documentsDirectory }
+
+    func canOpen(_ url: URL) -> Bool { UIApplication.shared.canOpenURL(url) }
+
+    func open(_ url: URL) async -> Bool { await UIApplication.shared.open(url) }
+
+    func show(_ destination: AppModel.Destination) { router.show(destination) }
+
+    func libraryChanged() { FilesLocation.libraryChanged() }
+
+    func servicesChanged(hasServices: Bool) async { await FilesLocation.update(hasServices: hasServices) }
+
+    func libraryUpdated(_ app: AppModel) {
+        SpotlightIndex.update(using: app)
+        WidgetSnapshotWriter.update(using: app)
     }
 
-    /// Re-armed after every change: `withObservationTracking` fires once.
-    private func observe() {
-        let records = withObservationTracking {
-            downloads.records
-        } onChange: { [weak self] in
-            Task { @MainActor in self?.observe() }
-        }
-        recordsChanged(records)
-    }
+    func accountsUpdated(_ app: AppModel) { WidgetSnapshotWriter.update(using: app) }
 
-    private func recordsChanged(_ records: [DownloadRecord]) {
-        if records.contains(where: { $0.state == .downloading }) { LocalNotifications.askIfNeeded(for: .downloads) }
+    func downloadsChanged(_ records: [DownloadRecord]) {
         activity.update(NotificationKind.liveActivity.isOn ? records : [])
     }
 
-    private func settled(_ record: DownloadRecord) {
-        // The job is looked up before `DownloadJobs` advances: a finished file still belongs to it here.
-        let job = jobs.job(for: record)
-        if let notice = DownloadNotices.notice(for: record, job: job) { post(notice, kind: job == nil ? .downloads : .downloadOnly) }
+    func audiobookStarted() { SiriSuggestions.listened() }
+
+    func nowPlayingArtwork(from data: Data) -> MPMediaItemArtwork? {
+        UIImage(data: data).map(Self.artwork)
     }
 
-    /// Each kind can be turned off in Settings › Notifications.
-    private func post(_ notice: DownloadNotice, kind: NotificationKind) {
-        LocalNotifications.post(kind, id: notice.id, title: notice.title, body: notice.body, thread: notice.thread)
+    /// Built outside the main actor: the system asks for the image on a background queue, and a closure made in a
+    /// main-actor method would trap there.
+    nonisolated private static func artwork(_ image: UIImage) -> MPMediaItemArtwork {
+        MPMediaItemArtwork(boundsSize: image.size) { @Sendable _ in image }
     }
 }
 

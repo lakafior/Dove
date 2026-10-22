@@ -1,33 +1,9 @@
 import AppIntents
 import CoreSpotlight
+import DoveAppCore
 import DoveKit
 import SwiftUI
 import UIKit
-
-// MARK: - Continue listening
-
-extension AppModel {
-    enum ContinueResult {
-        case playing(String)
-        case failed(String)
-    }
-
-    /// The audiobook listened to last that is still in the library, from its saved place (Siri, Shortcuts, the
-    /// app icon's Quick Action). Plays on if it is already loaded.
-    func continueAudiobook() async -> ContinueResult {
-        // A book that is loaded; music in the player gives way to the last book.
-        if let session = audiobook.session, !session.isMusic {
-            if !audiobook.isPlaying { audiobook.play() }
-            return .playing(session.title)
-        }
-        let books = library.books
-        guard let book = audiobook.listening().lazy.compactMap({ entry in books.first { $0.guess.key == entry.key } }).first else {
-            return .failed("No audiobook to continue. Start one in Dove first.")
-        }
-        if let refusal = await playAudiobook(book) { return .failed(refusal) }
-        return .playing(book.name)
-    }
-}
 
 // MARK: - Siri suggestions
 

@@ -1,21 +1,8 @@
+import DoveAppCore
 import DoveKit
 import SwiftUI
 
 struct WatchlistRoute: Hashable {}
-
-extension AppModel {
-    /// Adds or removes a title, then fetches what the watchlist needs for it (a series' episodes, a movie's dates).
-    func toggleWatchlist(_ media: MediaSummary, otherIDs: [String] = []) {
-        watchlist.toggle(media, otherIDs: otherIDs)
-        SpotlightIndex.update(using: self)
-        WidgetSnapshotWriter.update(using: self)
-        guard watchlist.contains(media) else { return }
-        Task {
-            await review.run(using: self)
-            await watchlist.refresh(using: self)
-        }
-    }
-}
 
 /// The bookmark in a title screen's toolbar.
 struct WatchlistButton: View {

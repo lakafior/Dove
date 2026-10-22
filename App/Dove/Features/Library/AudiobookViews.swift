@@ -1,4 +1,5 @@
 import AVKit
+import DoveAppCore
 import DoveKit
 import SwiftUI
 
@@ -62,38 +63,6 @@ struct AudiobookPlaySection: View {
     private func startOver() {
         player.clearPosition(for: book.guess.key)
         start()
-    }
-}
-
-extension AppModel {
-    /// Plays a book from where it was left: the first ready release with playable audio (services that list items
-    /// without files are asked for them). Returns why it could not, or nil once the player has it.
-    func playAudiobook(_ book: BookTitle) async -> String? {
-        var refusal: String?
-        for shelfItem in book.items where shelfItem.item.status == .ready {
-            var item = shelfItem.item
-            if item.files.isEmpty, let backend = backend(item.backend) {
-                do {
-                    item = try await backend.item(item.id)
-                } catch {
-                    refusal = error.localizedDescription
-                    continue
-                }
-            }
-            switch AudiobookTracks.tracks(in: item.files) {
-            case .success(let tracks):
-                audiobook.start(AudiobookPlayer.Session(
-                    key: book.guess.key, title: book.name, author: book.author,
-                    cover: book.book?.cover, item: item, tracks: tracks
-                ))
-                audiobook.isPresented = true
-                SiriSuggestions.listened()
-                return nil
-            case .failure(let reason):
-                refusal = reason.message
-            }
-        }
-        return refusal ?? "No release is ready on a service yet."
     }
 }
 

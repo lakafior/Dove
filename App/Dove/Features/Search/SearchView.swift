@@ -1,3 +1,4 @@
+import DoveAppCore
 import DoveKit
 import SwiftUI
 
@@ -8,6 +9,7 @@ import SwiftUI
 /// each category asks.
 struct SearchView: View {
     @Environment(AppModel.self) private var model
+    @Environment(AppRouter.self) private var router
     @State private var text = ""
     /// "Find by description": titles the on-device model suggested and a search confirmed (nil until asked).
     @State private var described: DescribedSearch.Found?
@@ -79,7 +81,7 @@ struct SearchView: View {
     }
 
     var body: some View {
-        NavigationStack(path: Bindable(model).searchPath) {
+        NavigationStack(path: Bindable(router).searchPath) {
             Group {
                 if showsResults {
                     resultsList
@@ -123,9 +125,9 @@ struct SearchView: View {
             .autocorrectionDisabled()
             .onSubmit(of: .search, handleSubmit)
             // "Search in Dove" from Siri, Shortcuts or a Quick Action.
-            .task(id: model.searchRequest) {
-                guard let request = model.searchRequest else { return }
-                model.searchRequest = nil
+            .task(id: router.searchRequest) {
+                guard let request = router.searchRequest else { return }
+                router.searchRequest = nil
                 text = request
                 if !request.isEmpty { handleSubmit() }
             }

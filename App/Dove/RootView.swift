@@ -1,8 +1,10 @@
 import CoreSpotlight
+import DoveAppCore
 import SwiftUI
 
 struct RootView: View {
     @Environment(AppModel.self) private var model
+    @Environment(AppRouter.self) private var router
     @Environment(\.scenePhase) private var scenePhase
     @State private var openedMessage: String?
 
@@ -11,8 +13,8 @@ struct RootView: View {
     }
 
     var body: some View {
-        @Bindable var model = model
-        TabView(selection: $model.selectedTab) {
+        @Bindable var router = router
+        TabView(selection: $router.selectedTab) {
             SearchView()
                 .audiobookMiniPlayer()
                 .tabItem { Label("Search", systemImage: "magnifyingglass") }

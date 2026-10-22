@@ -7,11 +7,11 @@ import Observation
 /// than `EpisodeScheduleStore.maxAge`, so the home screen itself still costs no calls. Never adds anything.
 @MainActor
 @Observable
-final class LibraryReviewModel {
+public final class LibraryReviewModel {
     /// By title ID; titles with nothing to report are left out.
-    private(set) var reviews: [String: TitleReview] = [:]
-    private(set) var schedules: [String: EpisodeSchedule] = [:]
-    private(set) var isRunning = false
+    public private(set) var reviews: [String: TitleReview] = [:]
+    public private(set) var schedules: [String: EpisodeSchedule] = [:]
+    public private(set) var isRunning = false
     private var dismissals: ReviewDismissals
 
     private let store = EpisodeScheduleStore(fileURL: URL.applicationSupportDirectory.appending(path: "Dove/library-episodes.json"))
@@ -19,12 +19,12 @@ final class LibraryReviewModel {
     /// Metadata addons and TMDB answer quickly, but a library can hold dozens of series.
     private static let concurrency = 3
 
-    init() {
+    public init() {
         dismissals = ReviewDismissals.load(from: Self.dismissalsURL) ?? ReviewDismissals()
     }
 
     /// Refreshes stale episode lists of the library's matched series, then reviews every title.
-    func run(using app: AppModel) async {
+    public func run(using app: AppModel) async {
         guard !isRunning else { return }
         isRunning = true
         defer { isRunning = false }
@@ -59,14 +59,14 @@ final class LibraryReviewModel {
     }
 
     /// The title screen loads the series' metadata anyway: it refreshes the stored list for free.
-    func record(_ detail: MediaDetail, for mediaID: String) async {
+    public func record(_ detail: MediaDetail, for mediaID: String) async {
         guard !detail.episodes.isEmpty else { return }
         let schedule = EpisodeSchedule(detail: detail)
         await store.set(schedule, for: mediaID)
         schedules[mediaID] = schedule
     }
 
-    func recompute(_ titles: [LibraryTitle]) {
+    public func recompute(_ titles: [LibraryTitle]) {
         dismissals.keep(only: Set(titles.map(\.id)))
         var reviews: [String: TitleReview] = [:]
         for title in titles {
@@ -77,18 +77,18 @@ final class LibraryReviewModel {
     }
 
     /// One title, with pack files the title screen already loaded (exact instead of presumed).
-    func review(of title: LibraryTitle, files: [ShelfItem.ID: [LibraryFile]] = [:]) -> TitleReview {
+    public func review(of title: LibraryTitle, files: [ShelfItem.ID: [LibraryFile]] = [:]) -> TitleReview {
         LibraryReview.review(title, schedule: schedule(for: title), files: files, dismissals: dismissals)
     }
 
-    func schedule(for title: LibraryTitle) -> EpisodeSchedule? {
+    public func schedule(for title: LibraryTitle) -> EpisodeSchedule? {
         title.media.flatMap { schedules[$0.id] }
     }
 
     // MARK: - Home
 
     /// Series with new or missing episodes: new ones first (latest air date first), then the rest by name.
-    func episodeTitles(in titles: [LibraryTitle]) -> [(title: LibraryTitle, review: TitleReview)] {
+    public func episodeTitles(in titles: [LibraryTitle]) -> [(title: LibraryTitle, review: TitleReview)] {
         titles.compactMap { title in reviews[title.id].flatMap { $0.hasEpisodes ? (title, $0) : nil } }
             .sorted { a, b in
                 switch (a.review.latestAired, b.review.latestAired) {
@@ -101,32 +101,32 @@ final class LibraryReviewModel {
     }
 
     /// Titles held in a weak quality, newest first (the library order).
-    func weakTitles(in titles: [LibraryTitle]) -> [(title: LibraryTitle, review: TitleReview)] {
+    public func weakTitles(in titles: [LibraryTitle]) -> [(title: LibraryTitle, review: TitleReview)] {
         titles.compactMap { title in reviews[title.id].flatMap { $0.weak.isEmpty ? nil : (title, $0) } }
     }
 
     // MARK: - Dismissing
 
     /// Hides the episodes listed now; newer ones still show when they air.
-    func dismissEpisodes(of title: LibraryTitle, _ episodes: [Episode]) {
+    public func dismissEpisodes(of title: LibraryTitle, _ episodes: [Episode]) {
         dismissals.episodes[title.id, default: []].formUnion(episodes.map { LibraryReview.key(season: $0.season, number: $0.number) })
         save(title)
     }
 
     /// Accepts the quality held now; a change in the library (another release) asks again.
-    func dismissQuality(of title: LibraryTitle, _ quality: ReleaseQuality) {
+    public func dismissQuality(of title: LibraryTitle, _ quality: ReleaseQuality) {
         dismissals.quality[title.id] = quality.label
         save(title)
     }
 
     /// Brings back everything set aside for a title.
-    func restore(_ title: LibraryTitle) {
+    public func restore(_ title: LibraryTitle) {
         dismissals.episodes[title.id] = nil
         dismissals.quality[title.id] = nil
         save(title)
     }
 
-    func hasDismissed(_ title: LibraryTitle) -> Bool {
+    public func hasDismissed(_ title: LibraryTitle) -> Bool {
         dismissals.episodes[title.id] != nil || dismissals.quality[title.id] != nil
     }
 

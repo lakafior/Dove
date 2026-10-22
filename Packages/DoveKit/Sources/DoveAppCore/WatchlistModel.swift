@@ -8,10 +8,10 @@ import Observation
 /// dates from TMDB, once every 12 h per movie. Never adds anything.
 @MainActor
 @Observable
-final class WatchlistModel {
-    private(set) var list: Watchlist
+public final class WatchlistModel {
+    public private(set) var list: Watchlist
     /// By entry ID, kept on this device.
-    private(set) var releases: [String: MovieRelease]
+    public private(set) var releases: [String: MovieRelease]
 
     private let keychain: KeychainStore
     private static let releasesURL = URL.applicationSupportDirectory.appending(path: "Dove/watchlist-releases.json")
@@ -20,7 +20,7 @@ final class WatchlistModel {
     private var announced: [String: String]
     private static let releaseAge: TimeInterval = 12 * 3600
 
-    init(keychain: KeychainStore) {
+    public init(keychain: KeychainStore) {
         self.keychain = keychain
         list = Watchlist.load(from: keychain)
         releases = (try? JSONDecoder().decode([String: MovieRelease].self, from: Data(contentsOf: Self.releasesURL))) ?? [:]
@@ -28,14 +28,14 @@ final class WatchlistModel {
     }
 
     /// After a settings import or another device's change.
-    func reload() {
+    public func reload() {
         list = Watchlist.load(from: keychain)
     }
 
-    func contains(_ media: MediaSummary) -> Bool { list.contains(media) }
+    public func contains(_ media: MediaSummary) -> Bool { list.contains(media) }
 
     /// Adds or removes. `otherIDs`: the same title under other IDs (the detail's IMDb ID for a TMDB result).
-    func toggle(_ media: MediaSummary, otherIDs: [String] = []) {
+    public func toggle(_ media: MediaSummary, otherIDs: [String] = []) {
         if list.contains(media) {
             list.remove(media)
         } else {
@@ -45,23 +45,23 @@ final class WatchlistModel {
         save()
     }
 
-    func remove(_ entry: Watchlist.Entry) {
+    public func remove(_ entry: Watchlist.Entry) {
         list.remove(ids: [entry.id])
         save()
     }
 
     /// Movies the library already holds: added to a service is not watched, so this is the user's call.
-    func removeMoviesInLibrary(_ titles: [LibraryTitle]) {
+    public func removeMoviesInLibrary(_ titles: [LibraryTitle]) {
         let held = list.entries.filter { $0.media.type == .movie && Watchlist.title(for: $0, in: titles) != nil }
         list.remove(ids: Set(held.map(\.id)))
         save()
     }
 
-    func moviesInLibrary(_ titles: [LibraryTitle]) -> Int {
+    public func moviesInLibrary(_ titles: [LibraryTitle]) -> Int {
         list.entries.filter { $0.media.type == .movie && Watchlist.title(for: $0, in: titles) != nil }.count
     }
 
-    func status(of entry: Watchlist.Entry, using app: AppModel) -> WatchlistStatus? {
+    public func status(of entry: Watchlist.Entry, using app: AppModel) -> WatchlistStatus? {
         let title = Watchlist.title(for: entry, in: app.library.titles)
         return WatchlistStatus.of(
             entry,
@@ -73,12 +73,12 @@ final class WatchlistModel {
     }
 
     /// Series on the list, for `LibraryReviewModel` to keep their episode lists.
-    var series: [MediaSummary] {
+    public var series: [MediaSummary] {
         list.entries.filter { $0.media.type == .series }.map(\.media)
     }
 
     /// Release dates for movies (TMDB only), then a notice for whatever has news.
-    func refresh(using app: AppModel) async {
+    public func refresh(using app: AppModel) async {
         if let tmdb = app.addonSet.tmdb {
             let stale = list.entries.filter { entry in
                 entry.media.type == .movie && (releases[entry.id].map { Date.now.timeIntervalSince($0.fetchedAt) > Self.releaseAge } ?? true)
