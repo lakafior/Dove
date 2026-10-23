@@ -62,6 +62,8 @@
 	<string>1</string>
 	<key>CoreSpotlightContinuation</key>
 	<true/>
+	<key>DoveAppGroup</key>
+	<string>group.net.smigi.dove</string>
 	<key>DoveKeychainGroup</key>
 	<string>$(AppIdentifierPrefix)net.smigi.dove.shared</string>
 	<key>NSAppTransportSecurity</key>

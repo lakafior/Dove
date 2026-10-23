@@ -28,9 +28,14 @@ struct SnapshotProvider: TimelineProvider {
 }
 
 /// An image the app copied next to the snapshot.
-func snapshotImage(_ name: String?) -> UIImage? {
+func snapshotImage(_ name: String?) -> Image? {
     guard let name, let container = SharedConfiguration.appGroupContainer else { return nil }
-    return UIImage(contentsOfFile: WidgetSnapshot.imagesURL(in: container).appending(path: name).path())
+    let path = WidgetSnapshot.imagesURL(in: container).appending(path: name).path()
+    #if canImport(UIKit)
+    return UIImage(contentsOfFile: path).map(Image.init(uiImage:))
+    #else
+    return NSImage(contentsOfFile: path).map(Image.init(nsImage:))
+    #endif
 }
 
 private struct EmptyWidget: View {
@@ -70,7 +75,11 @@ struct ServicesWidget: Widget {
         }
         .configurationDisplayName("Services")
         .description("Your debrid and Usenet services: online or not, and days of premium left.")
+        #if os(iOS)
         .supportedFamilies([.systemSmall, .systemMedium, .accessoryInline, .accessoryRectangular, .accessoryCircular])
+        #else
+        .supportedFamilies([.systemSmall, .systemMedium])
+        #endif
     }
 }
 
@@ -81,6 +90,7 @@ private struct ServicesView: View {
     var body: some View {
         if let snapshot, !snapshot.services.isEmpty {
             switch family {
+            #if os(iOS)
             case .accessoryInline:
                 if let soonest = snapshot.soonestExpiry {
                     Text("\(soonest.backend.abbreviation) \(soonest.daysLeft!) d")
@@ -105,6 +115,7 @@ private struct ServicesView: View {
                             .font(.caption)
                     }
                 }
+            #endif
             default:
                 let rows = family == .systemSmall ? 5 : 8
                 VStack(alignment: .leading, spacing: 4) {
@@ -248,7 +259,7 @@ private struct WatchlistWidgetView: View {
     private func poster(_ name: String?, width: CGFloat) -> some View {
         Group {
             if let image = snapshotImage(name) {
-                Image(uiImage: image).resizable().aspectRatio(contentMode: .fill)
+                image.resizable().aspectRatio(contentMode: .fill)
             } else {
                 Rectangle().fill(.quaternary)
             }
@@ -303,7 +314,7 @@ private struct ListeningWidgetView: View {
     private func cover(_ book: WidgetSnapshot.Listening, side: CGFloat) -> some View {
         Group {
             if let image = snapshotImage(book.image) {
-                Image(uiImage: image).resizable().aspectRatio(contentMode: .fill)
+                image.resizable().aspectRatio(contentMode: .fill)
             } else {
                 ZStack {
                     Rectangle().fill(.quaternary)

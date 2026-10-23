@@ -268,6 +268,7 @@ targets:
       - package: DoveKit
       - package: DoveKit
         product: DoveAppCore
+      - target: DoveMacWidgets
     info:
       path: App/Mac/Info.plist
       properties:
@@ -296,6 +297,8 @@ targets:
         # "Search in Dove" under Spotlight's Search in Apps (CSQueryContinuationActionType).
         CoreSpotlightContinuation: true
         NSUserActivityTypes: [net.smigi.dove.view]
+        # Read by SharedConfiguration.appGroupContainer: where the app writes the widgets' WidgetSnapshot.
+        DoveAppGroup: group.net.smigi.dove
         NSLocalNetworkUsageDescription: Dove talks to servers you add on your home network, such as Jackett, Prowlarr or nzbdav.
         NSAppleMusicUsageDescription: Dove searches Apple Music's catalog for album covers, titles and track lists. It does not read or change your music library.
         NSAppTransportSecurity:
@@ -313,6 +316,8 @@ targets:
         # Folders the user picks (other download places, .torrent/.nzb files) and ~/Downloads, the default place.
         com.apple.security.files.user-selected.read-write: true
         com.apple.security.files.downloads.read-write: true
+        # The widgets read the app's WidgetSnapshot from here (WidgetSnapshotWriter).
+        com.apple.security.application-groups: [group.net.smigi.dove]
         # Security-scoped bookmarks: the folders picked in Settings › Save to stay reachable after a restart.
         com.apple.security.files.bookmarks.app-scope: true
         keychain-access-groups: [$(AppIdentifierPrefix)net.smigi.dove.shared]
@@ -329,6 +334,42 @@ targets:
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
         ENABLE_HARDENED_RUNTIME: YES
+        ENABLE_USER_SCRIPT_SANDBOXING: YES
+        SWIFT_STRICT_CONCURRENCY: complete
+
+# Desktop widgets (docs/macos.md): the iPhone's home widgets, drawn from the same WidgetSnapshot in the App Group.
+  DoveMacWidgets:
+    type: app-extension
+    platform: macOS
+    deploymentTarget: "26.0"
+    sources:
+      - App/MacWidgets
+      - path: App/DoveWidgets/HomeWidgets.swift
+      - App/Shared/BackendBadge.swift
+      - App/Activity/ContinueAudiobookIntent.swift
+    dependencies:
+      - package: DoveKit
+    info:
+      path: App/MacWidgets/Info.plist
+      properties:
+        CFBundleDisplayName: Dove
+        # Read by SharedConfiguration.appGroupContainer: the widgets draw the app's WidgetSnapshot.
+        DoveAppGroup: group.net.smigi.dove
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+    entitlements:
+      path: App/MacWidgets/DoveMacWidgets.entitlements
+      properties:
+        com.apple.security.app-sandbox: true
+        com.apple.security.application-groups: [group.net.smigi.dove]
+    settings:
+      base:
+        # ContinueAudiobookIntent's widget copy does not reach AppModel.
+        SWIFT_ACTIVE_COMPILATION_CONDITIONS: $(inherited) WIDGET_EXTENSION
+        PRODUCT_BUNDLE_IDENTIFIER: net.smigi.dove.widgets
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_CFBundleDisplayName: Dove
+        SKIP_INSTALL: YES
         ENABLE_USER_SCRIPT_SANDBOXING: YES
         SWIFT_STRICT_CONCURRENCY: complete
 

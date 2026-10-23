@@ -29,9 +29,12 @@ final class MacPlatform: AppPlatform {
     func servicesChanged(hasServices: Bool) async {}
 
     /// Library titles, books and the watchlist in Spotlight (`SpotlightIndex`, shared with the iPhone).
-    func libraryUpdated(_ app: AppModel) { SpotlightIndex.update(using: app) }
+    func libraryUpdated(_ app: AppModel) {
+        SpotlightIndex.update(using: app)
+        WidgetSnapshotWriter.update(using: app)
+    }
 
-    func accountsUpdated(_ app: AppModel) {}
+    func accountsUpdated(_ app: AppModel) { WidgetSnapshotWriter.update(using: app) }
 
     func downloadsChanged(_ records: [DownloadRecord]) { dock.update(records) }
 

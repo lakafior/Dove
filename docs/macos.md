@@ -389,6 +389,16 @@ Split in three: Library, then Downloads, then Search → sources → add.
   the book, album and game pages and under the name results, in a sheet. Compiled; the browser, AirPlay and the pane
   drag not tried (no browse-only plugin or playing session at hand).
 
+- **Desktop widgets** (2026-10-23, compiles unsigned; not run): `DoveMacWidgets` (app extension, `App/MacWidgets`, embedded in
+  `DoveMac`) shows the iPhone's Services, Library, Watchlist and Listening widgets: `HomeWidgets.swift` is shared (the image
+  helper is platform-neutral, the Lock Screen families are iOS only); the Live Activity and Control Center controls are not
+  on the Mac. `WidgetSnapshotWriter` moved to `App/Components` and `MacPlatform` calls it after library and account
+  refreshes, so the Mac writes the same `WidgetSnapshot` into the App Group `group.net.smigi.dove` (`DoveAppGroup` in
+  the Info.plist, the application-groups entitlement on the app and the extension, both sandboxed). To run it: open the
+  project in Xcode, let automatic signing create the macOS profiles for `net.smigi.dove.widgets` and add the App Group to
+  `net.smigi.dove` (the command line has no account: "No profiles for 'net.smigi.dove.widgets'"), run DoveMac once, then
+  Edit Widgets on the desktop.
+
 ## 9. Where to pick up (2026-10-23)
 
 Done since phase 1 (details in §8): Library pages and item screens, Downloads and On services, Search in every
@@ -398,8 +408,8 @@ focus, download folders outside `~/Downloads`, Services menu, Spotlight, App Int
 
 Left:
 
-1. **Phase 5**: the File Provider location in Finder (`DoveFiles` for macOS) and desktop widgets (`DoveWidgets` for
-   macOS). Both are new extension targets: App Group and provisioning to settle first.
+1. **Phase 5**: the File Provider location in Finder (`DoveFiles` for macOS); desktop widgets are built, waiting for
+   signing and a first run.
 2. **Phase 6**: Developer ID, notarization, update check against GitHub Releases, then CI for both platforms (#6).
 3. Small items: none planned.
 4. Not yet seen working on the owner's Mac: Services › Add to Dove, Spotlight results, the intents in Shortcuts and
