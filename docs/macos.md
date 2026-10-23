@@ -298,6 +298,24 @@ Split in three: Library, then Downloads, then Search → sources → add.
   the sources table: toolbar button, context menu Play / Play in… (addon link, or an NZB through Dove's nzbdav job as
   on the iPhone; a compressed archive points to Add Only To instead of the iPhone's one-tap fallback).
 
+- **Menu bar extra** (2026-10-23, built, not run yet): `MacMenuBar.swift`, a `MenuBarExtra` in menu style. Now playing
+  on top (title, artist, Play/Pause, track or ±15/30 s), then the running downloads with percent and download-only jobs
+  waiting for their service, Show Downloads, Add from Clipboard, Open Dove (opens a window if none is left), Quit. The
+  icon is the bird (`BirdIcon`, drawn as an image): while something downloads it fills from the bottom with the
+  bytes that arrived, and turns green for 4 s when the last one is done. Two switches at the bottom of the Settings sidebar:
+  Show in Menu Bar and Keep Running When the Window Closes (`MacMenuBarSettings`, both on by default; off = the app
+  quits with its last window).
+
+- **Shortcuts** (2026-10-23, built, not run yet; `MacShortcuts.swift`): pages publish `MacPageCommands` as a focused scene
+  value (Library: download, show in Finder, open; sources table: add, play; Downloads: show in Finder) and the menus
+  read it, disabled when the page has nothing to offer. Go: ⌃⌘1, ⌃⌘2, ⌃⌘4, ⌃⌘5 (Search, Library, On Services,
+  Watchlist) and ⌘D for Downloads, ⌘[ back (`MacRouter.goBack`; no forward: a `NavigationPath` cannot be refilled). Item: ⌘I open, ⌘↩ add,
+  ⌥↩ play, ⇧⌘D download, ⇧⌘R show in Finder. Playback: ⌥⌘→ / ⌥⌘← next/previous track or chapter (⌘→ would take
+  the cursor keys from text fields). Space: pauses or resumes the selected downloads, else plays or pauses the audio
+  player (key presses on the table and the window, not menu keys, so text fields keep it). ⌘⌫ in Downloads is
+  Item › Remove from List (a key press never reached it: the table swallows ⌘⌫). ⌘A selects all through
+  `onCommand(selectAll:)` on the Library, the sources table and Downloads. ⌘1…⌘7 stay with the search categories, ⌥⌘1/2 with the view mode.
+
 ## 9. Where to pick up (2026-10-22)
 
 1. **Phase 2c, the rest of Search**: Books, Audiobooks, Music, Games (metadata first, then the indexers:

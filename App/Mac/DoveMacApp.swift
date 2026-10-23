@@ -7,6 +7,7 @@ import UserNotifications
 @main
 struct DoveMacApp: App {
     @NSApplicationDelegateAdaptor private var delegate: MacAppDelegate
+    @AppStorage(MacMenuBarSettings.showExtra) private var showMenuBarExtra = true
 
     var body: some Scene {
         // A window group (not `Window`), so a click on the Dock icon brings it back after it was closed; File › New
@@ -25,6 +26,16 @@ struct DoveMacApp: App {
             SourceIntakeCommands(model: delegate.model, router: delegate.platform.router)
             SearchCommands(router: delegate.platform.router)
             ViewModeCommands()
+            MacShortcutCommands(model: delegate.model, router: delegate.platform.router)
+        }
+
+        MenuBarExtra(isInserted: $showMenuBarExtra) {
+            MacMenuBar()
+                .environment(delegate.model)
+                .environment(delegate.platform.router)
+        } label: {
+            MacMenuBarLabel()
+                .environment(delegate.model)
         }
 
         Settings {
@@ -52,8 +63,8 @@ final class MacAppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationC
         UNUserNotificationCenter.current().delegate = self
     }
 
-    /// Dove keeps running after its window closes (downloads go on); the Dock icon or the menu bar bring it back.
-    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { false }
+    /// Dove keeps running after its window closes (downloads go on, unless turned off in Settings); the Dock icon or the menu bar bring it back.
+    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { !MacMenuBarSettings.keepsRunning }
 
     /// What iOS does at launch: addons first (titles are matched through them), then the library from its cache and
     /// the services, account days and host lists.

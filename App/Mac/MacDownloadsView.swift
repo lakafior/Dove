@@ -90,6 +90,26 @@ struct MacDownloadsView: View {
         .onDeleteCommand {
             for id in selection { downloads.remove(id, deletingFile: false) }
         }
+        // Space pauses what runs in the selection, or resumes what is paused or failed.
+        .onKeyPress(.space) {
+            let chosen = downloads.records.filter { selection.contains($0.id) }
+            guard !chosen.isEmpty else { return .ignored }
+            let running = chosen.filter { $0.state == .downloading }
+            if running.isEmpty { resume(chosen.filter { $0.state == .paused || $0.isFailed }) } else { running.forEach { downloads.pause($0.id) } }
+            return .handled
+        }
+        .focusedSceneValue(\.pageCommands, MacPageCommands(
+            reveal: revealAction,
+            remove: selection.isEmpty ? nil : { for id in selection { downloads.remove(id, deletingFile: false) } }
+        ))
+        // ⌘A. ⌘⌫ is Item › Remove from List: the table never sees it as a key press.
+        .onCommand(#selector(NSResponder.selectAll(_:))) { selection = Set(downloads.records.map(\.id)) }
+    }
+
+    /// ⇧⌘R: the selected files in the Finder.
+    private var revealAction: (() -> Void)? {
+        let files = downloads.records.filter { selection.contains($0.id) }.compactMap(downloads.fileURL)
+        return files.isEmpty ? nil : { NSWorkspace.shared.activateFileViewerSelecting(files) }
     }
 
     @ViewBuilder

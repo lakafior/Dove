@@ -28,6 +28,7 @@ struct MacSettingsView: View {
                         }
                     }
                 }
+                MacMenuBarToggles()
                 Text("Dove \(SettingsCatalog.version)")
                     .font(.caption)
                     .foregroundStyle(.secondary)

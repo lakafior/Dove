@@ -54,6 +54,12 @@ struct MacRootView: View {
             openSettings()
         }
         .onOpenURL { model.open($0) }
+        // Space plays or pauses the audio player; Downloads and text fields take it first.
+        .onKeyPress(.space) {
+            guard model.audiobook.session != nil else { return .ignored }
+            model.audiobook.togglePlayPause()
+            return .handled
+        }
         .dropDestination(for: URL.self) { urls, _ in
             MacSourceIntake.add(urls: urls, using: model)
         }

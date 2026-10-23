@@ -45,6 +45,10 @@ struct MacLibraryView: View {
                 MacLibraryTitleTable(filter: filter, actions: actions, selection: $selection)
             }
         }
+        .focusedSceneValue(\.pageCommands, pageCommands)
+        .onCommand(#selector(NSResponder.selectAll(_:))) {
+            selection = Set(TitleRow.rows(filter: filter, library: library).map(\.id))
+        }
         .navigationTitle(service?.displayName ?? category?.title ?? "Library")
         .onChange(of: category) { selection = [] }
         .navigationSubtitle(statusLine)
@@ -125,6 +129,22 @@ struct MacLibraryView: View {
             }
         }
         .help("Filters")
+    }
+
+    /// ⌘D, ⇧⌘R and ⌘I over the selection: what a service holds downloads, what is already on this Mac shows in the Finder.
+    private var pageCommands: MacPageCommands {
+        let targets = selectedTargets
+        let items = targets.flatMap(\.items)
+        let ready = items.filter { item in
+            guard !item.item.backend.isOnDevice, case .ready = item.item.status else { return false }
+            return true
+        }
+        let local = items.filter(\.item.backend.isOnDevice)
+        return MacPageCommands(
+            download: ready.isEmpty ? nil : { actions.download(ready) },
+            reveal: local.isEmpty ? nil : { actions.reveal(local) },
+            open: targets.first.map { first in { router.openLibrary(first) } }
+        )
     }
 
     /// The selected titles, in the list's order.

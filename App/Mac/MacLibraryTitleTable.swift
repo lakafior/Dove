@@ -15,6 +15,9 @@ struct MacLibraryTitleTable: View {
     /// The Library page's selection, shared with the icons and the toolbar's Share and Action menu.
     @Binding var selection: Set<TitleRow.ID>
     @State private var order = [KeyPathComparator(\TitleRow.added, order: .reverse)]
+    /// The table takes the keyboard focus once something is selected, so ⌘A and the arrow keys act on it, not on the
+    /// toolbar's Filter field.
+    @FocusState private var focused: Bool
 
     var body: some View {
         let rows = TitleRow.rows(filter: filter, library: model.library).sorted(using: order)
@@ -46,6 +49,8 @@ struct MacLibraryTitleTable: View {
             }
             .width(min: 80, ideal: 100)
         }
+        .focused($focused)
+        .onChange(of: selection) { if !selection.isEmpty { focused = true } }
         .contextMenu(forSelectionType: TitleRow.ID.self) { ids in
             let chosen = rows.filter { ids.contains($0.id) }
             actions.targetMenu(chosen.map(\.target)) { router.openLibrary($0) }

@@ -60,6 +60,10 @@ struct MacSourcesTable: View {
                     .help("Adds wait for the service, download the files to this Mac, then delete the item from the service.")
             }
         }
+        .focusedSceneValue(\.pageCommands, MacPageCommands(
+            add: selectedGroups.isEmpty ? nil : { selectedGroups.forEach { add($0, only: nil) } },
+            play: selectedGroups.count == 1 && canPlay(selectedGroups[0]) ? { play(selectedGroups[0]) } : nil
+        ))
         .task(id: query.id + "\(query.scope.map { "\($0)" } ?? "")") { await load() }
     }
 
@@ -109,6 +113,7 @@ struct MacSourcesTable: View {
             }
             .width(min: 80, ideal: 130)
         }
+        .onCommand(#selector(NSResponder.selectAll(_:))) { selection = Set(sorted.map(\.id)) }
         .contextMenu(forSelectionType: StreamGroup.ID.self) { ids in
             let chosen = shown.filter { ids.contains($0.id) }
             if let group = chosen.first, chosen.count == 1 {

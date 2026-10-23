@@ -87,6 +87,15 @@ final class MacRouter {
         libraryPath = NavigationPath()
     }
 
+    /// ⌘[: one screen back on the page in front (the Library's or the Search stack).
+    func goBack() {
+        switch selection {
+        case .search: if !searchPath.isEmpty { searchPath.removeLast() }
+        case .library, .service: if !libraryPath.isEmpty { libraryPath.removeLast() }
+        default: break
+        }
+    }
+
     /// Pushes an item screen over the Library page: a season, an album, an artist, a title found by search.
     func pushLibrary<Value: Hashable>(_ value: Value) {
         libraryPath.append(value)
