@@ -100,6 +100,7 @@ struct MacAlbumView: View {
                     }
                     .width(min: 60, ideal: 80)
                 }
+.takesFocusWhenSelected(selection)
                 .contextMenu(forSelectionType: AlbumTrack.ID.self) { ids in
                     if let track = tracks.first(where: { ids.contains($0.id) }) {
                         Button("Play from This Track", systemImage: "play") { playTrack(track, of: album) }

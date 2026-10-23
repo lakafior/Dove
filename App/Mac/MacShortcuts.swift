@@ -99,3 +99,23 @@ struct MacShortcutCommands: Commands {
         if player.session?.isMusic == true { player.previousTrack() } else { player.previousChapter() }
     }
 }
+
+/// A click on a row selects it, but the table does not always become the first responder (the toolbar's Filter field or
+/// the sidebar keeps it): the selection then shows grey, and ⌘A, ⌫ and the arrow keys go elsewhere. Taking the focus when
+/// the selection changes makes a click select in blue, as in the Finder.
+private struct TakesFocusWhenSelected<ID: Hashable>: ViewModifier {
+    let selection: Set<ID>
+    @FocusState private var focused: Bool
+
+    func body(content: Content) -> some View {
+        content
+            .focused($focused)
+            .onChange(of: selection) { if !selection.isEmpty { focused = true } }
+    }
+}
+
+extension View {
+    func takesFocusWhenSelected<ID: Hashable>(_ selection: Set<ID>) -> some View {
+        modifier(TakesFocusWhenSelected(selection: selection))
+    }
+}

@@ -80,6 +80,7 @@ struct MacDownloadsView: View {
             }
             .width(min: 110, ideal: 140)
         }
+.takesFocusWhenSelected(selection)
         .contextMenu(forSelectionType: DownloadRecord.ID.self) { ids in
             menu(for: downloads.records.filter { ids.contains($0.id) })
         } primaryAction: { ids in

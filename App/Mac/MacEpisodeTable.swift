@@ -35,6 +35,7 @@ struct MacEpisodeTable: View {
             TableColumn("") { row in actionCell(row) }
                 .width(min: 100, ideal: 130)
         }
+.takesFocusWhenSelected(selection)
         .contextMenu(forSelectionType: EpisodeRow.ID.self) { ids in
             let selected = chosen(ids, in: rows)
             if selected.count == 1, let row = selected.first {

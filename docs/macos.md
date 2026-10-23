@@ -316,6 +316,11 @@ Split in three: Library, then Downloads, then Search → sources → add.
   Item › Remove from List (a key press never reached it: the table swallows ⌘⌫). ⌘A selects all through
   `onCommand(selectAll:)` on the Library, the sources table and Downloads. ⌘1…⌘7 stay with the search categories, ⌥⌘1/2 with the view mode.
 
+- **Focus after a click** (2026-10-23): a click on a row often left the Filter field or the sidebar as first responder, so
+  the selection drew grey and ⌘A, ⌫ and the arrows went elsewhere. `takesFocusWhenSelected` (`MacShortcuts.swift`)
+  moves the focus into the table or icon grid whenever its selection changes; it is on every table of the Mac app.
+  Checked by clicking the Filter field, then a row: blue, and ⌘A selects all.
+
 ## 9. Where to pick up (2026-10-22)
 
 1. **Phase 2c, the rest of Search**: Books, Audiobooks, Music, Games (metadata first, then the indexers:

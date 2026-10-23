@@ -91,6 +91,7 @@ struct MacHeldReleases: View {
             TableColumn("") { node in actionCell(node) }
                 .width(min: 90, ideal: 130)
         }
+.takesFocusWhenSelected(selection)
         .contextMenu(forSelectionType: ReleaseNode.ID.self) { ids in
             menu(for: chosen(ids, in: nodes))
         } primaryAction: { ids in

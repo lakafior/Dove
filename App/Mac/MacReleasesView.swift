@@ -205,6 +205,7 @@ struct MacReleasesTable: View {
             }
             .width(min: 80, ideal: 150)
         }
+.takesFocusWhenSelected(selection)
         .contextMenu(forSelectionType: StreamGroup.ID.self) { ids in
             let chosen = list.visible.filter { ids.contains($0.id) }
             if !chosen.isEmpty {

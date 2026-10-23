@@ -53,6 +53,7 @@ struct MacOnServicesView: View {
                     }
                     .width(min: 70, ideal: 90)
                 }
+.takesFocusWhenSelected(selection)
                 .contextMenu(forSelectionType: ShelfItem.ID.self) { ids in
                     let chosen = items.filter { ids.contains($0.id) }
                     if !chosen.isEmpty {

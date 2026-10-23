@@ -134,6 +134,7 @@ struct MacArtistView: View {
             }
             .width(min: 90, ideal: 120)
         }
+.takesFocusWhenSelected(selection)
         .contextMenu(forSelectionType: AlbumTitle.ID.self) { ids in
             albumMenu(artist.albums.filter { ids.contains($0.id) })
         } primaryAction: { ids in

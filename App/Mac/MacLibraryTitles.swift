@@ -69,6 +69,7 @@ struct MacLibraryTitles: View {
         }
         .focusable()
         .focusEffectDisabled()
+        .takesFocusWhenSelected(selection)
         .onKeyPress(.return) {
             guard let first = order.first(where: { selection.contains($0.rowID) }) else { return .ignored }
             router.openLibrary(first)

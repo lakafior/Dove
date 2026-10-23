@@ -113,6 +113,7 @@ struct MacSourcesTable: View {
             }
             .width(min: 80, ideal: 130)
         }
+.takesFocusWhenSelected(selection)
         .onCommand(#selector(NSResponder.selectAll(_:))) { selection = Set(sorted.map(\.id)) }
         .contextMenu(forSelectionType: StreamGroup.ID.self) { ids in
             let chosen = shown.filter { ids.contains($0.id) }
