@@ -2,58 +2,6 @@ import DoveAppCore
 import DoveKit
 import SwiftUI
 
-/// Title screen: the series' new and missing episodes, one row per season (one episode opens its sources, several
-/// open `MissingSeasonView`). Never adds anything by itself.
-struct MissingEpisodesSection: View {
-    @Environment(AppModel.self) private var model
-    let title: LibraryTitle
-    let review: TitleReview
-    /// The series' metadata with IMDb IDs (the title screen's detail), for the source search.
-    let media: MediaSummary
-
-    private var schedule: EpisodeSchedule? { model.review.schedule(for: title) }
-
-    var body: some View {
-        let gaps = review.new + review.missing
-        if !gaps.isEmpty {
-            Section {
-                rows(gaps)
-            } header: {
-                Text(review.new.isEmpty ? "Missing episodes" : "New episodes")
-            } footer: {
-                Text("Aired episodes your library does not hold. Hidden ones come back only if newer episodes air.")
-            }
-        }
-    }
-
-    @ViewBuilder
-    private func rows(_ all: [Episode]) -> some View {
-        ForEach(Self.seasons(all), id: \.self) { season in
-            let episodes = all.filter { $0.season == season }.sorted { $0.number < $1.number }
-            let isNew = episodes.allSatisfy { episode in review.new.contains { $0.id == episode.id } }
-            NavigationLink {
-                if episodes.count == 1, let episode = episodes.first {
-                    EpisodeSourcesView(media: media, episode: episode)
-                } else {
-                    MissingSeasonView(media: media, season: season, episodes: episodes, schedule: schedule)
-                }
-            } label: {
-                MissingRow(label: LibraryReview.label(episodes, schedule: schedule), count: episodes.count, isNew: isNew,
-                           aired: episodes.compactMap(\.released).max())
-            }
-            .disabled(!model.addonSet.hasStreams)
-        }
-        Button("Hide these", systemImage: "eye.slash") {
-            model.review.dismissEpisodes(of: title, all)
-        }
-        .font(.subheadline)
-    }
-
-    static func seasons(_ episodes: [Episode]) -> [Int] {
-        Array(Set(episodes.map(\.season))).sorted()
-    }
-}
-
 private struct MissingRow: View {
     let label: String
     let count: Int
@@ -154,6 +102,58 @@ struct EpisodeSourcesView: View {
             searchTitle: media.name,
             media: media
         )
+    }
+}
+
+/// Title screen: the series' new and missing episodes, one row per season (one episode opens its sources, several
+/// open `MissingSeasonView`). Never adds anything by itself.
+struct MissingEpisodesSection: View {
+    @Environment(AppModel.self) private var model
+    let title: LibraryTitle
+    let review: TitleReview
+    /// The series' metadata with IMDb IDs (the title screen's detail), for the source search.
+    let media: MediaSummary
+
+    private var schedule: EpisodeSchedule? { model.review.schedule(for: title) }
+
+    var body: some View {
+        let gaps = review.new + review.missing
+        if !gaps.isEmpty {
+            Section {
+                rows(gaps)
+            } header: {
+                Text(review.new.isEmpty ? "Missing episodes" : "New episodes")
+            } footer: {
+                Text("Aired episodes your library does not hold. Hidden ones come back only if newer episodes air.")
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func rows(_ all: [Episode]) -> some View {
+        ForEach(Self.seasons(all), id: \.self) { season in
+            let episodes = all.filter { $0.season == season }.sorted { $0.number < $1.number }
+            let isNew = episodes.allSatisfy { episode in review.new.contains { $0.id == episode.id } }
+            NavigationLink {
+                if episodes.count == 1, let episode = episodes.first {
+                    EpisodeSourcesView(media: media, episode: episode)
+                } else {
+                    MissingSeasonView(media: media, season: season, episodes: episodes, schedule: schedule)
+                }
+            } label: {
+                MissingRow(label: LibraryReview.label(episodes, schedule: schedule), count: episodes.count, isNew: isNew,
+                           aired: episodes.compactMap(\.released).max())
+            }
+            .disabled(!model.addonSet.hasStreams)
+        }
+        Button("Hide these", systemImage: "eye.slash") {
+            model.review.dismissEpisodes(of: title, all)
+        }
+        .font(.subheadline)
+    }
+
+    static func seasons(_ episodes: [Episode]) -> [Int] {
+        Array(Set(episodes.map(\.season))).sorted()
     }
 }
 

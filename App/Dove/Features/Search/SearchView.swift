@@ -656,27 +656,6 @@ extension SearchView {
     }
 }
 
-struct MediaRow: View {
-    let item: MediaSummary
-
-    var body: some View {
-        HStack(spacing: 12) {
-            PosterImage(url: item.poster)
-                .frame(width: 46, height: 69)
-            VStack(alignment: .leading, spacing: 4) {
-                Text(item.name).font(.headline).lineLimit(2)
-                HStack(spacing: 6) {
-                    Text(item.type == .movie ? "Movie" : "Series")
-                    if let year = item.releaseInfo { Text(year) }
-                    if let rating = item.imdbRating { Text("★ \(rating)") }
-                }
-                .font(.caption)
-                .foregroundStyle(.secondary)
-            }
-        }
-    }
-}
-
 /// The app's add sheet: the shared add screen with the app's configured services and priority.
 struct AddSourceSheet: View {
     @Environment(AppModel.self) private var model

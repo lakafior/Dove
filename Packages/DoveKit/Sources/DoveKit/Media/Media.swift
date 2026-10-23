@@ -46,13 +46,24 @@ public struct MediaDetail: Sendable, Hashable {
     public var runtime: String?
     public var logo: URL?
     public var episodes: [Episode]
+    /// Each season's own name, overview, poster and air date, by season number (0 = specials). Empty when the
+    /// source has none (only TMDB fills it).
+    public var seasonInfo: [Int: SeasonInfo]
 
-    public init(summary: MediaSummary, genres: [String] = [], runtime: String? = nil, logo: URL? = nil, episodes: [Episode] = []) {
+    public init(
+        summary: MediaSummary,
+        genres: [String] = [],
+        runtime: String? = nil,
+        logo: URL? = nil,
+        episodes: [Episode] = [],
+        seasonInfo: [Int: SeasonInfo] = [:]
+    ) {
         self.summary = summary
         self.genres = genres
         self.runtime = runtime
         self.logo = logo
         self.episodes = episodes
+        self.seasonInfo = seasonInfo
     }
 
     /// Regular seasons in order; season 0 (specials) last.
@@ -63,6 +74,24 @@ public struct MediaDetail: Sendable, Hashable {
 
     public func episodes(inSeason season: Int) -> [Episode] {
         episodes.filter { $0.season == season }.sorted { $0.number < $1.number }
+    }
+}
+
+/// One season of a series as its metadata source describes it (TMDB `seasons[]`).
+public struct SeasonInfo: Sendable, Hashable, Codable {
+    public var name: String?
+    public var overview: String?
+    /// Poster image URL (TMDB `w342`).
+    public var poster: URL?
+    public var episodeCount: Int?
+    public var airDate: Date?
+
+    public init(name: String? = nil, overview: String? = nil, poster: URL? = nil, episodeCount: Int? = nil, airDate: Date? = nil) {
+        self.name = name
+        self.overview = overview
+        self.poster = poster
+        self.episodeCount = episodeCount
+        self.airDate = airDate
     }
 }
 

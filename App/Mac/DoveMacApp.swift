@@ -23,6 +23,7 @@ struct DoveMacApp: App {
         .commands {
             CommandGroup(replacing: .newItem) {}
             SearchCommands(router: delegate.platform.router)
+            ViewModeCommands()
         }
 
         Settings {

@@ -254,6 +254,41 @@ Split in three: Library, then Downloads, then Search → sources → add.
   without metadata (Software, Adult, All), or nothing found, show the indexers by name as a table with the plugins
   under it. Music covers seen on the owner's Mac ("green day dookie"); the releases page not opened yet.
 
+- **Library screens at the iPhone's options** (2026-10-23, owner: the first item screens lost the iPhone's actions
+  and the season list could not open downwards). Library page: Filters (services, status; the kind is the sidebar's),
+  ⋯ (Shuffle All for music, Re-match All Titles, Show Adult Content); cards, rows and selections share
+  `MacLibraryActions` (Download / Show in Finder, Copy Magnet Links, Refresh Status, Reinsert, Move To › Move/Copy,
+  Change Type, Delete; titles add Watchlist). Release screen (`MacItemView`): each release row has a visible ⋯ with
+  its menu (plus Choose Files… for Real-Debrid's `awaitingFileSelection` through `FileSelectionView`, Send to the next
+  Usenet service after a compressed-archive failure), files Play / Play in… / Download / Save to iCloud Drive / Copy
+  Link; toolbar Watchlist and ⋯ (Find Other Releases for books, albums, games; Wrong Title/Book/Album/Game? through
+  the shared pickers in `App/Components/MatchPickers.swift`; Refresh; Delete All). Series: the list mode is one
+  `MacEpisodeTable` (seasons → episodes → versions, Play / Play in… / Play from Here / Version / Copy Link /
+  Download / Find; the season page uses the same table), the iPhone's review sections as `MacReviewSection`
+  (new/missing episodes with Hide These, Could be better with Keep What I Have, Find), toolbar Wrong Title?,
+  Show Hidden Suggestions. Books: `MacBookActions` (Read opens the file in its reader, Send to Kindle/PocketBook/
+  e-mail through the system's compose service, Show in Finder, Add to Calibre; audiobooks Play/Continue/Start Over).
+  Dove's audio player has a bar at the bottom of the window (`MacNowPlayingBar`: ±15/30 s or previous/next, scrubber,
+  chapters, speed, sleep timer, shuffle and queue); music started without any controls before. Moved to
+  `App/Components` for both apps: `MatchPickers`, `FileSelectionView`, `SearchRows`, `WatchlistControls`. Built and
+  tested; not looked at in the running app yet.
+
+- **Library pages after a test pass in the running app** (2026-10-23; the owner gave the test tools Accessibility, so
+  pages are clicked and screenshotted before they are handed over). One header for every page (`MacPageHeader`:
+  backdrop or blurred cover, artwork, facts, badges, one row of buttons, description with More; text on a darkened
+  band). Buttons: Play (prominent) / Shuffle / Download / ⋯ (`MacItemsButtons`, same height). Albums and series show
+  their releases as a tab (`PageTabPicker`: Tracks or Seasons | N Releases, one remembered choice), not a sheet: the
+  sheet was too narrow and cut off the release rows' ⋯. `MacHeldReleases` is the releases table on its own (item
+  pages, both tabs). Library page as in the Finder: the Icons/List switch is the first item of the trailing toolbar
+  group, then Filters, Share (the selection's magnet links, else names) and Action (⋯: the selection's menu, then
+  Shuffle All, Re-match, Show Adult); icons are selectable (click, ⌘-click, ⇧-click range, double-click or Return
+  opens, Delete deletes, Esc or a click between icons clears), one selection with the list; a right-click on a
+  selected icon acts on the whole selection. Album and artist menus have Play and Shuffle; season cards a menu.
+  Item, series and album pages have one ⋯, in the header (as Music and TV): the page's own items first (Wrong
+  Title/Book/Album/Game?, Find Other Releases, Show Hidden Suggestions), then the releases' actions; their toolbar
+  keeps only the view switch and the Watchlist bookmark (Apple's pattern: the toolbar acts on a list's selection, a
+  page about one thing has its buttons beside it).
+
 ## 9. Where to pick up (2026-10-22)
 
 1. **Phase 2c, the rest of Search**: Books, Audiobooks, Music, Games (metadata first, then the indexers:
@@ -261,6 +296,6 @@ Split in three: Library, then Downloads, then Search → sources → add.
    name), plugins' results, pasted magnets and links (`AddSourceView`), the source filter editor, Play from a release.
 2. Per-kind download folders outside `~/Downloads` (NAS): folder picker + security-scoped bookmarks, shown in
    Settings › Save to on the Mac.
-3. Phase 3: title, series, book, album and game screens (cards have no click action yet), Play in Infuse/IINA/VLC,
-   the audiobook and music player.
+3. Phase 3 left: the described filter and upgrades in the source list, audiobook queue niceties (the player bar
+   covers the iPhone's controls but has no AirPlay picker).
 4. Not yet checked: the Dock progress bar and the download notice banner with a big file.

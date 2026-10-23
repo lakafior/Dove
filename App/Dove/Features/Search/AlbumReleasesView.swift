@@ -149,29 +149,3 @@ struct AlbumReleasesView: View {
     }
 }
 
-struct AlbumRow: View {
-    @Environment(AppModel.self) private var model
-    let album: AlbumSummary
-
-    var body: some View {
-        HStack(spacing: 12) {
-            CachedImage(url: album.cover) {
-                RoundedRectangle(cornerRadius: 4).fill(.quaternary)
-                    .overlay { Image(systemName: "music.note").foregroundStyle(.secondary) }
-            }
-            .frame(width: 52, height: 52)
-            .clipShape(RoundedRectangle(cornerRadius: 4))
-            VStack(alignment: .leading, spacing: 4) {
-                Text(album.title).font(.headline).lineLimit(2)
-                HStack(spacing: 6) {
-                    if let artist = album.artist { Text(artist).lineLimit(1) }
-                    if let year = album.year { Text(String(year)) }
-                    if let type = album.type { Text(type) }
-                    if !album.id.hasPrefix("mb:") { Text(album.sourceName(plugins: model.plugins.manifests())) }
-                }
-                .font(.caption)
-                .foregroundStyle(.secondary)
-            }
-        }
-    }
-}

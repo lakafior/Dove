@@ -65,6 +65,31 @@ struct TMDBMetadataTests {
         #expect(seasonsQuery.contains("append_to_response=season/1,season/2"))
     }
 
+    @Test func seasonsCarryTheirOwnPosterOverviewAndAirDate() async throws {
+        let transport = MockTransport()
+        await transport.stub("3/tv/95396", queryContains: "external_ids", json: #"""
+        {"id":95396,"name":"Severance","first_air_date":"2022-02-18","external_ids":{"imdb_id":"tt11280740"},
+         "seasons":[
+           {"season_number":1,"episode_count":9,"name":"Season 1","overview":"Mark leads a team of office workers.","poster_path":"/s1.jpg","air_date":"2022-02-18"},
+           {"season_number":2,"episode_count":1,"name":"Season 2","overview":"","poster_path":null,"air_date":null}
+         ]}
+        """#)
+
+        let detail = try await TMDBMetadata(key: v3Key, transport: transport)
+            .detail(of: MediaSummary(id: "tmdb:95396", type: .series, name: "Severance"), includeEpisodes: false)
+
+        #expect(detail.seasonInfo[1]?.name == "Season 1")
+        #expect(detail.seasonInfo[1]?.overview == "Mark leads a team of office workers.")
+        #expect(detail.seasonInfo[1]?.poster?.absoluteString == "https://image.tmdb.org/t/p/w342/s1.jpg")
+        #expect(detail.seasonInfo[1]?.airDate == TMDBMetadata.parseDay("2022-02-18"))
+        #expect(detail.seasonInfo[1]?.episodeCount == 9)
+        #expect(detail.seasonInfo[2]?.poster == nil)
+        #expect(detail.seasonInfo[2]?.overview == nil)
+        #expect(detail.seasonInfo[2]?.airDate == nil)
+        #expect(detail.seasonInfo[2]?.episodeCount == 1)
+        #expect(detail.seasonInfo[3] == nil)
+    }
+
     @Test func imdbIDsAreFoundFirst() async throws {
         let transport = MockTransport()
         await transport.stub("3/find/tt11280740", body: try Fixture.data("tmdb_find"))

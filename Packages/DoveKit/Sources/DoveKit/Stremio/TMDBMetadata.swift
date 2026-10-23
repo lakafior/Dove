@@ -68,6 +68,10 @@ public struct TMDBMetadata: Sendable {
             imdbRating: item.imdbRating
         )
         let minutes = show.runtime ?? show.episodeRunTime?.first
+        let seasonInfo = Dictionary(
+            (show.seasons ?? []).map { ($0.seasonNumber, $0.info) },
+            uniquingKeysWith: { first, _ in first }
+        )
         var episodes: [Episode] = []
         if item.type == .series, includeEpisodes {
             let numbers = (show.seasons ?? []).filter { $0.episodeCount > 0 }.map(\.seasonNumber)
@@ -77,7 +81,8 @@ public struct TMDBMetadata: Sendable {
             summary: summary,
             genres: (show.genres ?? []).map(\.name),
             runtime: minutes.flatMap { $0 > 0 ? "\($0) min" : nil },
-            episodes: episodes
+            episodes: episodes,
+            seasonInfo: seasonInfo
         )
     }
 
@@ -339,9 +344,26 @@ private struct TMDBTitle: Decodable {
     struct Season: Decodable {
         let seasonNumber: Int
         let episodeCount: Int
+        let name: String?
+        let overview: String?
+        let posterPath: String?
+        let airDate: String?
         enum CodingKeys: String, CodingKey {
             case seasonNumber = "season_number"
             case episodeCount = "episode_count"
+            case name, overview
+            case posterPath = "poster_path"
+            case airDate = "air_date"
+        }
+
+        var info: SeasonInfo {
+            SeasonInfo(
+                name: name.flatMap { $0.isEmpty ? nil : $0 },
+                overview: overview.flatMap { $0.isEmpty ? nil : $0 },
+                poster: TMDBMetadata.image(posterPath, size: "w342"),
+                episodeCount: episodeCount,
+                airDate: airDate.flatMap(TMDBMetadata.parseDay)
+            )
         }
     }
 

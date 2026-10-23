@@ -3,21 +3,23 @@ import DoveAppCore
 import DoveKit
 import SwiftUI
 
-/// The Library for one sidebar entry (all, or one kind): titles as cover grids, or every item as a sortable table.
-/// Title, book and game screens come with phase 3 (`docs/macos.md`); until then cards offer their actions in the
-/// context menu.
+/// The Library for one sidebar entry (all, or one kind). Its titles as icons (cover grids) or as a table, one setting
+/// for the whole Library (`LibraryViewMode`). The root of the Library's stack (`MacLibraryStack`): a title opens its
+/// screen over it.
 struct MacLibraryView: View {
     @Environment(AppModel.self) private var model
+    @Environment(MacRouter.self) private var router
     let category: LibraryFilter.Category?
 
-    @AppStorage("macLibraryMode") private var mode: Mode = .titles
+    @AppStorage(LibraryViewMode.storageKey) private var mode: LibraryViewMode = .icons
     @State private var query = ""
+    /// The iPhone's Filters menu: services and status (the kind is the sidebar's).
+    @State private var backends = Set<BackendID>()
+    @State private var status: LibraryFilter.Status?
+    /// What is selected, in the icons and the list alike (`TitleRow.id`); the toolbar's Share and Action menu act on it.
+    @State private var selection = Set<String>()
     @State private var pendingDelete: [ShelfItem] = []
     @State private var message: String?
-
-    enum Mode: String {
-        case titles, files
-    }
 
     private var library: LibraryModel { model.library }
 
@@ -25,6 +27,8 @@ struct MacLibraryView: View {
         var filter = LibraryFilter()
         filter.category = category
         filter.query = query
+        filter.backends = backends
+        filter.status = status
         return filter
     }
 
@@ -32,23 +36,24 @@ struct MacLibraryView: View {
         Group {
             if library.items.isEmpty {
                 emptyState
-            } else if mode == .titles {
-                MacLibraryTitles(filter: filter, actions: actions)
+            } else if mode == .icons {
+                MacLibraryTitles(filter: filter, actions: actions, selection: $selection)
             } else {
-                MacLibraryFiles(items: filter.apply(to: library.items), actions: actions)
+                MacLibraryTitleTable(filter: filter, actions: actions, selection: $selection)
             }
         }
         .navigationTitle(category?.title ?? "Library")
+        .onChange(of: category) { selection = [] }
         .navigationSubtitle(statusLine)
         .searchable(text: $query, placement: .toolbar, prompt: "Filter")
         .toolbar {
-            ToolbarItem(placement: .principal) {
-                Picker("View", selection: $mode) {
-                    Text("Titles").tag(Mode.titles)
-                    Text("Files").tag(Mode.files)
-                }
-                .pickerStyle(.segmented)
+            // Where the Finder has it: first in the trailing group, before the actions and search.
+            ToolbarItem(placement: .primaryAction) {
+                ViewModePicker(mode: $mode)
             }
+            ToolbarItem(placement: .primaryAction) { filterMenu }
+            ToolbarItem(placement: .primaryAction) { shareButton }
+            ToolbarItem(placement: .primaryAction) { moreMenu }
             ToolbarItem(placement: .primaryAction) {
                 Button("Refresh", systemImage: "arrow.clockwise") {
                     Task { await library.refresh(using: model) }
@@ -82,38 +87,84 @@ struct MacLibraryView: View {
         }
     }
 
-    private var actions: LibraryActions {
-        LibraryActions(download: download, reveal: reveal, delete: { pendingDelete = $0 })
-    }
+    // MARK: Menus
 
-    /// Items already on this Mac (iCloud Drive) in the Finder: their files, fetched from iCloud first if needed.
-    private func reveal(_ items: [ShelfItem]) {
-        Task {
-            var files: [URL] = []
-            for item in items {
-                guard let backend = model.backend(item.item.backend) else { continue }
-                do {
-                    let full = item.item.files.isEmpty ? try await backend.item(item.item.id) : item.item
-                    for file in full.files {
-                        if let url = try await backend.downloadRequest(itemID: full.id, fileID: file.id).url { files.append(url) }
-                    }
-                } catch {
-                    message = error.localizedDescription
+    private var filterMenu: some View {
+        let isActive = !backends.isEmpty || status != nil
+        return Menu("Filters", systemImage: isActive ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease.circle") {
+            Section("Services") {
+                ForEach(model.backends.map(\.id), id: \.self) { backend in
+                    Toggle(backend.displayName, isOn: Binding(
+                        get: { backends.contains(backend) },
+                        set: { on in
+                            if on { backends.insert(backend) } else { backends.remove(backend) }
+                        }
+                    ))
                 }
             }
-            if !files.isEmpty { NSWorkspace.shared.activateFileViewerSelecting(files) }
+            Picker("Status", selection: $status) {
+                Text("Any Status").tag(LibraryFilter.Status?.none)
+                ForEach(LibraryFilter.Status.allCases, id: \.self) { Text($0.title).tag(LibraryFilter.Status?.some($0)) }
+            }
+            if isActive {
+                Divider()
+                Button("Clear Filters") {
+                    backends = []
+                    status = nil
+                }
+            }
+        }
+        .help("Filters")
+    }
+
+    /// The selected titles, in the list's order.
+    private var selectedTargets: [MacRouter.LibraryTarget] {
+        guard !selection.isEmpty else { return [] }
+        return TitleRow.rows(filter: filter, library: library).filter { selection.contains($0.id) }.map(\.target)
+    }
+
+    /// Share, as the Finder's: the selection's magnet links (what another app or person can add), else their names.
+    @ViewBuilder
+    private var shareButton: some View {
+        let targets = selectedTargets
+        let magnets = targets.flatMap(\.items).compactMap(\.item.magnet)
+        let lines = magnets.isEmpty ? targets.map(\.name) : magnets
+        ShareLink(items: lines) {
+            Label("Share", systemImage: "square.and.arrow.up")
+        }
+        .disabled(lines.isEmpty)
+        .help(magnets.isEmpty ? "Share the selected names" : "Share the selected magnet links")
+    }
+
+    /// The Finder's Action menu: what the context menu offers for the selection, then the page's own (the iPhone
+    /// Library's ⋯): Shuffle All for music, Re-match All Titles, Show Adult Content.
+    private var moreMenu: some View {
+        @Bindable var model = model
+        let targets = selectedTargets
+        return Menu("Action", systemImage: "ellipsis.circle") {
+            if !targets.isEmpty {
+                actions.targetMenu(targets) { router.openLibrary($0) }
+                Divider()
+            }
+            if category == .music {
+                Button("Shuffle All", systemImage: "shuffle") {
+                    Task {
+                        let albums = LibraryShelf.albums(filter.apply(to: library.items), matches: library.albumMatches)
+                        if let notice = await model.playMusic(albums, title: "All music", shuffled: true) { message = notice }
+                    }
+                }
+                Divider()
+            }
+            Button(library.isRematching ? "Re-matching…" : "Re-match All Titles", systemImage: "arrow.triangle.2.circlepath") {
+                Task { await library.rematchAll(using: model) }
+            }
+            .disabled(library.isRematching)
+            Toggle("Show Adult Content", systemImage: "eye", isOn: $model.showAdult)
         }
     }
 
-    /// Every file of each ready item, to the place its kind goes; what could not start is said at the end.
-    private func download(_ items: [ShelfItem]) {
-        Task {
-            var failures: [String] = []
-            for item in items {
-                do { try await model.downloadItem(item) } catch { failures.append(error.localizedDescription) }
-            }
-            if !failures.isEmpty { message = failures.joined(separator: "\n") }
-        }
+    private var actions: MacLibraryActions {
+        .standard(model: model, report: { message = $0 }, confirmDelete: { pendingDelete = $0 })
     }
 
     /// "Updated 2 minutes ago · 46 items, 1.1 TB", like the iPhone's status line.
@@ -138,214 +189,5 @@ struct MacLibraryView: View {
             ContentUnavailableView("Nothing here yet", systemImage: "books.vertical",
                                    description: Text("What you add to your services shows up here."))
         }
-    }
-}
-
-// MARK: - Titles
-
-/// Cover grids, one per kind, in the iPhone's order: movies, series, books, audiobooks, music, games, other files.
-private struct MacLibraryTitles: View {
-    @Environment(AppModel.self) private var model
-    @Environment(MacRouter.self) private var router
-    let filter: LibraryFilter
-    let actions: LibraryActions
-
-    private var library: LibraryModel { model.library }
-
-    var body: some View {
-        let titles = filter.apply(to: library.titles)
-        let books = filter.apply(to: library.books)
-        let artists = LibraryShelf.artists(filter.apply(to: library.albums))
-        let games = filter.apply(to: library.games)
-        let others = filter.apply(to: library.others)
-        ScrollView {
-            LazyVStack(alignment: .leading, spacing: 28) {
-                grid("Movies", titles.filter { $0.type == .movie }, minimum: 150) { title in
-                    TitleCard(title: title).onTapGesture { router.openLibrary(.title(title)) }.contextMenu { itemMenu(title.items) }
-                }
-                grid("Series", titles.filter { $0.type == .series }, minimum: 150) { title in
-                    TitleCard(title: title).onTapGesture { router.openLibrary(.title(title)) }.contextMenu { itemMenu(title.items) }
-                }
-                grid("Books", books.filter { $0.format == .ebook }, minimum: 140) { book in
-                    BookCard(book: book).onTapGesture { router.openLibrary(.book(book)) }.contextMenu { itemMenu(book.items) }
-                }
-                grid("Audiobooks", books.filter { $0.format == .audiobook }, minimum: 180) { book in
-                    BookCard(book: book).onTapGesture { router.openLibrary(.book(book)) }.contextMenu { itemMenu(book.items) }
-                }
-                grid("Music", artists, minimum: 160,
-                     count: "\(artists.reduce(0) { $0 + $1.albums.count }) albums") { artist in
-                    ArtistCard(artist: artist).onTapGesture { router.openLibrary(.artist(artist)) }.contextMenu { itemMenu(artist.albums.flatMap(\.items)) }
-                }
-                grid("Games", games, minimum: 140) { game in
-                    GameCard(game: game).onTapGesture { router.openLibrary(.game(game)) }.contextMenu { itemMenu(game.items) }
-                }
-                if !others.isEmpty {
-                    VStack(alignment: .leading, spacing: 0) {
-                        heading("Other files", count: "\(others.count)").padding(.bottom, 8)
-                        ForEach(others) { item in
-                            ShelfItemRow(item: item)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .padding(.vertical, 6)
-                                .contentShape(Rectangle())
-                                .contextMenu { itemMenu([item]) }
-                            Divider()
-                        }
-                    }
-                }
-            }
-            .padding(20)
-        }
-    }
-
-    @ViewBuilder
-    private func grid<Item: Identifiable, Cell: View>(
-        _ title: String, _ items: [Item], minimum: CGFloat, count: String? = nil,
-        @ViewBuilder cell: @escaping (Item) -> Cell
-    ) -> some View {
-        if !items.isEmpty {
-            VStack(alignment: .leading, spacing: 10) {
-                heading(title, count: count ?? "\(items.count)")
-                LazyVGrid(columns: [GridItem(.adaptive(minimum: minimum), spacing: 16)], alignment: .leading, spacing: 20) {
-                    ForEach(items) { cell($0) }
-                }
-            }
-        }
-    }
-
-    private func heading(_ title: String, count: String) -> some View {
-        HStack(alignment: .firstTextBaseline) {
-            Text(title).font(.title2.bold())
-            Text(count).foregroundStyle(.secondary)
-        }
-    }
-
-    @ViewBuilder
-    private func itemMenu(_ items: [ShelfItem]) -> some View {
-        actions.menu(items)
-    }
-}
-
-// MARK: - Files
-
-/// Every item as a table: sortable columns, several selected at once, actions in the context menu.
-private struct MacLibraryFiles: View {
-    let items: [ShelfItem]
-    let actions: LibraryActions
-
-    @State private var selection = Set<ShelfItem.ID>()
-    @State private var order = [KeyPathComparator(\FileRow.added, order: .reverse)]
-
-    var body: some View {
-        let rows = items.map(FileRow.init).sorted(using: order)
-        Table(rows, selection: $selection, sortOrder: $order) {
-            TableColumn("Name", value: \.name) { row in
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(row.name).lineLimit(1)
-                    if row.item.isRenamed {
-                        // The service's own (random) name, so the item can still be found there.
-                        Text(row.item.item.name).font(.caption).foregroundStyle(.tertiary).lineLimit(1)
-                    }
-                }
-                .help(row.name)
-            }
-            .width(min: 240, ideal: 420)
-            TableColumn("Service", value: \.service) { row in
-                HStack(spacing: 6) {
-                    BackendBadge(backend: row.item.item.backend)
-                    Text(row.service)
-                }
-            }
-            .width(min: 110, ideal: 140)
-            TableColumn("Kind", value: \.kind)
-                .width(min: 70, ideal: 100)
-            TableColumn("Status", value: \.status)
-                .width(min: 80, ideal: 120)
-            // Seeding services only (Debrid-Link, TorBox on a paid plan); others show a dash.
-            TableColumn("Ratio", value: \.ratio) { row in
-                if let seeding = row.item.item.seeding {
-                    SeedingRatio(ratio: seeding.ratio, isActive: seeding.isActive).fixedSize()
-                } else {
-                    Text("–").foregroundStyle(.secondary)
-                }
-            }
-            .width(min: 60, ideal: 70)
-            TableColumn("Size", value: \.size) { row in
-                Text(row.size > 0 ? row.size.formatted(.byteCount(style: .file)) : "–").monospacedDigit()
-            }
-            .width(min: 70, ideal: 90)
-            TableColumn("Added", value: \.added) { row in
-                Text(row.added == .distantPast ? "–" : row.added.formatted(date: .abbreviated, time: .omitted))
-            }
-            .width(min: 80, ideal: 110)
-        }
-        .contextMenu(forSelectionType: ShelfItem.ID.self) { ids in
-            let chosen = items.filter { ids.contains($0.id) }
-            if !chosen.isEmpty {
-                Button("Copy Name", systemImage: "doc.on.doc") {
-                    NSPasteboard.general.clearContents()
-                    NSPasteboard.general.setString(chosen.map(\.name).joined(separator: "\n"), forType: .string)
-                }
-                Divider()
-                actions.menu(chosen)
-            }
-        }
-        .onDeleteCommand {
-            let chosen = items.filter { selection.contains($0.id) }
-            if !chosen.isEmpty { actions.delete(chosen) }
-        }
-    }
-}
-
-/// What a card or a row offers: download its files, delete it on its services.
-@MainActor
-private struct LibraryActions {
-    let download: @MainActor ([ShelfItem]) -> Void
-    let reveal: @MainActor ([ShelfItem]) -> Void
-    let delete: @MainActor ([ShelfItem]) -> Void
-
-    /// Items on a service are downloaded; items already on this Mac (iCloud Drive) are shown in the Finder.
-    @ViewBuilder
-    func menu(_ items: [ShelfItem]) -> some View {
-        let local = items.filter(\.item.backend.isOnDevice)
-        let ready = items.filter { item in
-            guard !item.item.backend.isOnDevice else { return false }
-            if case .ready = item.item.status { return true }
-            return false
-        }
-        if !ready.isEmpty || local.isEmpty {
-            Button(ready.count > 1 ? "Download \(ready.count) Items" : "Download", systemImage: "arrow.down.circle") { download(ready) }
-                .disabled(ready.isEmpty)
-        }
-        if !local.isEmpty {
-            Button("Show in Finder", systemImage: "folder") { reveal(local) }
-        }
-        Divider()
-        Button(items.count > 1 ? "Delete \(items.count) Items…" : "Delete…", systemImage: "trash", role: .destructive) { delete(items) }
-    }
-}
-
-/// A table row with plain sortable values (Table's sort comparators need non-optional, comparable fields).
-private struct FileRow: Identifiable {
-    let item: ShelfItem
-    let name: String
-    let service: String
-    let kind: String
-    let status: String
-    /// -1 when the item does not seed, so those sort below every real ratio.
-    let ratio: Double
-    let size: Int64
-    let added: Date
-
-    var id: ShelfItem.ID { item.id }
-
-    init(_ item: ShelfItem) {
-        self.item = item
-        name = item.name
-        service = item.item.backend.displayName
-        kind = item.kind.displayName
-        status = item.item.status.label
-        ratio = item.item.seeding?.ratio ?? -1
-        size = item.item.size ?? 0
-        added = item.item.addedAt ?? .distantPast
     }
 }

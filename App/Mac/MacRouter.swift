@@ -32,6 +32,9 @@ final class MacRouter {
     var searchPath = NavigationPath()
     /// Set when something asks for Settings; the window opens the Settings scene and clears it.
     var settingsRequested = false
+    /// The Library's navigation stack: the category's page at the root, the item screens pushed over it (a title, a
+    /// season, an album, a release). `MacLibraryStack` shows it; any other page or a sidebar click empties it.
+    var libraryPath = NavigationPath()
 
     /// ⌘F: the Search page's field, or a floating one over any other page.
     func startSearch() {
@@ -50,17 +53,40 @@ final class MacRouter {
         case album(AlbumTitle)
         case artist(ArtistShelf)
         case game(GameTitle)
+        /// One release from Library › Files.
+        case item(ShelfItem)
+
+        /// The Library kind the target belongs to.
+        var category: LibraryFilter.Category {
+            switch self {
+            case .title(let title): title.type == .movie ? .movies : .series
+            case .book(let book): book.format == .audiobook ? .audiobooks : .books
+            case .album, .artist: .music
+            case .game: .games
+            // The kind the Library's own filter puts the item in (`LibraryFilter.Category.contains`).
+            case .item(let item): LibraryFilter.Category.allCases.first { $0.contains(item) } ?? .other
+            }
+        }
     }
 
+    /// The Library at the target's kind, with the target's own screen over it.
     func openLibrary(_ target: LibraryTarget) {
         isQuickSearchPresented = false
-        let category: LibraryFilter.Category = switch target {
-        case .title(let title): title.type == .movie ? .movies : .series
-        case .book(let book): book.format == .audiobook ? .audiobooks : .books
-        case .album, .artist: .music
-        case .game: .games
-        }
-        selection = .library(category)
+        selection = .library(target.category)
+        var path = NavigationPath()
+        path.append(target)
+        libraryPath = path
+    }
+
+    /// A sidebar click: the page changes and the Library's stack goes back to its root.
+    func select(_ item: SidebarItem?) {
+        selection = item
+        libraryPath = NavigationPath()
+    }
+
+    /// Pushes an item screen over the Library page: a season, an album, an artist, a title found by search.
+    func pushLibrary<Value: Hashable>(_ value: Value) {
+        libraryPath.append(value)
     }
 
     /// A suggestion picked under the Spotlight field (on the Search page or in the ⌘F panel).
@@ -97,6 +123,7 @@ final class MacRouter {
     }
 
     func show(_ destination: AppModel.Destination) {
+        libraryPath = NavigationPath()
         switch destination {
         case .search(let text):
             searchPath = NavigationPath()

@@ -12,9 +12,8 @@ struct MacRootView: View {
     @State private var columns = NavigationSplitViewVisibility.detailOnly
 
     var body: some View {
-        @Bindable var router = router
         NavigationSplitView(columnVisibility: $columns) {
-            List(selection: $router.selection) {
+            List(selection: sidebarSelection) {
                 Section {
                     Label("Search", systemImage: "magnifyingglass").tag(SidebarItem.search)
                     Label("Watchlist", systemImage: "bookmark").tag(SidebarItem.watchlist)
@@ -43,6 +42,7 @@ struct MacRootView: View {
             .navigationSplitViewColumnWidth(min: 190, ideal: 220)
         } detail: {
             detail
+                .safeAreaInset(edge: .bottom, spacing: 0) { MacNowPlayingBar() }
         }
         .overlay {
             if router.isQuickSearchPresented { QuickSearchPanel() }
@@ -62,7 +62,7 @@ struct MacRootView: View {
         case .service(let backend):
             ServiceStatusPage(backend: backend)
         case .library(let category):
-            MacLibraryView(category: category)
+            MacLibraryStack(category: category)
         case .search:
             MacSearchView()
         case .downloads:
@@ -75,6 +75,11 @@ struct MacRootView: View {
         case nil:
             ContentUnavailableView("Dove", systemImage: "bird", description: Text("Pick a place in the sidebar."))
         }
+    }
+
+    /// A click in the sidebar: the page changes and the Library goes back to its root (`MacRouter.select`).
+    private var sidebarSelection: Binding<SidebarItem?> {
+        Binding(get: { router.selection }, set: { router.select($0) })
     }
 
     /// The kinds the library holds (adult only when shown), like the iPhone's Library chips.
