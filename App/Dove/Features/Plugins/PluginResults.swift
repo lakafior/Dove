@@ -119,7 +119,7 @@ private struct PluginResultRow: View {
             // A tap goes to the kind's default place; a long press picks another.
             Menu {
                 ForEach(model.places(for: kind), id: \.self) { place in
-                    Button(place.displayName, systemImage: place.symbol) { get(place) }
+                    Button(model.placeName(of: place), systemImage: place.symbol) { get(place) }
                 }
             } label: {
                 Group {

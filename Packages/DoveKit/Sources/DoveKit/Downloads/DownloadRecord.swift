@@ -1,12 +1,46 @@
 import Foundation
 
-/// Where a downloaded file is kept.
-public enum DownloadDestination: String, Codable, Sendable, Hashable, CaseIterable {
+/// Where a downloaded file is kept. Stored as one string: `device`, `iCloud`, `folder:<id>`.
+public enum DownloadDestination: Sendable, Hashable, Codable {
     /// This device: Dove's Documents on iOS (Files › On My iPhone › Dove), the Downloads folder on the Mac.
     case device
     /// iCloud Drive › Dove: on the user's other devices too, and listed in the Library as a place.
     case iCloud
+    /// A folder the user picked on this Mac (a NAS share, an external disk): `PickedFolders` resolves the id.
+    case folder(String)
 
+    public var rawValue: String {
+        switch self {
+        case .device: "device"
+        case .iCloud: "iCloud"
+        case .folder(let id): "folder:\(id)"
+        }
+    }
+
+    public init?(rawValue: String) {
+        switch rawValue {
+        case "device": self = .device
+        case "iCloud": self = .iCloud
+        default:
+            guard rawValue.hasPrefix("folder:"), rawValue.count > "folder:".count else { return nil }
+            self = .folder(String(rawValue.dropFirst("folder:".count)))
+        }
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let raw = try decoder.singleValueContainer().decode(String.self)
+        guard let destination = DownloadDestination(rawValue: raw) else {
+            throw DecodingError.dataCorrupted(.init(codingPath: decoder.codingPath, debugDescription: "Unknown destination \(raw)"))
+        }
+        self = destination
+    }
+
+    public func encode(to encoder: any Encoder) throws {
+        var container = encoder.singleValueContainer()
+        try container.encode(rawValue)
+    }
+
+    /// A picked folder's own name is `PickedFolders`'; this is the generic one.
     public var displayName: String {
         switch self {
         #if os(macOS)
@@ -15,6 +49,7 @@ public enum DownloadDestination: String, Codable, Sendable, Hashable, CaseIterab
         case .device: "This iPhone"
         #endif
         case .iCloud: "iCloud Drive"
+        case .folder: "Folder"
         }
     }
 }

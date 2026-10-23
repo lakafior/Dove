@@ -1237,7 +1237,7 @@ struct LibraryItemView: View {
         Task {
             do {
                 try await model.download(file, of: detail ?? item, to: destination)
-                message = "Downloading \(file.name) to \(destination.displayName). Progress is in the Downloads tab."
+                message = "Downloading \(file.name) to \(model.placeName(of: destination)). Progress is in the Downloads tab."
             } catch {
                 message = error.localizedDescription
             }

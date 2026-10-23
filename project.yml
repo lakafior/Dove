@@ -301,6 +301,8 @@ targets:
         # Folders the user picks (other download places, .torrent/.nzb files) and ~/Downloads, the default place.
         com.apple.security.files.user-selected.read-write: true
         com.apple.security.files.downloads.read-write: true
+        # Security-scoped bookmarks: the folders picked in Settings › Save to stay reachable after a restart.
+        com.apple.security.files.bookmarks.app-scope: true
         keychain-access-groups: [$(AppIdentifierPrefix)net.smigi.dove.shared]
         com.apple.developer.icloud-container-identifiers: [iCloud.net.smigi.dove]
         com.apple.developer.ubiquity-container-identifiers: [iCloud.net.smigi.dove]

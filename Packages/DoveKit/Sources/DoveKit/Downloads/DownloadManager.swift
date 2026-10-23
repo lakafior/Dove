@@ -27,6 +27,9 @@ public final class DownloadManager: NSObject {
     /// iCloud Drive › Dove's folder, when this device has iCloud Drive for Dove (set by the app; resolving it
     /// must not happen on the main thread). Downloads meant for iCloud go to `directory` while it is nil.
     @ObservationIgnored public var iCloudDirectory: URL?
+    /// Turns a picked folder's id into its URL, with access to it opened (`PickedFolders`; the app sets it). A nil
+    /// answer (the disk is gone, the bookmark is stale) sends the download to `directory`.
+    @ObservationIgnored public var folderResolver: ((String) -> URL?)?
     @ObservationIgnored private let store: DownloadStore
     @ObservationIgnored private var session: URLSession!
     @ObservationIgnored private var tasks: [DownloadRecord.ID: URLSessionDownloadTask] = [:]
@@ -249,7 +252,12 @@ public final class DownloadManager: NSObject {
             return
         }
         // Without iCloud Drive (signed out, or a sideloaded build without the entitlement) the file stays here.
-        let place: DownloadDestination = record.destination == .iCloud && iCloudDirectory == nil ? .device : record.destination
+        let place: DownloadDestination
+        switch record.destination {
+        case .iCloud where iCloudDirectory == nil: place = .device
+        case .folder(let id) where folderResolver?(id) == nil: place = .device
+        default: place = record.destination
+        }
         let folder = folder(for: place, subfolder: record.subfolder)
         do {
             try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
@@ -287,7 +295,12 @@ public final class DownloadManager: NSObject {
     }
 
     private func folder(for destination: DownloadDestination, subfolder: String? = nil) -> URL {
-        let root = destination == .iCloud ? (iCloudDirectory ?? directory) : directory
+        let root: URL
+        switch destination {
+        case .device: root = directory
+        case .iCloud: root = iCloudDirectory ?? directory
+        case .folder(let id): root = folderResolver?(id) ?? directory
+        }
         guard let subfolder, !subfolder.isEmpty else { return root }
         return subfolder.split(separator: "/").reduce(root) { $0.appending(path: DownloadNaming.sanitized(String($1))) }
     }

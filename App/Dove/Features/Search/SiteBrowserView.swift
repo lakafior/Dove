@@ -78,7 +78,7 @@ struct SiteBrowserView: View {
                             let standard = model.place(for: category.contentKind)
                             Menu {
                                 ForEach(model.places(for: category.contentKind), id: \.self) { place in
-                                    Button(place.displayName, systemImage: place.symbol) { download(file, to: place) }
+                                    Button(model.placeName(of: place), systemImage: place.symbol) { download(file, to: place) }
                                 }
                             } label: {
                                 if isStarting {

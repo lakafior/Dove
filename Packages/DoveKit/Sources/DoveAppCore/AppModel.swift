@@ -204,6 +204,11 @@ public final class AppModel {
     }
 
     /// Where downloads of each kind go by default (synced).
+    /// Folders the user picked as places for downloads (this Mac only: a bookmark means nothing elsewhere).
+    @ObservationIgnored public let pickedFolders = PickedFolders(fileURL: .applicationSupportDirectory.appending(path: "Dove/picked-folders.json"))
+    /// `pickedFolders` as the views read it.
+    public private(set) var folderPlaces: [PickedFolder] = []
+
     public var downloadDestinations = DownloadDestinations() {
         didSet { savePreferences() }
     }
@@ -345,6 +350,8 @@ public final class AppModel {
             downloads: downloads
         ) { [weak self] id in self?.backend(id) }
         downloadAlerts = DownloadAlerts(downloads: downloads, jobs: downloadJobs, platform: platform)
+        downloads.folderResolver = { [pickedFolders] id in pickedFolders.resolve(id) }
+        folderPlaces = pickedFolders.all
         downloads.onSettled { [weak self] record in
             if record.state == .finished, record.destination == .iCloud { self?.iCloudFileArrived() }
         }
@@ -499,7 +506,36 @@ public final class AppModel {
 
     /// Every place a file can go from this device: downloads, then the services that fetch plain links.
     public var places: [FilePlace] {
-        [.device] + (iCloudFolder == nil ? [] : [.iCloud]) + directLinkServices.map(FilePlace.service)
+        [.device] + (iCloudFolder == nil ? [] : [.iCloud]) + folderPlaces.map { FilePlace.download(.folder($0.id)) }
+            + directLinkServices.map(FilePlace.service)
+    }
+
+    /// Remembers a folder the user chose (NSOpenPanel) as a place and returns it.
+    @discardableResult
+    public func addFolderPlace(_ url: URL) throws -> FilePlace {
+        let folder = try pickedFolders.add(url)
+        folderPlaces = pickedFolders.all
+        return .download(.folder(folder.id))
+    }
+
+    /// Forgets a folder; the kinds that saved there fall back to their standard place.
+    public func removeFolderPlace(_ id: String) {
+        pickedFolders.remove(id)
+        folderPlaces = pickedFolders.all
+        for (kind, place) in downloadDestinations.chosen where place == .download(.folder(id)) {
+            downloadDestinations.chosen[kind] = nil
+        }
+    }
+
+    /// The place's name for a message or a picker: a folder's own name, else the generic one.
+    public func placeName(of place: FilePlace) -> String {
+        if case .download(let destination) = place { return placeName(of: destination) }
+        return place.displayName
+    }
+
+    public func placeName(of destination: DownloadDestination) -> String {
+        if case .folder(let id) = destination { return folderPlaces.first { $0.id == id }?.name ?? destination.displayName }
+        return destination.displayName
     }
 
     /// The places for one kind: Calibre takes ebooks too (Dove downloads the file and adds it there).
@@ -523,6 +559,7 @@ public final class AppModel {
         switch place {
         case .download(.device): true
         case .download(.iCloud): iCloudFolder != nil
+        case .download(.folder(let id)): pickedFolders.isReachable(id)
         case .service(.calibre): backend(.calibre) != nil
         case .service(let id): backend(id)?.acceptsDirectLinks == true
         }
@@ -893,7 +930,7 @@ public final class AppModel {
                     try downloads.start(Self.request(for: link), plugin: ref, name: name, size: link.size, destination: destination, subfolder: subfolder)
                 }
                 if let rememberedPlace { rememberICloud(rememberedPlace, book: book, media: media, kind: kind) }
-                return single ? "Downloading to \(destination.displayName)." : "Downloading \(links.count) files to \(destination.displayName)."
+                return single ? "Downloading to \(placeName(of: destination))." : "Downloading \(links.count) files to \(placeName(of: destination))."
             }
         } catch {
             return error.localizedDescription
@@ -1002,7 +1039,7 @@ public final class AppModel {
                     )
                 }
                 try downloads.start(file.request, stream: ref, name: name, destination: destination, subfolder: subfolder)
-                return "Downloading to \(destination.displayName)."
+                return "Downloading to \(placeName(of: destination))."
             }
         } catch {
             return error.localizedDescription

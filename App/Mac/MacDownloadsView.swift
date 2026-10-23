@@ -72,7 +72,7 @@ struct MacDownloadsView: View {
             }
             .width(min: 160, ideal: 220)
             TableColumn("Place") { record in
-                Text(record.destination.displayName)
+                Text(model.placeName(of: record.destination))
             }
             .width(min: 80, ideal: 110)
             TableColumn("Added") { record in

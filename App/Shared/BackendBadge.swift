@@ -51,6 +51,7 @@ extension DownloadDestination {
         switch self {
         case .device: "iphone"
         case .iCloud: "icloud"
+        case .folder: "externaldrive"
         }
     }
 }

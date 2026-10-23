@@ -323,6 +323,19 @@ Split in three: Library, then Downloads, then Search → sources → add.
   has the keyboard by default.
   Checked by clicking the Filter field, then a row: blue, and ⌘A selects all.
 
+- **Download folders outside ~/Downloads** (2026-10-23): `DownloadDestination` got a third case, `.folder(id)` (stored as
+  `folder:<id>`, so `FilePlace` and the synced per-kind choices carry it unchanged; another device sees an
+  unreachable folder and falls back to the kind's standard place). `PickedFolders` (DoveKit, tested, device-local
+  `Dove/picked-folders.json`) keeps a security-scoped bookmark per folder (`com.apple.security.files.bookmarks.app-scope`
+  in the Mac entitlements), resolves it on demand and holds access open while the app runs, since downloads finish
+  in the background. `DownloadManager.folderResolver` turns the id into a URL; a folder that cannot be reached (an
+  unmounted NAS) sends the file to `~/Downloads`. `AppModel.folderPlaces`, `addFolderPlace`, `removeFolderPlace`,
+  `placeName(of:)`; the folders are offered in every per-kind picker (`places(for:)`) and in the pickers of plugin
+  rows. Settings › Save to on the Mac has "Folders on this Mac" (Add Folder… opens the open panel; Remove forgets it
+  and resets the kinds that used it). Checked on the Mac: add through the panel, the path shows, it survives a
+  restart. Not seen: a real download into a folder (Library › Download goes through `downloadItem`, which now passes
+  the chosen destination instead of always `.device`).
+
 ## 9. Where to pick up (2026-10-22)
 
 1. **Phase 2c, the rest of Search**: Books, Audiobooks, Music, Games (metadata first, then the indexers:

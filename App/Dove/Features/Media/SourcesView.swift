@@ -266,7 +266,7 @@ struct SourcesView: View {
         if group.librarySource == nil, let file = group.primary.directFile {
             Section("Get the file") {
                 ForEach(model.places, id: \.self) { place in
-                    Button(place.displayName, systemImage: place.symbol) { getFile(group, to: place) }
+                    Button(model.placeName(of: place), systemImage: place.symbol) { getFile(group, to: place) }
                         .disabled(place.isService && !file.isPlain)
                 }
             }
@@ -430,6 +430,7 @@ struct SourcesView: View {
 }
 
 private struct SourceRow: View {
+    @Environment(AppModel.self) private var model
     let group: StreamGroup
     let scope: PackScope?
     let isBusy: Bool
@@ -551,7 +552,7 @@ private struct SourceRow: View {
                 // A tap goes to the default place for video; a long press picks another.
                 Menu {
                     ForEach(places, id: \.self) { place in
-                        Button(place.displayName, systemImage: place.symbol) { onGet(place) }
+                        Button(model.placeName(of: place), systemImage: place.symbol) { onGet(place) }
                     }
                 } label: {
                     Group {

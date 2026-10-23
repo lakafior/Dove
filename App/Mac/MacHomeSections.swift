@@ -85,7 +85,7 @@ struct MacHomeSections: View {
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 300), spacing: 12)], spacing: 12) {
                     ForEach(downloads.prefix(6)) { record in
                         ProgressCard(
-                            title: record.name, place: "To \(record.destination.displayName)", badge: record.backend,
+                            title: record.name, place: "To \(model.placeName(of: record.destination))", badge: record.backend,
                             progress: record.progress, detail: record.totalBytes.map {
                                 "\(record.bytesWritten.formatted(.byteCount(style: .file))) of \($0.formatted(.byteCount(style: .file)))"
                             }

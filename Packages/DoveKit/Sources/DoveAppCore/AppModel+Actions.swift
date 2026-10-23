@@ -118,7 +118,7 @@ extension AppModel {
             let placement = item.files.count > 1
                 ? LibraryFolderLayout.Placement(folder: LibraryFolderLayout.component(shelf.name), fileName: LibraryFolderLayout.cleanPath(file.name))
                 : nil
-            try downloads.start(request, backend: item.backend, itemID: item.id, file: file, destination: .device, placement: placement)
+            try downloads.start(request, backend: item.backend, itemID: item.id, file: file, destination: destination, placement: placement)
         }
         return item.files.count
     }
