@@ -336,6 +336,13 @@ Split in three: Library, then Downloads, then Search → sources → add.
   restart. Not seen: a real download into a folder (Library › Download goes through `downloadItem`, which now passes
   the chosen destination instead of always `.device`).
 
+- **Watchlist page and the source filter** (2026-10-23): the sidebar's Watchlist was a placeholder; `MacWatchlistView` is a
+  table (poster and title, kind, year, status as on the iPhone, a check when the title is in the library; Return opens
+  the library page of a held title, else its sources; ⌫ / context menu remove; ⌘A; More › Remove movies in your
+  library). Checked with an empty list only. The source table's toolbar has Filters: the iPhone's `SourceFilterSheet`
+  (now in `App/Components` with `FlowLayout`), over the saved filter, so the Mac edits the same one as the iPhone.
+  Checked with Interstellar's 1,600 releases.
+
 ## 9. Where to pick up (2026-10-22)
 
 1. **Phase 2c, the rest of Search**: Books, Audiobooks, Music, Games (metadata first, then the indexers:

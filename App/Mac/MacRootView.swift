@@ -90,6 +90,8 @@ struct MacRootView: View {
             MacDownloadsView()
         case .onServices:
             MacOnServicesView()
+        case .watchlist:
+            MacWatchlistView()
         case .some(let item):
             ContentUnavailableView(item.title, systemImage: item.symbol,
                                    description: Text("This page comes with the next step of the Mac app."))

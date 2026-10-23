@@ -18,6 +18,7 @@ struct MacSourcesTable: View {
     @State private var busy: Set<StreamGroup.ID> = []
     @State private var status: (text: String, isError: Bool)?
     @State private var showFailures = false
+    @State private var showFilters = false
     /// Usenet jobs added by Play, so Play again reuses the job (and its service).
     @State private var usenetJobs: [StreamGroup.ID: (backend: BackendID, itemID: LibraryItem.ID)] = [:]
 
@@ -49,6 +50,14 @@ struct MacSourcesTable: View {
         }
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
+                Button("Filters", systemImage: model.sourceFilter.isActive
+                       ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease.circle") {
+                    showFilters = true
+                }
+                .disabled(groups == nil)
+                .help("Filter and sort the releases: resolution, codec, HDR, audio, language, tracker…")
+            }
+            ToolbarItem(placement: .primaryAction) {
                 Button(model.playback.playLabel, systemImage: "play.fill") {
                     selectedGroups.first.map { play($0) }
                 }
@@ -64,6 +73,10 @@ struct MacSourcesTable: View {
             add: selectedGroups.isEmpty ? nil : { selectedGroups.forEach { add($0, only: nil) } },
             play: selectedGroups.count == 1 && canPlay(selectedGroups[0]) ? { play(selectedGroups[0]) } : nil
         ))
+        .sheet(isPresented: $showFilters) {
+            SourceFilterSheet(filter: $model.sourceFilter, groups: groups ?? [])
+                .frame(minWidth: 460, idealWidth: 520, minHeight: 480, idealHeight: 640)
+        }
         .task(id: query.id + "\(query.scope.map { "\($0)" } ?? "")") { await load() }
     }
 

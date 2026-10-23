@@ -54,6 +54,7 @@ struct SourceFilterSheet: View {
             }
             .navigationTitle("Filters")
             .navigationBarTitleDisplayMode(.inline)
+            .formStyle(.grouped)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Reset") { filter.reset() }
