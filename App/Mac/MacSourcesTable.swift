@@ -21,6 +21,11 @@ struct MacSourcesTable: View {
     @State private var status: (text: String, isError: Bool)?
     @State private var showFailures = false
     @State private var showFilters = false
+    /// Plugins that search Movies & TV answer for this title next to the addons and indexers.
+    @State private var pluginSearch = PluginSearch()
+    @State private var tab = ResultsTab.sources
+
+    enum ResultsTab { case sources, plugins }
     /// A described filter ("4K DV, no Atmos, under 20 GB") on top of the saved one, for this list only.
     @State private var request: SourceRequest?
     /// Usenet jobs added by Play, so Play again reuses the job (and its service).
@@ -34,7 +39,9 @@ struct MacSourcesTable: View {
     var body: some View {
         @Bindable var model = model
         VStack(spacing: 0) {
-            if let groups {
+            if tab == .plugins {
+                MacPluginResults(search: pluginSearch)
+            } else if let groups {
                 let shown = visible(of: groups)
                 if let upgradeOver, let label = upgradeOver.label {
                     Label("Better than yours (\(label)) · \(upgrades(of: groups).count) of \(groups.count)", systemImage: "arrow.up.circle")
@@ -70,6 +77,15 @@ struct MacSourcesTable: View {
             footer
         }
         .toolbar {
+            if upgradeOver == nil, !pluginSearch.isEmpty || pluginSearch.isSearching {
+                ToolbarItem(placement: .principal) {
+                    Picker("Results", selection: $tab) {
+                        Text("Sources").tag(ResultsTab.sources)
+                        Text("Plugins (\(pluginSearch.resultCount))").tag(ResultsTab.plugins)
+                    }
+                    .pickerStyle(.segmented)
+                }
+            }
             ToolbarItem(placement: .primaryAction) {
                 Button("Filters", systemImage: model.sourceFilter.isActive
                        ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease.circle") {
@@ -219,6 +235,7 @@ struct MacSourcesTable: View {
 
     private func load() async {
         groups = nil
+        searchPlugins()
         let results = await model.sources(for: query)
         groups = results.groups
         failures = results.failures
@@ -262,6 +279,15 @@ struct MacSourcesTable: View {
         } else {
             DescribeSourcesField(groups: groups) { request = $0 }
         }
+    }
+
+    /// Not when looking for an upgrade: plugin rows carry no traits to compare.
+    private func searchPlugins() {
+        guard upgradeOver == nil else { return }
+        let title = PluginTitle(name: query.searchTitle ?? query.media?.name ?? "", type: query.type, streamID: query.id,
+                                media: query.media, scope: query.scope)
+        pluginSearch.search(title.query, category: .media, title: title, media: query.media,
+                            calls: model.plugins.calls(.search, category: .media))
     }
 
     private var selectedGroups: [StreamGroup] {

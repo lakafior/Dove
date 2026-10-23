@@ -353,6 +353,12 @@ Split in three: Library, then Downloads, then Search → sources → add.
   through `UpgradeRoute`/`MacUpgradeView` (a movie, or a season through its first episode). Compiled, not seen with a
   real weak spot. The sources table's empty state now fills the page (the header had floated to the middle).
 
+- **Plugins in the movie and series sources** (2026-10-23): `MacSourcesTable` asks the plugins that search Movies & TV
+  (`PluginSearch` with `PluginTitle`: name, year, IDs, season and episode from the stream ID, pack scope), not when it
+  looks for an upgrade. A Sources | Plugins (N) switch appears in the toolbar once a plugin answers; the plugin tab is
+  the releases page's `MacPluginResults` (a section per plugin, Get to the kind's place). Checked with Interstellar
+  (Chomikuj: 90 results).
+
 ## 9. Where to pick up (2026-10-22)
 
 1. **Phase 2c, the rest of Search**: Books, Audiobooks, Music, Games (metadata first, then the indexers:
