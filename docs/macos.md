@@ -318,7 +318,9 @@ Split in three: Library, then Downloads, then Search → sources → add.
 
 - **Focus after a click** (2026-10-23): a click on a row often left the Filter field or the sidebar as first responder, so
   the selection drew grey and ⌘A, ⌫ and the arrows went elsewhere. `takesFocusWhenSelected` (`MacShortcuts.swift`)
-  moves the focus into the table or icon grid whenever its selection changes; it is on every table of the Mac app.
+  moves the focus into the table or icon grid when its page appears, on any click in it (also the empty space under
+  the rows) and whenever its selection changes; it is on every table of the Mac app, so the content next to the sidebar
+  has the keyboard by default.
   Checked by clicking the Filter field, then a row: blue, and ⌘A selects all.
 
 ## 9. Where to pick up (2026-10-22)

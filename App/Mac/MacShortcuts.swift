@@ -100,7 +100,7 @@ struct MacShortcutCommands: Commands {
     }
 }
 
-/// A click on a row selects it, but the table does not always become the first responder (the toolbar's Filter field or
+/// The page's list or grid takes the keyboard focus. A click on a row selects it, but the table does not always become the first responder (the toolbar's Filter field or
 /// the sidebar keeps it): the selection then shows grey, and ⌘A, ⌫ and the arrow keys go elsewhere. Taking the focus when
 /// the selection changes makes a click select in blue, as in the Finder.
 private struct TakesFocusWhenSelected<ID: Hashable>: ViewModifier {
@@ -111,6 +111,13 @@ private struct TakesFocusWhenSelected<ID: Hashable>: ViewModifier {
         content
             .focused($focused)
             .onChange(of: selection) { if !selection.isEmpty { focused = true } }
+            // The content next to the sidebar is where the keyboard goes: when the page appears, and on any click in
+            // it, also on the empty space under the rows.
+            .task {
+                try? await Task.sleep(for: .milliseconds(150))
+                focused = true
+            }
+            .simultaneousGesture(TapGesture().onEnded { focused = true })
     }
 }
 
