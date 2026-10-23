@@ -84,7 +84,11 @@ extension LibraryMatcher {
     public static func applyGameHints(_ items: [ShelfItem], store: MetadataStore<GameSummary>) async -> [String: GameSummary] {
         var applied: [String: GameSummary] = [:]
         for item in items {
-            guard let game = item.hint?.game, let key = item.gameGuess?.key, applied[key] == nil else { continue }
+            guard let game = item.hint?.game, let guess = item.gameGuess, applied[guess.key] == nil else { continue }
+            let key = guess.key
+            // A hint for a game on other platforms than the release is a wrong pick (a 2021 Game Boy Color homebrew
+            // recorded for a FitGirl repack of the 2025 PC game): the search decides instead.
+            if let platform = guess.platform, !game.platforms.isEmpty, !game.platforms.contains(platform) { continue }
             switch await store.entry(for: key) {
             case .manual: continue
             case .matched(let current) where current.id == game.id: continue

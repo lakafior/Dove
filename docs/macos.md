@@ -289,6 +289,15 @@ Split in three: Library, then Downloads, then Search → sources → add.
   keeps only the view switch and the Watchlist bookmark (Apple's pattern: the toolbar acts on a list's selection, a
   page about one thing has its buttons beside it).
 
+- **Adding from outside, and Play from sources** (2026-10-23, built, not run yet): `MacSourceIntake` (`MacAddSources.swift`)
+  turns a magnet, link, info hash, `.torrent` or `.nzb` into `AppModel.openedSource`, which `MacRootView` shows as the
+  iPhone's `AddSourceView` (shared file, now in the Mac target) in `MacAddSourceSheet`. Entry points: dropping files,
+  links or text on the window, File › Open… (⌘O), File › Add from Clipboard (⇧⌘V; Finder-copied files first), the
+  Search field (a magnet there opens the sheet), `magnet:` links and `.torrent`/`.nzb` documents (Dock drop, Open With;
+  `CFBundleURLTypes`/`CFBundleDocumentTypes`). `MacRouter.notice` is the window alert for results and refusals. Play in
+  the sources table: toolbar button, context menu Play / Play in… (addon link, or an NZB through Dove's nzbdav job as
+  on the iPhone; a compressed archive points to Add Only To instead of the iPhone's one-tap fallback).
+
 ## 9. Where to pick up (2026-10-22)
 
 1. **Phase 2c, the rest of Search**: Books, Audiobooks, Music, Games (metadata first, then the indexers:

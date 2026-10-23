@@ -9,13 +9,13 @@ struct GameGuessTests {
         ("Pokemon - Emerald Version (USA, Europe).gba", "Pokemon - Emerald Version", .gameBoyAdvance),
         ("Metal Gear Solid (USA) (Disc 1) (v1.1).chd", "Metal Gear Solid", nil),
         ("Super Mario Odyssey [0100000000010000][v0].nsp", "Super Mario Odyssey", .nintendoSwitch),
-        // Scene and repacks.
-        ("Elden.Ring.Shadow.of.the.Erdtree-RUNE", "Elden Ring Shadow of the Erdtree", nil),
-        ("Baldurs.Gate.3.v4.1.1.3767641-GOG", "Baldurs Gate 3", nil),
-        ("Cyberpunk 2077 v2.1 - GOG", "Cyberpunk 2077", nil),
-        ("Red Dead Redemption 2 [v 1436.28 + DLCs] [FitGirl Repack]", "Red Dead Redemption 2", nil),
-        ("Elden Ring - Deluxe Edition [FitGirl Repack]", "Elden Ring", nil),
-        ("The.Witcher.3.Wild.Hunt.Complete.Edition-GOG", "The Witcher 3 Wild Hunt", nil),
+        // Scene and repacks: PC unless the name says otherwise.
+        ("Elden.Ring.Shadow.of.the.Erdtree-RUNE", "Elden Ring Shadow of the Erdtree", .pc),
+        ("Baldurs.Gate.3.v4.1.1.3767641-GOG", "Baldurs Gate 3", .pc),
+        ("Cyberpunk 2077 v2.1 - GOG", "Cyberpunk 2077", .pc),
+        ("Red Dead Redemption 2 [v 1436.28 + DLCs] [FitGirl Repack]", "Red Dead Redemption 2", .pc),
+        ("Elden Ring - Deluxe Edition [FitGirl Repack]", "Elden Ring", .pc),
+        ("The.Witcher.3.Wild.Hunt.Complete.Edition-GOG", "The Witcher 3 Wild Hunt", .pc),
         ("The_Legend_of_Zelda_Tears_of_the_Kingdom_NSW-VENOM", "The Legend of Zelda Tears of the Kingdom", .nintendoSwitch),
         ("God.of.War.PS4-DUPLEX", "God of War", .ps4),
     ])
@@ -272,7 +272,7 @@ struct GameLibraryTests {
         #expect(games.map(\.name) == ["No-Intro SNES Romset", "Elden Ring", "Super Metroid"], "newest first")
         let ring = games[1]
         #expect(ring.id == "game:igdb:119133" && ring.items.count == 3)
-        #expect(ring.platforms == [.ps5], "platforms held, from the names")
+        #expect(ring.platforms == [.pc, .ps5], "platforms held, from the names (scene groups and repackers are PC)")
         #expect(games[0].isCollection && games[0].game == nil)
         #expect(games[2].platforms == [.snes] && games[2].year == nil)
         #expect(LibraryShelf.others(items).map(\.item.id) == ["6"], "games are not other files")
@@ -298,6 +298,12 @@ struct GameLibraryTests {
         let applied = await LibraryMatcher.applyGameHints(hinted, store: store)
         #expect(applied == [GameGuess(releaseName: "Elden.Ring-RUNE").key: elden])
         #expect(await LibraryMatcher.applyGameHints(hinted, store: store).isEmpty, "recorded once")
+
+        // A repack is a PC release; a hint for a Game Boy Color game of the same name is not applied.
+        #expect(GameGuess(releaseName: "Hollow Knight - Silksong [FitGirl Repack]").platform == .pc)
+        let homebrew = GameSummary(id: "plugin:lb:432714", title: "Hollow Knight: Silk Song", year: 2021, platforms: [.gameBoyColor], type: "Homebrew")
+        let wrong = [item("3", "Hollow Knight - Silksong [FitGirl Repack]", added: 3, hint: AddedHint(releaseName: nil, game: homebrew))]
+        #expect(await LibraryMatcher.applyGameHints(wrong, store: store).isEmpty)
     }
 }
 
@@ -349,7 +355,7 @@ struct GameFolderTests {
 
 struct GameMergeTests {
     @Test func theOriginalBeatsLaterPortsAndSoundtracksSink() {
-        let port = GameSummary(id: "plugin:lb:1", title: "The Legend of Zelda: A Link to the Past", year: 2022, platforms: [.pc], type: "Homebrew")
+        let port = GameSummary(id: "wd:1", title: "The Legend of Zelda: A Link to the Past", year: 2002, platforms: [.gameBoyAdvance])
         let original = GameSummary(id: "plugin:lb:2", title: "The Legend of Zelda: A Link to the Past", year: 1991, platforms: [.snes], cover: nil)
         let merged = GameMatcher.merge([], [port, original])
         #expect(merged.map(\.id) == ["plugin:lb:2"], "the earliest dated one")
@@ -358,5 +364,19 @@ struct GameMergeTests {
         let game = GameSummary(id: "s:1", title: "Hollow Knight Silksong")
         #expect(!soundtrack.isMainGame)
         #expect(GameMatcher.rank([soundtrack, game], for: "hollow knight").first == game)
+    }
+
+    /// LaunchBox's 2021 Game Boy Color homebrew "Hollow Knight: Silk Song" took the place of the 2025 game (from GOG
+    /// and Wikidata) as "the earliest one", so a FitGirl repack showed as a Game Boy Color game from 2021.
+    @Test func anEarlierHomebrewOfTheSameNameDoesNotReplaceTheGame() throws {
+        let homebrew = GameSummary(id: "plugin:lb:432714", title: "Hollow Knight: Silk Song", year: 2021, platforms: [.gameBoyColor], type: "Homebrew")
+        let gog = GameSummary(id: "plugin:gog:1", title: "Hollow Knight: Silksong", year: 2025, platforms: [.pc], type: "Main Game")
+        let wikidata = GameSummary(id: "wd:Q63294487", title: "Hollow Knight: Silksong", year: 2025, platforms: [.pc, .nintendoSwitch])
+        #expect(!homebrew.isMainGame)
+        let results = GameMatcher.rank(GameMatcher.merge([], [homebrew, gog, wikidata]), for: "Hollow Knight - Silksong")
+        let guess = GameGuess(releaseName: "Hollow Knight - Silksong [FitGirl Repack]")
+        let best = try #require(GameMatcher.best(results, for: guess))
+        #expect(best.year == 2025 && best.platforms.contains(.pc))
+        #expect(results.contains { $0.id == homebrew.id }, "the homebrew stays findable")
     }
 }

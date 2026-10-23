@@ -41,11 +41,12 @@ public struct GameSummary: Identifiable, Sendable, Hashable, Codable {
         self.link = link
     }
 
-    /// Whether it is the game itself, not an add-on to one.
+    /// Whether it is the game itself, not an add-on to one, nor a fan's game borrowing its name (LaunchBox lists a
+    /// 2021 Game Boy Color homebrew "Hollow Knight: Silk Song").
     public var isMainGame: Bool {
         guard let type = type?.lowercased() else { return true }
         return !["dlc", "addon", "add-on", "expansion", "bundle", "compilation", "pack", "update", "mod", "episode", "season",
-                 "soundtrack", "demo"]
+                 "soundtrack", "demo", "homebrew", "hack", "fan"]
             .contains { type.contains($0) }
     }
 
@@ -387,11 +388,14 @@ public enum GameMatcher {
     /// before Wikidata, so theirs win); games only the others know are added. The same game = a name in common and years at most one apart (or one unknown).
     /// Wikidata and plugins also list ports under the original's name (A Link to the Past for SNES, 1991, for GBA with
     /// no date, a 2022 PC port): one of them stays, the earliest dated one (the original), so the answer does not
-    /// depend on which came first.
+    /// depend on which came first. A main game and a homebrew, hack or add-on of one name are different games: both
+    /// stay, and `rank` puts the main game first (an earlier homebrew must not replace the real game).
     public static func merge(_ igdb: [GameSummary], _ others: [GameSummary]) -> [GameSummary] {
         var kept: [GameSummary] = []
         for game in others {
-            guard let index = kept.firstIndex(where: { !Set(names($0)).isDisjoint(with: names(game)) }) else {
+            guard let index = kept.firstIndex(where: {
+                $0.isMainGame == game.isMainGame && !Set(names($0)).isDisjoint(with: names(game))
+            }) else {
                 kept.append(game)
                 continue
             }

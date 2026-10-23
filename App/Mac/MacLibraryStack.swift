@@ -8,11 +8,12 @@ import SwiftUI
 struct MacLibraryStack: View {
     @Environment(MacRouter.self) private var router
     let category: LibraryFilter.Category?
+    var service: BackendID?
 
     var body: some View {
         @Bindable var router = router
         NavigationStack(path: $router.libraryPath) {
-            MacLibraryView(category: category)
+            MacLibraryView(category: category, service: service)
                 .navigationDestination(for: MacRouter.LibraryTarget.self) { target in
                     detail(of: target)
                 }

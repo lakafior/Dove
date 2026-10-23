@@ -10,7 +10,10 @@ struct MacLibraryView: View {
     @Environment(AppModel.self) private var model
     @Environment(MacRouter.self) private var router
     let category: LibraryFilter.Category?
+    /// A service picked in the sidebar: the Library of what that service holds (every kind), without the services filter.
+    var service: BackendID?
 
+    @Environment(\.openSettings) private var openSettings
     @AppStorage(LibraryViewMode.storageKey) private var mode: LibraryViewMode = .icons
     @State private var query = ""
     /// The iPhone's Filters menu: services and status (the kind is the sidebar's).
@@ -27,7 +30,7 @@ struct MacLibraryView: View {
         var filter = LibraryFilter()
         filter.category = category
         filter.query = query
-        filter.backends = backends
+        filter.backends = service.map { [$0] } ?? backends
         filter.status = status
         return filter
     }
@@ -42,7 +45,7 @@ struct MacLibraryView: View {
                 MacLibraryTitleTable(filter: filter, actions: actions, selection: $selection)
             }
         }
-        .navigationTitle(category?.title ?? "Library")
+        .navigationTitle(service?.displayName ?? category?.title ?? "Library")
         .onChange(of: category) { selection = [] }
         .navigationSubtitle(statusLine)
         .searchable(text: $query, placement: .toolbar, prompt: "Filter")
@@ -52,6 +55,11 @@ struct MacLibraryView: View {
                 ViewModePicker(mode: $mode)
             }
             ToolbarItem(placement: .primaryAction) { filterMenu }
+            if service != nil {
+                ToolbarItem(placement: .primaryAction) {
+                    Button("Service Settings…", systemImage: "key") { openSettings() }
+                }
+            }
             ToolbarItem(placement: .primaryAction) { shareButton }
             ToolbarItem(placement: .primaryAction) { moreMenu }
             ToolbarItem(placement: .primaryAction) {
@@ -90,16 +98,18 @@ struct MacLibraryView: View {
     // MARK: Menus
 
     private var filterMenu: some View {
-        let isActive = !backends.isEmpty || status != nil
+        let isActive = (service == nil && !backends.isEmpty) || status != nil
         return Menu("Filters", systemImage: isActive ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease.circle") {
-            Section("Services") {
-                ForEach(model.backends.map(\.id), id: \.self) { backend in
-                    Toggle(backend.displayName, isOn: Binding(
-                        get: { backends.contains(backend) },
-                        set: { on in
-                            if on { backends.insert(backend) } else { backends.remove(backend) }
-                        }
-                    ))
+            if service == nil {
+                Section("Services") {
+                    ForEach(model.backends.map(\.id), id: \.self) { backend in
+                        Toggle(backend.displayName, isOn: Binding(
+                            get: { backends.contains(backend) },
+                            set: { on in
+                                if on { backends.insert(backend) } else { backends.remove(backend) }
+                            }
+                        ))
+                    }
                 }
             }
             Picker("Status", selection: $status) {

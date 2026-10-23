@@ -26,6 +26,9 @@ final class MacRouter {
     var isQuickSearchPresented = false
     /// Bumped by ⌘F on the Search page: its field takes the focus.
     var focusSearchRequest = 0
+    /// A short message for an alert over the window (nothing to add from the clipboard, a file that is not a source…).
+    var notice: String?
+
     /// Words to search, from the sidebar's field, a link or the Services menu; the Search page runs it and clears this.
     var searchRequest: String?
     /// The Search page's stack: a title from search, a link or Spotlight.

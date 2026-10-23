@@ -18,6 +18,8 @@ struct MacSourcesTable: View {
     @State private var busy: Set<StreamGroup.ID> = []
     @State private var status: (text: String, isError: Bool)?
     @State private var showFailures = false
+    /// Usenet jobs added by Play, so Play again reuses the job (and its service).
+    @State private var usenetJobs: [StreamGroup.ID: (backend: BackendID, itemID: LibraryItem.ID)] = [:]
 
     private var ranking: SourceRanking {
         let configured = model.backends.map(\.id)
@@ -46,6 +48,13 @@ struct MacSourcesTable: View {
             footer
         }
         .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                Button(model.playback.playLabel, systemImage: "play.fill") {
+                    selectedGroups.first.map { play($0) }
+                }
+                .disabled(selectedGroups.count != 1 || !canPlay(selectedGroups[0]))
+                .help("Plays the selected release in your player")
+            }
             ToolbarItem(placement: .primaryAction) {
                 Toggle("Download only", systemImage: "arrow.down.to.line", isOn: $model.downloadOnly)
                     .help("Adds wait for the service, download the files to this Mac, then delete the item from the service.")
@@ -103,6 +112,11 @@ struct MacSourcesTable: View {
         .contextMenu(forSelectionType: StreamGroup.ID.self) { ids in
             let chosen = shown.filter { ids.contains($0.id) }
             if let group = chosen.first, chosen.count == 1 {
+                if canPlay(group) {
+                    Button(model.playback.playLabel, systemImage: "play") { play(group) }
+                    PlayInMenu { play(group, in: $0) }
+                    Divider()
+                }
                 Button("Add (Automatic)", systemImage: "plus.circle") { add(group, only: nil) }
                 Menu("Add Only To") {
                     ForEach(group.addTargets(through: model.router), id: \.self) { backend in
@@ -172,6 +186,62 @@ struct MacSourcesTable: View {
         isCheckingCache = true
         if let checked = await model.checkingCache(results.groups) { groups = checked }
         isCheckingCache = false
+    }
+
+    private var selectedGroups: [StreamGroup] {
+        (groups ?? []).filter { selection.contains($0.id) }
+    }
+
+    // MARK: Play
+
+    /// NZBs play through Dove's own nzbdav job when it is set up (addon play links make players wait and time out);
+    /// everything else plays the addon's link.
+    private func usenetSource(of group: StreamGroup) -> (source: Source, backend: any LibraryBackend)? {
+        guard group.kind == .usenet, let source = group.librarySource, source.kind == .nzb,
+              let nzbdav = model.backend(.nzbdav) else { return nil }
+        let backend = usenetJobs[group.id].flatMap { model.backend($0.backend) } ?? nzbdav
+        return (source, backend)
+    }
+
+    private func canPlay(_ group: StreamGroup) -> Bool {
+        usenetSource(of: group) != nil || group.playURL != nil
+    }
+
+    private func play(_ group: StreamGroup, in player: ExternalPlayer? = nil) {
+        guard !busy.contains(group.id) else { return }
+        busy.insert(group.id)
+        status = nil
+        Task {
+            defer { busy.remove(group.id) }
+            do {
+                if let usenet = usenetSource(of: group) {
+                    status = ("Preparing in \(usenet.backend.id.displayName)…", false)
+                    let itemID: LibraryItem.ID
+                    if let job = usenetJobs[group.id], job.backend == usenet.backend.id {
+                        itemID = job.itemID
+                    } else {
+                        // Kept before waiting: a service that unpacks takes longer than Play waits.
+                        itemID = try await usenet.backend.add(usenet.source, category: AddCategory(mediaType: query.type))
+                        usenetJobs[group.id] = (usenet.backend.id, itemID)
+                        model.library.recordAdded(
+                            AddedHint(releaseName: group.releaseName, media: query.media),
+                            backend: usenet.backend.id, itemIDs: [itemID], infoHash: group.infoHash
+                        )
+                    }
+                    let prepared = try await UsenetPlayback.prepare(usenet.source, itemID: itemID, on: usenet.backend)
+                    status = nil
+                    try await model.playback.play([PlayEntry(url: prepared.url)], in: player)
+                } else if let url = group.playURL {
+                    try await model.playback.play([PlayEntry(url: url)], in: player)
+                }
+            } catch let error as UsenetPlayback.CompressedArchiveError {
+                let target = model.compressedArchiveTarget(after: error.backend)
+                status = (error.localizedDescription + (target.map { " Add it to \($0.displayName) instead (Add Only To): it downloads and unpacks it first." }
+                    ?? " A service that unpacks archives can: turn on Usenet for TorBox, Premiumize or Offcloud in Settings."), true)
+            } catch {
+                status = (error.localizedDescription, true)
+            }
+        }
     }
 
     private func add(_ group: StreamGroup, only backend: BackendID?) {

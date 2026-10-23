@@ -22,6 +22,7 @@ struct DoveMacApp: App {
         .handlesExternalEvents(matching: ["*"])
         .commands {
             CommandGroup(replacing: .newItem) {}
+            SourceIntakeCommands(model: delegate.model, router: delegate.platform.router)
             SearchCommands(router: delegate.platform.router)
             ViewModeCommands()
         }

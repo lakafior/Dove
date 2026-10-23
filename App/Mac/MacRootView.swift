@@ -54,13 +54,28 @@ struct MacRootView: View {
             openSettings()
         }
         .onOpenURL { model.open($0) }
+        .dropDestination(for: URL.self) { urls, _ in
+            MacSourceIntake.add(urls: urls, using: model)
+        }
+        .dropDestination(for: String.self) { texts, _ in
+            MacSourceIntake.add(text: texts.joined(separator: "\n"), using: model)
+        }
+        .sheet(item: Binding(get: { model.openedSource }, set: { model.openedSource = $0 })) { batch in
+            MacAddSourceSheet(sources: batch.sources) { result in
+                model.openedSource = nil
+                if !result.isEmpty { router.notice = result }
+            }
+        }
+        .alert(router.notice ?? "", isPresented: Binding(get: { router.notice != nil }, set: { if !$0 { router.notice = nil } })) {
+            Button("OK") {}
+        }
     }
 
     @ViewBuilder
     private var detail: some View {
         switch router.selection {
         case .service(let backend):
-            ServiceStatusPage(backend: backend)
+            MacLibraryStack(category: nil, service: backend).id(backend)
         case .library(let category):
             MacLibraryStack(category: category)
         case .search:
@@ -107,40 +122,6 @@ private struct ServiceSidebarRow: View {
             Spacer()
             StatusLight(color: model.services.light(backend))
         }
-    }
-}
-
-/// A service's state: whether the last refresh reached it, and its plan or premium days.
-private struct ServiceStatusPage: View {
-    @Environment(AppModel.self) private var model
-    @Environment(\.openSettings) private var openSettings
-    let backend: BackendID
-
-    var body: some View {
-        Form {
-            Section {
-                LabeledContent("Status") {
-                    HStack(spacing: 6) {
-                        StatusLight(color: model.services.light(backend))
-                        Text(status)
-                    }
-                }
-                if let account = model.services.accountSummary(backend) {
-                    LabeledContent("Account", value: account)
-                }
-                LabeledContent("Items", value: "\(model.library.items.filter { $0.item.backend == backend }.count)")
-            }
-            Section {
-                Button("Open Settings…") { openSettings() }
-            }
-        }
-        .formStyle(.grouped)
-        .navigationTitle(backend.displayName)
-    }
-
-    private var status: String {
-        if case .offline = model.services.health(of: backend) { return "Offline" }
-        return model.library.updatedAt == nil ? "Not checked yet" : "Online"
     }
 }
 

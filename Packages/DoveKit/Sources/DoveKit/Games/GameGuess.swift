@@ -54,7 +54,8 @@ public struct GameGuess: Sendable, Hashable, Codable {
         if GamePlatform.fileExtensions.contains(ext) || Self.archiveExtensions.contains(ext) {
             base = (base as NSString).deletingPathExtension
         }
-        platform = GamePlatform(releaseName: name)
+        // Scene groups and repackers (FitGirl, DODI, CODEX…) release PC games and rarely say so.
+        platform = GamePlatform(releaseName: name) ?? (GamePlatform.isPCRelease(name) ? .pc : nil)
         region = Self.firstRegion(in: base)
         year = Self.bracketedYear(in: base)
         version = Self.version(in: base)

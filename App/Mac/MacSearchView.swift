@@ -261,6 +261,12 @@ struct MacSearchView: View {
             Task { await model.openTitle(link) }
             return
         }
+        // A magnet, a link or an info hash typed or pasted into the field: the add sheet, not a search.
+        if MacSourceIntake.add(text: query, using: model) {
+            searched = ""
+            router.searchText = ""
+            return
+        }
         home.remember(query, category: category)
         guard category == .media else { return searchCovers(query) }
         guard model.addonSet.canSearch else {

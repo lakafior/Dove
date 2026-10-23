@@ -259,6 +259,7 @@ targets:
       - App/Dove/Features/Plugins/PluginsSettingsView.swift
       - App/Dove/Features/Common/CachedImage.swift
       - App/Shared/BackendBadge.swift
+      - App/Shared/AddSourceView.swift
       # The app icon (Icon Composer) and accent colour, shared with iOS.
       - App/Dove/Resources
     dependencies:
@@ -274,6 +275,15 @@ targets:
         CFBundleURLTypes:
           - CFBundleURLName: net.smigi.dove.app
             CFBundleURLSchemes: [dove]
+          - CFBundleURLName: net.smigi.dove.magnet
+            CFBundleURLSchemes: [magnet]
+        CFBundleDocumentTypes:
+          - CFBundleTypeName: BitTorrent file
+            CFBundleTypeExtensions: [torrent]
+            CFBundleTypeRole: Viewer
+          - CFBundleTypeName: NZB file
+            CFBundleTypeExtensions: [nzb]
+            CFBundleTypeRole: Viewer
         NSLocalNetworkUsageDescription: Dove talks to servers you add on your home network, such as Jackett, Prowlarr or nzbdav.
         NSAppleMusicUsageDescription: Dove searches Apple Music's catalog for album covers, titles and track lists. It does not read or change your music library.
         NSAppTransportSecurity:
