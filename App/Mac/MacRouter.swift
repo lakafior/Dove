@@ -19,7 +19,13 @@ enum SidebarItem: Hashable {
 @MainActor
 @Observable
 final class MacRouter {
+    init() { Self.current = self }
+
     var selection: SidebarItem? = .search
+    /// The app's model, for destinations that name a library item by ID (Spotlight, Siri, links). Set at launch.
+    weak var model: AppModel?
+    /// The window's router, for App Intents (they run in the app's process and know no SwiftUI environment).
+    static weak var current: MacRouter?
     /// The words in the search field (the Search page's, or the ⌘F panel's: one text for both).
     var searchText = ""
     /// The ⌘F panel over a page other than Search.
@@ -146,9 +152,10 @@ final class MacRouter {
             searchPath = NavigationPath()
             searchPath.append(media)
             selection = .search
-        // Library title and book screens come with phase 3; until then the search page is the closest place.
-        case .title, .book:
-            selection = .search
+        case .title(let id):
+            if let title = model?.library.titles.first(where: { $0.id == id }) { openLibrary(.title(title)) } else { selection = .search }
+        case .book(let id):
+            if let book = model?.library.books.first(where: { $0.id == id }) { openLibrary(.book(book)) } else { selection = .search }
         case .watchlist:
             selection = .watchlist
         case .downloads:

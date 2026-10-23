@@ -56,11 +56,28 @@ final class MacAppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationC
         platform = MacPlatform()
         model = AppModel(platform: platform)
         super.init()
+        platform.router.model = model
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         // Download notices show as banners while Dove is in front too (`DownloadAlerts`).
         UNUserNotificationCenter.current().delegate = self
+        // Services › Add to Dove (`NSServices` in Info.plist).
+        NSApp.servicesProvider = self
+        NSUpdateDynamicServices()
+    }
+
+    /// The Services menu's "Add to Dove": selected text (a magnet, a link, an info hash) or .torrent/.nzb files from
+    /// the Finder open the add sheet.
+    @objc func addToDove(_ pasteboard: NSPasteboard, userData: String, error: AutoreleasingUnsafeMutablePointer<NSString>) {
+        let files = pasteboard.readObjects(forClasses: [NSURL.self], options: [.urlReadingFileURLsOnly: true]) as? [URL] ?? []
+        let added = MacSourceIntake.add(urls: files, using: model)
+            || pasteboard.string(forType: .string).map { MacSourceIntake.add(text: $0, using: model) } == true
+        if added {
+            NSApp.activate()
+        } else {
+            error.pointee = "Dove found no magnet, link, .torrent or .nzb in the selection." as NSString
+        }
     }
 
     /// Dove keeps running after its window closes (downloads go on, unless turned off in Settings); the Dock icon or the menu bar bring it back.

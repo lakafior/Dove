@@ -4,8 +4,8 @@ import DoveKit
 import Foundation
 import MediaPlayer
 
-/// The Mac side of `AppPlatform`. Owns the router the window follows and the Dock icon's download progress. Finder,
-/// Spotlight and widgets come in later phases (`docs/macos.md`); until then those hooks do nothing.
+/// The Mac side of `AppPlatform`. Owns the router the window follows and the Dock icon's download progress. Finder
+/// and widgets come in later phases (`docs/macos.md`); until then those hooks do nothing (Spotlight is in).
 @MainActor
 final class MacPlatform: AppPlatform {
     let router = MacRouter()
@@ -28,7 +28,8 @@ final class MacPlatform: AppPlatform {
 
     func servicesChanged(hasServices: Bool) async {}
 
-    func libraryUpdated(_ app: AppModel) {}
+    /// Library titles, books and the watchlist in Spotlight (`SpotlightIndex`, shared with the iPhone).
+    func libraryUpdated(_ app: AppModel) { SpotlightIndex.update(using: app) }
 
     func accountsUpdated(_ app: AppModel) {}
 

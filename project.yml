@@ -254,6 +254,8 @@ targets:
     sources:
       - App/Mac
       - App/Components
+      # The audiobook intent is shared with the iPhone; its widget-only parts are compiled out here.
+      - App/Activity/ContinueAudiobookIntent.swift
       - App/Dove/DoveKitAliases.swift
       - App/Dove/Features/Settings
       - App/Dove/Features/Plugins/PluginsSettingsView.swift
@@ -284,6 +286,16 @@ targets:
           - CFBundleTypeName: NZB file
             CFBundleTypeExtensions: [nzb]
             CFBundleTypeRole: Viewer
+        # Services menu: "Add to Dove" for selected text (magnets, links, hashes) and for .torrent/.nzb files in the Finder.
+        NSServices:
+          - NSMenuItem:
+              default: Add to Dove
+            NSMessage: addToDove
+            NSPortName: Dove
+            NSSendTypes: [public.utf8-plain-text, NSStringPboardType, public.file-url, NSFilenamesPboardType]
+        # "Search in Dove" under Spotlight's Search in Apps (CSQueryContinuationActionType).
+        CoreSpotlightContinuation: true
+        NSUserActivityTypes: [net.smigi.dove.view]
         NSLocalNetworkUsageDescription: Dove talks to servers you add on your home network, such as Jackett, Prowlarr or nzbdav.
         NSAppleMusicUsageDescription: Dove searches Apple Music's catalog for album covers, titles and track lists. It does not read or change your music library.
         NSAppTransportSecurity:

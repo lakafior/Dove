@@ -60,6 +60,8 @@
 	</array>
 	<key>CFBundleVersion</key>
 	<string>1</string>
+	<key>CoreSpotlightContinuation</key>
+	<true/>
 	<key>DoveKeychainGroup</key>
 	<string>$(AppIdentifierPrefix)net.smigi.dove.shared</string>
 	<key>NSAppTransportSecurity</key>
@@ -71,6 +73,27 @@
 	<string>Dove searches Apple Music's catalog for album covers, titles and track lists. It does not read or change your music library.</string>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>Dove talks to servers you add on your home network, such as Jackett, Prowlarr or nzbdav.</string>
+	<key>NSServices</key>
+	<array>
+		<dict>
+			<key>NSMenuItem</key>
+			<dict>
+				<key>default</key>
+				<string>Add to Dove</string>
+			</dict>
+			<key>NSMessage</key>
+			<string>addToDove</string>
+			<key>NSPortName</key>
+			<string>Dove</string>
+			<key>NSSendTypes</key>
+			<array>
+				<string>public.utf8-plain-text</string>
+				<string>NSStringPboardType</string>
+				<string>public.file-url</string>
+				<string>NSFilenamesPboardType</string>
+			</array>
+		</dict>
+	</array>
 	<key>NSUbiquitousContainers</key>
 	<dict>
 		<key>iCloud.net.smigi.dove</key>
@@ -83,5 +106,9 @@
 			<string>Any</string>
 		</dict>
 	</dict>
+	<key>NSUserActivityTypes</key>
+	<array>
+		<string>net.smigi.dove.view</string>
+	</array>
 </dict>
 </plist>

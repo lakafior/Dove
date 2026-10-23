@@ -1,3 +1,4 @@
+import CoreSpotlight
 import DoveAppCore
 import DoveKit
 import SwiftUI
@@ -54,6 +55,15 @@ struct MacRootView: View {
             openSettings()
         }
         .onOpenURL { model.open($0) }
+        // A Spotlight result for a library title, book or watchlist entry, or a title looked at before.
+        .onContinueUserActivity(CSSearchableItemActionType) { activity in
+            if let id = activity.userInfo?[CSSearchableItemActivityIdentifier] as? String { SpotlightIndex.open(id, using: model) }
+        }
+        .onContinueUserActivity(SpotlightIndex.viewActivity) { SpotlightIndex.open($0, using: model) }
+        // "Search in Dove" under Spotlight's Search in Apps: search for whatever was typed there.
+        .onContinueUserActivity(CSQueryContinuationActionType) { activity in
+            model.show(.search(activity.userInfo?[CSSearchQueryString] as? String))
+        }
         // Space plays or pauses the audio player; Downloads and text fields take it first.
         .onKeyPress(.space) {
             guard model.audiobook.session != nil else { return .ignored }

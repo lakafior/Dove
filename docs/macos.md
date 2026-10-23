@@ -359,6 +359,26 @@ Split in three: Library, then Downloads, then Search → sources → add.
   the releases page's `MacPluginResults` (a section per plugin, Get to the kind's place). Checked with Interstellar
   (Chomikuj: 90 results).
 
+- **Series page band** (2026-10-23): the series page's left pane is a fixed 280 pt column, not an `HSplitView`: the
+  split view drew a toolbar-high blurred band over the top of both panes (describe field, table header) once a pick
+  was made. Checked on Fear Itself.
+- **Services menu and Spotlight** (2026-10-23, built, not seen working): Services › Add to Dove (`NSServices` in the Mac
+  Info.plist, `MacAppDelegate.addToDove`): selected text (magnet, link, hash) or .torrent/.nzb files from the Finder
+  open the add sheet. `NSPerformService` from a script could not be checked: it reached an older instance. Spotlight:
+  `SpotlightIndex` moved to `App/Components` (the prediction flag is iOS only) and `MacPlatform.libraryUpdated` calls it, so
+  library titles, books and unheld watchlist entries are indexed after each refresh; a result opens through
+  `onContinueUserActivity` and `MacRouter.show(.title/.book)`, which now opens the library page (`MacRouter.model`). The
+  index could not be inspected from outside (CoreSpotlight items are not in `mdfind`). 
+
+- **App Intents, Shortcuts and Search in Dove** (2026-10-23, built; the intents' metadata is in the bundle, not seen in
+  Shortcuts or Spotlight yet): `DoveIntents.swift` (Add to Dove, Search in Dove, Open Watchlist, Open Downloads and
+  `DoveShortcuts`) moved to `App/Components` and compiles for both apps; the Mac also takes the shared
+  `ContinueAudiobookIntent` and has its own `AddFromClipboardIntent` (`MacIntents.swift`, through `MacSourceIntake`; the
+  iPhone's stays in `App/Activity` because the widgets compile it). Intents reach the window through `AppModel.current`
+  and `MacRouter.current`. "Search in Dove" for Spotlight's Search in Apps: `CoreSpotlightContinuation` in the Mac
+  Info.plist and an `onContinueUserActivity(CSQueryContinuationActionType)` that opens the Search page. Download-only
+  jobs from the Add intent run while Dove is open.
+
 ## 9. Where to pick up (2026-10-22)
 
 1. **Phase 2c, the rest of Search**: Books, Audiobooks, Music, Games (metadata first, then the indexers:

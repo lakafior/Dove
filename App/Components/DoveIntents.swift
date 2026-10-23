@@ -40,7 +40,7 @@ struct AddToDoveIntent: AppIntent {
     @Parameter(title: "Text", description: "A magnet, a link, or text that contains them.", inputOptions: String.IntentInputOptions(keyboardType: .URL))
     var text: String
 
-    @Parameter(title: "Download to iPhone", description: "Download the files to this iPhone, then remove the item from the service.", default: false)
+    @Parameter(title: "Download to this device", description: "Download the files to this iPhone or Mac, then remove the item from the service.", default: false)
     var downloadOnly: Bool
 
     static var parameterSummary: some ParameterSummary {
@@ -77,7 +77,7 @@ struct AddToDoveIntent: AppIntent {
             .joined(separator: ", ")]
         lines[0] = "Added " + lines[0] + "."
         // Download-only jobs wait for the service while Dove is open (iOS has no background polling).
-        if downloadOnly { lines.append("Dove downloads it to this iPhone when you open it.") }
+        if downloadOnly { lines.append("Dove downloads it to this device while it is open.") }
         if !failures.isEmpty { lines.append("Not added: " + failures.joined(separator: "; ")) }
         let summary = lines.joined(separator: " ")
         return .result(value: summary, dialog: "\(summary)")
@@ -114,7 +114,7 @@ struct OpenWatchlistIntent: AppIntent {
 
 struct OpenDownloadsIntent: AppIntent {
     static let title: LocalizedStringResource = "Open Downloads"
-    static let description = IntentDescription("Opens what is downloading to this iPhone and on your services.")
+    static let description = IntentDescription("Opens what is downloading to this device and on your services.")
     static let openAppWhenRun = true
 
     @MainActor
