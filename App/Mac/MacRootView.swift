@@ -55,6 +55,8 @@ struct MacRootView: View {
             openSettings()
         }
         .onOpenURL { model.open($0) }
+        .onChange(of: router.libraryPath.count) { router.syncHistory() }
+        .onChange(of: router.searchPath.count) { router.syncHistory() }
         // A Spotlight result for a library title, book or watchlist entry, or a title looked at before.
         .onContinueUserActivity(CSSearchableItemActionType) { activity in
             if let id = activity.userInfo?[CSSearchableItemActivityIdentifier] as? String { SpotlightIndex.open(id, using: model) }

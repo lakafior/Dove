@@ -44,6 +44,10 @@ final class MacRouter {
     /// The Library's navigation stack: the category's page at the root, the item screens pushed over it (a title, a
     /// season, an album, a release). `MacLibraryStack` shows it; any other page or a sidebar click empties it.
     var libraryPath = NavigationPath()
+    /// What each stack holds, kept beside its path (a `NavigationPath` cannot be read back or refilled), so ⌘] can go
+    /// forward again after ⌘[.
+    private(set) var searchHistory = NavHistory()
+    private(set) var libraryHistory = NavHistory()
 
     /// ⌘F: the Search page's field, or a floating one over any other page.
     func startSearch() {
@@ -82,29 +86,58 @@ final class MacRouter {
     func openLibrary(_ target: LibraryTarget) {
         isQuickSearchPresented = false
         selection = .library(target.category)
-        var path = NavigationPath()
-        path.append(target)
-        libraryPath = path
+        libraryPath = NavigationPath()
+        libraryHistory = NavHistory()
+        libraryHistory.push(target, onto: &libraryPath)
     }
 
     /// A sidebar click: the page changes and the Library's stack goes back to its root.
     func select(_ item: SidebarItem?) {
         selection = item
         libraryPath = NavigationPath()
+        libraryHistory = NavHistory()
     }
 
     /// ⌘[: one screen back on the page in front (the Library's or the Search stack).
     func goBack() {
         switch selection {
-        case .search: if !searchPath.isEmpty { searchPath.removeLast() }
-        case .library, .service: if !libraryPath.isEmpty { libraryPath.removeLast() }
+        case .search: searchHistory.back(&searchPath)
+        case .library, .service: libraryHistory.back(&libraryPath)
         default: break
         }
     }
 
+    /// ⌘]: the screen ⌘[ (or the Back button) left.
+    func goForward() {
+        switch selection {
+        case .search: searchHistory.forward(&searchPath)
+        case .library, .service: libraryHistory.forward(&libraryPath)
+        default: break
+        }
+    }
+
+    var canGoForward: Bool {
+        switch selection {
+        case .search: searchHistory.canGoForward
+        case .library, .service: libraryHistory.canGoForward
+        default: false
+        }
+    }
+
+    /// The Back button and swipes shrink a path without telling the router: the history follows.
+    func syncHistory() {
+        searchHistory.sync(to: searchPath.count)
+        libraryHistory.sync(to: libraryPath.count)
+    }
+
     /// Pushes an item screen over the Library page: a season, an album, an artist, a title found by search.
     func pushLibrary<Value: Hashable>(_ value: Value) {
-        libraryPath.append(value)
+        libraryHistory.push(value, onto: &libraryPath)
+    }
+
+    /// Pushes a title or a releases page over the Search page.
+    func pushSearch<Value: Hashable>(_ value: Value) {
+        searchHistory.push(value, onto: &searchPath)
     }
 
     /// A suggestion picked under the Spotlight field (on the Search page or in the ⌘F panel).
@@ -129,7 +162,8 @@ final class MacRouter {
     /// A book's, album's or game's releases, on the Search page.
     func showReleases(_ target: ReleaseTarget) {
         searchPath = NavigationPath()
-        searchPath.append(target)
+        searchHistory = NavHistory()
+        searchHistory.push(target, onto: &searchPath)
         selection = .search
     }
 
@@ -142,15 +176,18 @@ final class MacRouter {
 
     func show(_ destination: AppModel.Destination) {
         libraryPath = NavigationPath()
+        libraryHistory = NavHistory()
         switch destination {
         case .search(let text):
             searchPath = NavigationPath()
+            searchHistory = NavHistory()
             if let text { searchText = text }
             searchRequest = text
             selection = .search
         case .media(let media):
             searchPath = NavigationPath()
-            searchPath.append(media)
+            searchHistory = NavHistory()
+            searchHistory.push(media, onto: &searchPath)
             selection = .search
         case .title(let id):
             if let title = model?.library.titles.first(where: { $0.id == id }) { openLibrary(.title(title)) } else { selection = .search }
@@ -165,5 +202,42 @@ final class MacRouter {
         case .settings:
             settingsRequested = true
         }
+    }
+}
+
+/// The values a stack holds, in order, each with the way to push it again, plus the ones taken off by going back.
+struct NavHistory {
+    private struct Entry {
+        let append: (inout NavigationPath) -> Void
+    }
+
+    private var trail: [Entry] = []
+    private var ahead: [Entry] = []
+
+    var canGoForward: Bool { !ahead.isEmpty }
+
+    mutating func push<Value: Hashable>(_ value: Value, onto path: inout NavigationPath) {
+        path.append(value)
+        trail.append(Entry { $0.append(value) })
+        ahead = []
+    }
+
+    /// Entries beyond the path's length were popped by the system: they become the forward ones.
+    mutating func sync(to count: Int) {
+        guard count < trail.count else { return }
+        ahead.append(contentsOf: trail[count...].reversed())
+        trail.removeLast(trail.count - count)
+    }
+
+    mutating func back(_ path: inout NavigationPath) {
+        guard !path.isEmpty else { return }
+        path.removeLast()
+        sync(to: path.count)
+    }
+
+    mutating func forward(_ path: inout NavigationPath) {
+        guard let next = ahead.popLast() else { return }
+        next.append(&path)
+        trail.append(next)
     }
 }

@@ -13,6 +13,9 @@ struct MacTitleView: View {
     @State private var error: String?
     @State private var season: Int?
     @State private var pick: Pick?
+    /// The episodes pane's width, dragged by its edge and remembered.
+    @AppStorage("macSeriesPaneWidth") private var paneWidth = 280.0
+    @State private var dragStart: Double?
 
     /// What the right side lists.
     enum Pick: Hashable {
@@ -115,9 +118,25 @@ struct MacTitleView: View {
                     }
                 }
             }
-            // A fixed pane, not an HSplitView: its NSSplitView drew a toolbar-high blurred band over the top of both panes.
-            .frame(width: 280)
+            // Not an HSplitView: its NSSplitView drew a toolbar-high blurred band over the top of both panes. The edge
+            // is dragged by hand instead.
+            .frame(width: paneWidth)
             Divider()
+                .overlay {
+                    Color.clear
+                        .frame(width: 8)
+                        .contentShape(.rect)
+                        .onHover { inside in if inside { NSCursor.resizeLeftRight.push() } else { NSCursor.pop() } }
+                        .gesture(
+                            DragGesture(minimumDistance: 1)
+                                .onChanged { drag in
+                                    let start = dragStart ?? paneWidth
+                                    dragStart = start
+                                    paneWidth = min(max(start + drag.translation.width, 200), 520)
+                                }
+                                .onEnded { _ in dragStart = nil }
+                        )
+                }
 
             Group {
                 if let query = query(for: pick, in: detail) {

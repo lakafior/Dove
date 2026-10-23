@@ -15,6 +15,7 @@ struct RoutingSettingsView: View {
             Section {
                 ForEach(model.debridOrder) { id in
                     ServiceOrderRow(id: id, skipped: debridSkip(id))
+                        .moveMenu(id, in: $model.debridOrder)
                 }
                 .onMove { model.debridOrder.move(fromOffsets: $0, toOffset: $1) }
             } header: {
@@ -26,6 +27,7 @@ struct RoutingSettingsView: View {
             Section {
                 ForEach(model.usenetOrder) { id in
                     ServiceOrderRow(id: id, skipped: usenetSkip(id))
+                        .moveMenu(id, in: $model.usenetOrder)
                 }
                 .onMove { model.usenetOrder.move(fromOffsets: $0, toOffset: $1) }
             } header: {
@@ -114,5 +116,28 @@ struct RoutingSettingsView: View {
             text += plan == .essential ? ": most private trackers ask for 72 hours or more." : "."
         }
         return text
+    }
+}
+
+private extension View {
+    /// On the Mac a row is dragged to reorder (no edit mode); Move Up and Move Down do the same from the menu or with
+    /// the keyboard. Nothing on the iPhone, which has the drag handles.
+    @ViewBuilder
+    func moveMenu(_ id: BackendID, in order: Binding<[BackendID]>) -> some View {
+        #if os(macOS)
+        contextMenu {
+            let index = order.wrappedValue.firstIndex(of: id)
+            Button("Move Up", systemImage: "arrow.up") {
+                if let index { order.wrappedValue.move(fromOffsets: [index], toOffset: index - 1) }
+            }
+            .disabled(index == nil || index == 0)
+            Button("Move Down", systemImage: "arrow.down") {
+                if let index { order.wrappedValue.move(fromOffsets: [index], toOffset: index + 2) }
+            }
+            .disabled(index == nil || index == order.wrappedValue.count - 1)
+        }
+        #else
+        self
+        #endif
     }
 }

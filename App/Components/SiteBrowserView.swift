@@ -67,7 +67,7 @@ struct SiteBrowserView: View {
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
                     ToolbarItem(placement: .cancellationAction) { Button("Done") { dismiss() } }
-                    ToolbarItemGroup(placement: .bottomBar) {
+                    ToolbarItemGroup(placement: Self.navigationBar) {
                         Button("Back", systemImage: "chevron.backward") { page.webView?.goBack() }
                             .disabled(!page.canGoBack)
                         Button("Forward", systemImage: "chevron.forward") { page.webView?.goForward() }
@@ -97,6 +97,12 @@ struct SiteBrowserView: View {
                 }
         }
     }
+
+    #if os(iOS)
+    private static let navigationBar = ToolbarItemPlacement.bottomBar
+    #else
+    private static let navigationBar = ToolbarItemPlacement.automatic
+    #endif
 
     private func download(_ file: (call: PluginCall, id: String), to place: FilePlace) {
         isStarting = true
@@ -129,53 +135,71 @@ final class SiteBrowserPage {
     @ObservationIgnored weak var webView: WKWebView?
 }
 
+#if os(iOS)
 private struct SiteWebView: UIViewRepresentable {
     let start: URL
     let page: SiteBrowserPage
 
     func makeCoordinator() -> Coordinator { Coordinator(page: page) }
 
-    func makeUIView(context: Context) -> WKWebView {
-        let configuration = WKWebViewConfiguration()
-        configuration.websiteDataStore = .default()
-        let webView = WKWebView(frame: .zero, configuration: configuration)
-        webView.allowsBackForwardNavigationGestures = true
-        context.coordinator.observe(webView)
-        page.webView = webView
-        webView.load(URLRequest(url: start))
-        return webView
-    }
+    func makeUIView(context: Context) -> WKWebView { makeSiteWebView(start: start, page: page, coordinator: context.coordinator) }
 
     func updateUIView(_ webView: WKWebView, context: Context) {}
+}
+#else
+private struct SiteWebView: NSViewRepresentable {
+    let start: URL
+    let page: SiteBrowserPage
 
-    @MainActor
-    final class Coordinator: NSObject {
-        let page: SiteBrowserPage
-        private var observations: [NSKeyValueObservation] = []
+    func makeCoordinator() -> Coordinator { Coordinator(page: page) }
 
-        init(page: SiteBrowserPage) {
-            self.page = page
-        }
+    func makeNSView(context: Context) -> WKWebView { makeSiteWebView(start: start, page: page, coordinator: context.coordinator) }
 
-        /// KVO on the web view's own properties: the URL also changes on in-page navigation (SPA links).
-        func observe(_ webView: WKWebView) {
-            observations = [
-                webView.observe(\.url, options: [.initial, .new]) { [weak self] view, _ in
-                    MainActor.assumeIsolated { self?.page.url = view.url }
-                },
-                webView.observe(\.isLoading, options: [.initial, .new]) { [weak self] view, _ in
-                    MainActor.assumeIsolated { self?.page.isLoading = view.isLoading }
-                },
-                webView.observe(\.estimatedProgress, options: [.new]) { [weak self] view, _ in
-                    MainActor.assumeIsolated { self?.page.progress = view.estimatedProgress }
-                },
-                webView.observe(\.canGoBack, options: [.initial, .new]) { [weak self] view, _ in
-                    MainActor.assumeIsolated { self?.page.canGoBack = view.canGoBack }
-                },
-                webView.observe(\.canGoForward, options: [.initial, .new]) { [weak self] view, _ in
-                    MainActor.assumeIsolated { self?.page.canGoForward = view.canGoForward }
-                },
-            ]
-        }
+    func updateNSView(_ webView: WKWebView, context: Context) {}
+}
+#endif
+
+@MainActor
+private func makeSiteWebView(start: URL, page: SiteBrowserPage, coordinator: SiteWebCoordinator) -> WKWebView {
+    let configuration = WKWebViewConfiguration()
+    configuration.websiteDataStore = .default()
+    let webView = WKWebView(frame: .zero, configuration: configuration)
+    webView.allowsBackForwardNavigationGestures = true
+    coordinator.observe(webView)
+    page.webView = webView
+    webView.load(URLRequest(url: start))
+    return webView
+}
+
+private typealias Coordinator = SiteWebCoordinator
+
+@MainActor
+final class SiteWebCoordinator: NSObject {
+    let page: SiteBrowserPage
+    private var observations: [NSKeyValueObservation] = []
+
+    init(page: SiteBrowserPage) {
+        self.page = page
+    }
+
+    /// KVO on the web view's own properties: the URL also changes on in-page navigation (SPA links).
+    func observe(_ webView: WKWebView) {
+        observations = [
+            webView.observe(\.url, options: [.initial, .new]) { [weak self] view, _ in
+                MainActor.assumeIsolated { self?.page.url = view.url }
+            },
+            webView.observe(\.isLoading, options: [.initial, .new]) { [weak self] view, _ in
+                MainActor.assumeIsolated { self?.page.isLoading = view.isLoading }
+            },
+            webView.observe(\.estimatedProgress, options: [.new]) { [weak self] view, _ in
+                MainActor.assumeIsolated { self?.page.progress = view.estimatedProgress }
+            },
+            webView.observe(\.canGoBack, options: [.initial, .new]) { [weak self] view, _ in
+                MainActor.assumeIsolated { self?.page.canGoBack = view.canGoBack }
+            },
+            webView.observe(\.canGoForward, options: [.initial, .new]) { [weak self] view, _ in
+                MainActor.assumeIsolated { self?.page.canGoForward = view.canGoForward }
+            },
+        ]
     }
 }

@@ -31,6 +31,7 @@ struct MacSearchView: View {
     /// The indexers by name (and the plugins), shown in place of covers.
     @State private var releases = ReleaseList()
     @State private var pluginSearch = PluginSearch()
+    @State private var siteSearch: BrowserRequest?
     @State private var isNameSearch = false
 
     /// Adult only when shown.
@@ -98,6 +99,10 @@ struct MacSearchView: View {
         .onChange(of: router.focusSearchRequest) { isFieldFocused = true }
         .onAppear { if searched.isEmpty { isFieldFocused = true } }
         .onExitCommand { clear() }
+        .sheet(item: $siteSearch) { request in
+            SiteBrowserView(start: request.url, category: category)
+                .frame(minWidth: 900, idealWidth: 1100, minHeight: 620, idealHeight: 760)
+        }
     }
 
     /// The newest library title with a backdrop: the start page's background.
@@ -142,7 +147,7 @@ struct MacSearchView: View {
                 .fixedSize()
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: layout.resultWidth), spacing: 16)], alignment: .leading, spacing: 20) {
                     ForEach(results.filter { typeFilter == nil || $0.type == typeFilter }) { media in
-                        NavigationLink(value: media) { ResultCard(media: media) }
+                        Button { router.pushSearch(media) } label: { ResultCard(media: media) }
                             .buttonStyle(.plain)
                     }
                 }
@@ -181,7 +186,7 @@ struct MacSearchView: View {
             VStack(alignment: .leading, spacing: 16) {
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: layout.resultWidth), spacing: 16)], alignment: .leading, spacing: 20) {
                     ForEach(covers) { cover in
-                        NavigationLink(value: cover.target) { CoverResultCard(cover: cover) }
+                        Button { router.pushSearch(cover.target) } label: { CoverResultCard(cover: cover) }
                             .buttonStyle(.plain)
                     }
                 }
@@ -200,6 +205,7 @@ struct MacSearchView: View {
             MacReleasesTable(list: releases)
                 .frame(height: 560 * layout.scale)
                 .clipShape(.rect(cornerRadius: 12))
+            siteSearchButtons
             if !pluginSearch.isEmpty || pluginSearch.isSearching {
                 Text("From plugins").scaledFont(.title2, weight: .bold)
                 MacPluginResults(search: pluginSearch)
@@ -208,6 +214,21 @@ struct MacSearchView: View {
             }
         }
         .frame(maxWidth: layout.contentWidth)
+    }
+
+    /// "Search on <plugin>" for the plugins with a search page in this category, once a name search ran.
+    @ViewBuilder
+    private var siteSearchButtons: some View {
+        let browsers = model.plugins.browsers(for: category)
+        if !searched.isEmpty, !browsers.isEmpty {
+            HStack {
+                ForEach(browsers, id: \.id) { call in
+                    if let url = call.browseURL(for: searched) {
+                        Button("Search on \(call.manifest.name)", systemImage: "safari") { siteSearch = BrowserRequest(url: url) }
+                    }
+                }
+            }
+        }
     }
 
     private func searchByName(_ query: String) {

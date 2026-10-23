@@ -1,3 +1,4 @@
+import AVKit
 import DoveAppCore
 import DoveKit
 import SwiftUI
@@ -24,6 +25,9 @@ struct MacNowPlayingBar: View {
                 controls(session)
                 scrubber
                 trailingMenus(session)
+                AirPlayButton()
+                    .frame(width: 24, height: 24)
+                    .help("Choose where the audio plays: AirPlay speakers and other outputs")
                 Button("Stop", systemImage: "xmark") { player.stop() }
                     .labelStyle(.iconOnly)
                     .buttonStyle(.borderless)
@@ -158,4 +162,15 @@ struct MacNowPlayingBar: View {
     private static func time(_ seconds: Double) -> String {
         Duration.seconds(max(seconds, 0)).formatted(seconds >= 3600 ? .time(pattern: .hourMinuteSecond) : .time(pattern: .minuteSecond))
     }
+}
+
+/// The system's output picker (AirPlay speakers, HomePods, Bluetooth), the Mac form of the iPhone's route button.
+private struct AirPlayButton: NSViewRepresentable {
+    func makeNSView(context: Context) -> AVRoutePickerView {
+        let view = AVRoutePickerView()
+        view.isRoutePickerButtonBordered = false
+        return view
+    }
+
+    func updateNSView(_ view: AVRoutePickerView, context: Context) {}
 }

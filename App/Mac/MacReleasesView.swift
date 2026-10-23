@@ -13,6 +13,7 @@ struct MacReleasesView: View {
     @State private var releases: ReleaseList
     @State private var plugins = PluginSearch()
     @State private var tab = Tab.indexers
+    @State private var siteSearch: BrowserRequest?
 
     enum Tab { case indexers, plugins }
 
@@ -49,6 +50,49 @@ struct MacReleasesView: View {
             }
         }
         .task { search() }
+        .sheet(item: $siteSearch) { request in
+            SiteBrowserView(start: request.url, category: siteCategory, book: siteBook)
+                .frame(minWidth: 900, idealWidth: 1100, minHeight: 620, idealHeight: 760)
+        }
+    }
+
+    // MARK: Plugin sites
+
+    private var siteCategory: SearchCategory {
+        switch target {
+        case .book(_, let format): format == .audiobook ? .audiobooks : .books
+        case .album: .music
+        case .game: .games
+        }
+    }
+
+    private var siteBook: BookSummary? {
+        if case .book(let book, _) = target { book } else { nil }
+    }
+
+    private var siteWords: String {
+        switch target {
+        case .book(let book, _): [book.authors.first, book.searchTitle].compactMap { $0 }.joined(separator: " ")
+        case .album(let album): [album.artist, album.searchTitle].compactMap { $0 }.joined(separator: " ")
+        case .game(let game): game.indexerQuery
+        }
+    }
+
+    /// "Search on <plugin>": the plugins that cannot list results themselves (captchas, bot checks) open their site in
+    /// Dove's browser, where the user searches and a file page offers Download.
+    @ViewBuilder
+    private var siteSearchButtons: some View {
+        let browsers = model.plugins.browsers(for: siteCategory)
+        if !browsers.isEmpty {
+            HStack {
+                ForEach(browsers, id: \.id) { call in
+                    if let url = call.browseURL(for: siteWords) {
+                        Button("Search on \(call.manifest.name)", systemImage: "safari") { siteSearch = BrowserRequest(url: url) }
+                    }
+                }
+            }
+            .padding(.top, 2)
+        }
     }
 
     private var header: some View {
@@ -62,6 +106,7 @@ struct MacReleasesView: View {
                 if let description = target.description {
                     Text(description).lineLimit(3).textSelection(.enabled)
                 }
+                siteSearchButtons
             }
             Spacer()
         }

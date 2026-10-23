@@ -55,6 +55,9 @@ struct MacShortcutCommands: Commands {
             Divider()
             Button("Back") { router.goBack() }
                 .keyboardShortcut("[")
+            Button("Forward") { router.goForward() }
+                .keyboardShortcut("]")
+                .disabled(!router.canGoForward)
         }
         CommandMenu("Item") {
             Button("Open") { page?.open?() }

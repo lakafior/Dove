@@ -1,6 +1,7 @@
 # Dove for macOS: review and architecture plan
 
-Status (2026-10-22): phases 0 and 1 done; phase 2 done except pasted magnets/links, Play and the filter editor (see §9).
+Status (2026-10-23): phases 0–4 done and committed (not every piece checked on the owner's Mac, see §9); phases 5 (Finder,
+widgets) and 6 (distribution) are left.
 
 Goal (owner): a native Mac app that uses what a computer does better, not the iPad app on a Mac and not
 Catalyst. No hurry: the Mac app comes before the release pipeline (#6), which then builds both platforms.
@@ -124,9 +125,9 @@ Rule of thumb: share what draws a thing, not what arranges things.
 |---|---|---|
 | 0 | ✅ (2026-10-22) **Prepare on iOS, no visible change**: create `DoveAppCore`, move `AppModel` and feature models into it, add the platform seam with the iOS implementation, move navigation state to an iOS router, make the download directory injectable, `KeychainStore` data protection flag on macOS, first model tests | iOS app behaves exactly as before (Simulator + owner's device), `swift test` covers the models |
 | 1 | ✅ (2026-10-22) **Mac skeleton**: target in `project.yml`, sandbox and entitlements, sidebar shell, Settings scene with the shared forms | Mac sees the iPhone's settings through iCloud Keychain; services' status lights green |
-| 2 | **Core flows**: Search → sources `Table` → add; Library (Titles grid, Files table); Downloads to chosen folders with Dock progress | add, list, download and delete work against the owner's services |
-| 3 | **Detail screens and playback**: title/series/book/album/game screens, Play in Infuse/IINA/VLC, audiobook and music player | Play all and audiobook positions sync with the iPhone |
-| 4 | **Mac integration**: drag and drop, ⌘O, Dock drop, magnet default handler, Services menu, MenuBarExtra, notifications, App Intents/Spotlight | each checked on the owner's Mac |
+| 2 | ✅ (2026-10-23) **Core flows**: Search → sources `Table` → add; Library (Titles grid, Files table); Downloads to chosen folders with Dock progress | add, list, download and delete work against the owner's services |
+| 3 | ✅ (2026-10-23, no AirPlay picker) **Detail screens and playback**: title/series/book/album/game screens, Play in Infuse/IINA/VLC, audiobook and music player | Play all and audiobook positions sync with the iPhone |
+| 4 | ✅ (2026-10-23) **Mac integration**: drag and drop, ⌘O, Dock drop, magnet default handler, Services menu, MenuBarExtra, notifications, App Intents/Spotlight | each checked on the owner's Mac |
 | 5 | **Finder and widgets**: File Provider location on macOS, desktop widgets | browse and download in Finder |
 | 6 | **Distribution**: Developer ID, notarization, update check, then CI for both platforms (#6) | a notarized DMG from a GitHub release |
 
@@ -379,13 +380,28 @@ Split in three: Library, then Downloads, then Search → sources → add.
   Info.plist and an `onContinueUserActivity(CSQueryContinuationActionType)` that opens the Search page. Download-only
   jobs from the Add intent run while Dove is open.
 
-## 9. Where to pick up (2026-10-22)
+- **Small items** (2026-10-23): AirPlay route button in the player bar (`AVRoutePickerView`, not tried with a session);
+  the series page's episode pane resizes by dragging its edge (width remembered; the split view stays out because of the
+  blurred band); ⌘] goes forward again after ⌘[ or Back (`NavHistory` in `MacRouter` keeps what each stack held, since a
+  `NavigationPath` cannot be refilled; the Search cards are buttons now, so they go through the router); Order and
+  fallback has Move Up/Down in the row's menu on the Mac (rows also drag, as the list has `onMove`); "Search on
+  <plugin>" (the site browser, now `App/Components/SiteBrowserView.swift` with an `NSViewRepresentable` web view) on
+  the book, album and game pages and under the name results, in a sheet. Compiled; the browser, AirPlay and the pane
+  drag not tried (no browse-only plugin or playing session at hand).
 
-1. **Phase 2c, the rest of Search**: Books, Audiobooks, Music, Games (metadata first, then the indexers:
-   `BookReleasesView`, `AlbumReleasesView`, `GameReleasesView`, `ReleaseList` on iOS), Software/Adult/All (indexers by
-   name), plugins' results, pasted magnets and links (`AddSourceView`), the source filter editor, Play from a release.
-2. Per-kind download folders outside `~/Downloads` (NAS): folder picker + security-scoped bookmarks, shown in
-   Settings › Save to on the Mac.
-3. Phase 3 left: the described filter and upgrades in the source list, audiobook queue niceties (the player bar
-   covers the iPhone's controls but has no AirPlay picker).
-4. Not yet checked: the Dock progress bar and the download notice banner with a big file.
+## 9. Where to pick up (2026-10-23)
+
+Done since phase 1 (details in §8): Library pages and item screens, Downloads and On services, Search in every
+category, the source table (add, Play, filters, described filter, upgrades, plugins), the Watchlist page, adding from
+outside (drop, ⌘O, ⇧⌘V, `magnet:`, `.torrent`/`.nzb` documents), menu bar extra and Dock progress, keyboard shortcuts and
+focus, download folders outside `~/Downloads`, Services menu, Spotlight, App Intents and "Search in Dove".
+
+Left:
+
+1. **Phase 5**: the File Provider location in Finder (`DoveFiles` for macOS) and desktop widgets (`DoveWidgets` for
+   macOS). Both are new extension targets: App Group and provisioning to settle first.
+2. **Phase 6**: Developer ID, notarization, update check against GitHub Releases, then CI for both platforms (#6).
+3. Small items: none planned.
+4. Not yet seen working on the owner's Mac: Services › Add to Dove, Spotlight results, the intents in Shortcuts and
+   Spotlight, the Watchlist table with entries, upgrades with a real weak spot, a download into a picked folder, the
+   Dock progress bar and the download banner with a big file.
