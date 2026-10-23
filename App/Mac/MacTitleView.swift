@@ -84,7 +84,7 @@ struct MacTitleView: View {
     private func series(_ detail: MediaDetail) -> some View {
         let current = season ?? detail.seasons.first { $0 > 0 } ?? detail.seasons.first ?? 1
         let episodes = detail.episodes(inSeason: current)
-        return HSplitView {
+        return HStack(spacing: 0) {
             List(selection: $pick) {
                 if detail.seasons.count > 1 {
                     Picker("Season", selection: Binding(get: { current }, set: { season = $0; pick = nil })) {
@@ -115,7 +115,9 @@ struct MacTitleView: View {
                     }
                 }
             }
-            .frame(minWidth: 220, idealWidth: 280, maxWidth: 380)
+            // A fixed pane, not an HSplitView: its NSSplitView drew a toolbar-high blurred band over the top of both panes.
+            .frame(width: 280)
+            Divider()
 
             Group {
                 if let query = query(for: pick, in: detail) {
