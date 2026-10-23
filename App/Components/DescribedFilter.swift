@@ -9,7 +9,7 @@ import FoundationModels
 enum OnDeviceModel {
     static var isAvailable: Bool {
         #if canImport(FoundationModels)
-        if #available(iOS 26, *) { return SystemLanguageModel.default.availability == .available }
+        if #available(iOS 26, macOS 26, *) { return SystemLanguageModel.default.availability == .available }
         #endif
         return false
     }
@@ -25,7 +25,7 @@ enum DescribedFilter {
 
         var errorDescription: String? {
             switch self {
-            case .unavailable: "Apple Intelligence is not available on this iPhone."
+            case .unavailable: "Apple Intelligence is not available on this device."
             case .nothingUnderstood: "Nothing in that matched resolution, source, codec, HDR, audio, language, size or order. Try words like \u{201C}4K DV, no Atmos, under 20 GB\u{201D}."
             }
         }
@@ -33,7 +33,7 @@ enum DescribedFilter {
 
     static func request(for text: String, groups: [StreamGroup]) async throws -> SourceRequest {
         #if canImport(FoundationModels)
-        if #available(iOS 26, *) {
+        if #available(iOS 26, macOS 26, *) {
             let wish = try await LanguageModelSession(instructions: instructions(for: groups))
                 .respond(to: text, generating: SourceWish.self, options: GenerationOptions(samplingMode: .greedy))
                 .content
@@ -82,7 +82,7 @@ enum DescribedFilter {
 enum DescribedLibrary {
     static func request(for text: String, services: [BackendID]) async throws -> LibraryRequest {
         #if canImport(FoundationModels)
-        if #available(iOS 26, *) {
+        if #available(iOS 26, macOS 26, *) {
             let instructions = """
             You turn a short description of what someone wants to see in their media library into filter settings.
             kind: one of movies, series, books, audiobooks, music, software, other, or none.
@@ -117,7 +117,7 @@ enum DescribedLibrary {
 }
 
 #if canImport(FoundationModels)
-@available(iOS 26, *)
+@available(iOS 26, macOS 26, *)
 @Generable
 struct LibraryWish {
     @Guide(description: "What kind of item", .anyOf(["none", "movies", "series", "books", "audiobooks", "music", "software", "other"]))
@@ -136,7 +136,7 @@ struct LibraryWish {
     var words: String?
 }
 
-@available(iOS 26, *)
+@available(iOS 26, macOS 26, *)
 @Generable
 struct SourceWish {
     @Generable

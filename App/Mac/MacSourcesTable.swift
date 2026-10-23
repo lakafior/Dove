@@ -9,6 +9,8 @@ import SwiftUI
 struct MacSourcesTable: View {
     @Environment(AppModel.self) private var model
     let query: SourceQuery
+    /// "Find a better version": only releases clearly better than what the library holds are listed.
+    var upgradeOver: ReleaseQuality?
 
     @State private var groups: [StreamGroup]?
     @State private var failures: [String] = []
@@ -19,6 +21,8 @@ struct MacSourcesTable: View {
     @State private var status: (text: String, isError: Bool)?
     @State private var showFailures = false
     @State private var showFilters = false
+    /// A described filter ("4K DV, no Atmos, under 20 GB") on top of the saved one, for this list only.
+    @State private var request: SourceRequest?
     /// Usenet jobs added by Play, so Play again reuses the job (and its service).
     @State private var usenetJobs: [StreamGroup.ID: (backend: BackendID, itemID: LibraryItem.ID)] = [:]
 
@@ -31,15 +35,32 @@ struct MacSourcesTable: View {
         @Bindable var model = model
         VStack(spacing: 0) {
             if let groups {
-                let shown = model.sourceFilter.apply(to: groups, ranking: ranking)
+                let shown = visible(of: groups)
+                if let upgradeOver, let label = upgradeOver.label {
+                    Label("Better than yours (\(label)) · \(upgrades(of: groups).count) of \(groups.count)", systemImage: "arrow.up.circle")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
+                }
+                if OnDeviceModel.isAvailable, !groups.isEmpty {
+                    describeRow(total: groups.count, shown: shown.count, groups: groups)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
+                    Divider()
+                }
                 if shown.isEmpty {
                     ContentUnavailableView(
-                        groups.isEmpty ? "No sources" : "Everything is filtered out",
+                        groups.isEmpty ? "No sources" : upgrades(of: groups).isEmpty ? "Nothing better yet" : "Everything is filtered out",
                         systemImage: "line.3.horizontal.decrease.circle",
                         description: Text(groups.isEmpty
                             ? "Your addons and indexers found nothing for this."
-                            : "\(groups.count) releases do not pass the filter saved on your iPhone (Sources › Filters).")
+                            : upgrades(of: groups).isEmpty
+                                ? "None of the \(groups.count) releases beats what you have."
+                                : "\(groups.count) releases do not pass the filter (Filters, or the description above).")
                     )
+                    .frame(maxHeight: .infinity)
                 } else {
                     table(shown)
                 }
@@ -205,6 +226,42 @@ struct MacSourcesTable: View {
         isCheckingCache = true
         if let checked = await model.checkingCache(results.groups) { groups = checked }
         isCheckingCache = false
+    }
+
+    /// Every group, or only the better ones when looking for an upgrade.
+    private func upgrades(of groups: [StreamGroup]) -> [StreamGroup] {
+        guard let upgradeOver else { return groups }
+        return groups.filter { ReleaseQuality(traits: $0.traits).isUpgrade(over: upgradeOver) }
+    }
+
+    /// What the table lists: the saved filter, then the described one.
+    private func visible(of groups: [StreamGroup]) -> [StreamGroup] {
+        let filtered = model.sourceFilter.apply(to: upgrades(of: groups), ranking: ranking)
+        return request?.apply(to: filtered, ranking: ranking) ?? filtered
+    }
+
+    /// The field for a described filter, or what it understood with a button to clear it.
+    @ViewBuilder
+    private func describeRow(total: Int, shown: Int, groups: [StreamGroup]) -> some View {
+        if let request {
+            HStack(alignment: .firstTextBaseline) {
+                Label {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("\u{201C}\(request.text)\u{201D}")
+                        Text("\(request.summary) · \(shown) of \(total)").font(.caption).foregroundStyle(.secondary)
+                    }
+                } icon: {
+                    Image(systemName: "sparkles")
+                }
+                Spacer()
+                Button("Clear", systemImage: "xmark.circle.fill") { self.request = nil }
+                    .labelStyle(.iconOnly)
+                    .foregroundStyle(.secondary)
+                    .buttonStyle(.borderless)
+            }
+        } else {
+            DescribeSourcesField(groups: groups) { request = $0 }
+        }
     }
 
     private var selectedGroups: [StreamGroup] {

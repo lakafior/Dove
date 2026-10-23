@@ -343,6 +343,16 @@ Split in three: Library, then Downloads, then Search → sources → add.
   (now in `App/Components` with `FlowLayout`), over the saved filter, so the Mac edits the same one as the iPhone.
   Checked with Interstellar's 1,600 releases.
 
+- **Described filter and upgrades in the source list** (2026-10-23): `DescribedFilter`/`DescribeSourcesField` moved to
+  `App/Components` (macOS 26 availability added), so the Mac's sources table shows the same "Describe it: 4K DV, no
+  Atmos, under 20 GB" field when the on-device model is there, then the chip with what was understood and a clear
+  button. Checked on the Mac with Interstellar ("4K DV, no Atmos, under 90 GB" → 2160p · DV · no Atmos · ≤ 90 GB, 117
+  of 1,601). The model had heard "under 90 GB" as both bounds and filtered everything out: `SourceRequest` now keeps
+  only the bound the words give a direction for when the model gave both (tested). Upgrades: `MacSourcesTable(upgradeOver:)`
+  keeps `ReleaseQuality.isUpgrade` rows and says "Better than yours (…)"; a title page's "Could be better" › Find goes
+  through `UpgradeRoute`/`MacUpgradeView` (a movie, or a season through its first episode). Compiled, not seen with a
+  real weak spot. The sources table's empty state now fills the page (the header had floated to the middle).
+
 ## 9. Where to pick up (2026-10-22)
 
 1. **Phase 2c, the rest of Search**: Books, Audiobooks, Music, Games (metadata first, then the indexers:

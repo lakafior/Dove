@@ -22,6 +22,7 @@ struct MacLibraryStack: View {
                 }
                 // "Find" on a missing episode opens the title's sources (the search results' page).
                 .navigationDestination(for: MediaSummary.self) { MacTitleView(media: $0) }
+                .navigationDestination(for: UpgradeRoute.self) { MacUpgradeView(route: $0) }
                 .navigationDestination(for: ReleaseTarget.self) { MacReleasesView(target: $0) }
         }
     }

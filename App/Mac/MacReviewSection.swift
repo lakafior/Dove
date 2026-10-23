@@ -57,10 +57,20 @@ struct MacReviewSection: View {
                     .foregroundStyle(.secondary)
             }
             Spacer()
-            findButton
+            if let media, model.addonSet.hasStreams {
+                Button("Find", systemImage: "magnifyingglass") { router.pushLibrary(upgradeRoute(for: spot, media: media)) }
+            }
             Button("Keep What I Have") { model.review.dismissQuality(of: title, spot.quality) }
         }
         .controlSize(.small)
+    }
+
+    /// A season's weak spot looks through that season's first episode (packs kept); a movie through its own ID.
+    private func upgradeRoute(for spot: TitleReview.WeakSpot, media: MediaSummary) -> UpgradeRoute {
+        let first = spot.season.flatMap { season in
+            model.review.schedule(for: title)?.episodes.filter { $0.season == season }.min { $0.number < $1.number }
+        }
+        return UpgradeRoute(media: media, quality: spot.quality, season: first == nil ? nil : spot.season, episodeID: first?.id)
     }
 
     @ViewBuilder

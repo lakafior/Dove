@@ -57,8 +57,12 @@ public struct SourceRequest: Equatable, Sendable {
             self.wanted[.language, default: []].insert(code)
         }
         let hasNumber = text.contains { $0.isNumber }
-        maxSize = maxSizeGB.flatMap { $0 > 0 && hasNumber ? Int64($0 * 1_000_000_000) : nil }
-        minSize = minSizeGB.flatMap { $0 > 0 && hasNumber ? Int64($0 * 1_000_000_000) : nil }
+        // A small model hears "under 90 GB" as both bounds: when it gave both, a bound the words give no direction for goes.
+        let wantsMax = Self.mentionsAny(text, ["under", "below", "less than", "at most", "up to", "max", "smaller", "no more than", "<"])
+        let wantsMin = Self.mentionsAny(text, ["over", "above", "more than", "at least", "min", "bigger", "larger", "greater", ">"])
+        let both = (maxSizeGB ?? 0) > 0 && (minSizeGB ?? 0) > 0
+        maxSize = maxSizeGB.flatMap { $0 > 0 && hasNumber && !(both && wantsMin && !wantsMax) ? Int64($0 * 1_000_000_000) : nil }
+        minSize = minSizeGB.flatMap { $0 > 0 && hasNumber && !(both && wantsMax && !wantsMin) ? Int64($0 * 1_000_000_000) : nil }
         self.cachedOnly = cachedOnly && Self.mentionsAny(text, ["cached", "cache", "instant", "ready"])
         self.appleTVFriendly = appleTVFriendly && Self.mentionsAny(text, ["apple tv", "appletv", "atv"])
         self.sort = sort.flatMap(Self.sort(named:)).flatMap { sort in

@@ -75,6 +75,11 @@ struct SourceRequestTests {
         #expect(!r.cachedOnly)
         #expect(r.sort == nil)
         #expect(request(max: 20, text: "small files please").maxSize == nil)
+        // The model gave both bounds for "under 90 GB": only the one the words name stays.
+        let both = request(max: 90, min: 90, text: "4K DV under 90 GB")
+        #expect(both.maxSize == 90_000_000_000 && both.minSize == nil)
+        let between = request(max: 90, min: 40, text: "between 40 and 90 GB, over 40 GB, under 90 GB")
+        #expect(between.maxSize != nil && between.minSize != nil)
     }
 
     @Test func namedLanguageIsWantedEvenWhenTheModelDropsIt() {
