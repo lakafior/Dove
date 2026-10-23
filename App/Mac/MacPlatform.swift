@@ -24,9 +24,9 @@ final class MacPlatform: AppPlatform {
 
     func show(_ destination: AppModel.Destination) { router.show(destination) }
 
-    func libraryChanged() {}
+    func libraryChanged() { FilesLocation.libraryChanged() }
 
-    func servicesChanged(hasServices: Bool) async {}
+    func servicesChanged(hasServices: Bool) async { await FilesLocation.update(hasServices: hasServices) }
 
     /// Library titles, books and the watchlist in Spotlight (`SpotlightIndex`, shared with the iPhone).
     func libraryUpdated(_ app: AppModel) {

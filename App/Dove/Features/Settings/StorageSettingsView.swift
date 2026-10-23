@@ -35,8 +35,6 @@ struct StorageSettingsView: View {
                 Text("Kept so a second Read does not download the book again. iOS may clear both when space runs low; Dove then fetches them again as needed. Downloads are in the Downloads tab.")
             }
 
-            // The Mac's Finder location comes later (docs/macos.md, phase 5).
-            #if os(iOS)
             Section {
                 Button(action: resetFiles) {
                     HStack {
@@ -47,11 +45,10 @@ struct StorageSettingsView: View {
                 .disabled(filesStatus == .testing)
                 if let filesStatus, filesStatus != .testing { SettingsStatusView(status: filesStatus) }
             } header: {
-                Text("Files app")
+                Text(Self.filesTitle)
             } footer: {
-                Text("Your services appear in Files under Locations › Dove. If Files shows an error there, reset it: Files forgets what it knew and lists everything again.")
+                Text(Self.filesFooter)
             }
-            #endif
         }
         .navigationTitle("Storage and Files")
         .navigationBarTitleDisplayMode(.inline)
@@ -66,16 +63,24 @@ struct StorageSettingsView: View {
     }
 
     #if os(iOS)
+    private static let filesTitle = "Files app"
+    private static let filesDone = "Done. Open Files, tap Dove and turn it on."
+    private static let filesFooter = "Your services appear in Files under Locations › Dove. If Files shows an error there, reset it: Files forgets what it knew and lists everything again."
+    #else
+    private static let filesTitle = "Finder"
+    private static let filesDone = "Done. Dove appears again in Finder's sidebar; if it does not, turn it on in System Settings › General › Login Items & Extensions › Added Extensions."
+    private static let filesFooter = "Your services appear in Finder's sidebar under Locations › Dove. If Finder shows an error there, reset it: Finder forgets what it knew and lists everything again."
+    #endif
+
     private func resetFiles() {
         filesStatus = .testing
         Task {
             do {
                 try await FilesLocation.reset()
-                filesStatus = .success("Done. Open Files, tap Dove and turn it on.")
+                filesStatus = .success(Self.filesDone)
             } catch {
                 filesStatus = SettingsStatus(error)
             }
         }
     }
-    #endif
 }

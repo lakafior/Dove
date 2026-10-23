@@ -399,6 +399,15 @@ Split in three: Library, then Downloads, then Search → sources → add.
   `net.smigi.dove` (the command line has no account: "No profiles for 'net.smigi.dove.widgets'"), run DoveMac once, then
   Edit Widgets on the desktop.
 
+- **Finder location** (2026-10-23, compiles unsigned; not run): `DoveMacFiles` (app extension, sandboxed, embedded in
+  `DoveMac`) is the iPhone's `DoveFiles` File Provider (`App/DoveFiles`, UIKit-free, logic in DoveKit's
+  `LibraryBrowser`) built for macOS with the same bundle ID `net.smigi.dove.files`, keychain group and App Group.
+  `FilesLocation` (adds and removes the "Dove" domain, signals the working set) moved to `App/Components`;
+  `MacPlatform` calls it like the iPhone's platform does, so the location exists while a service is set up. Settings ›
+  Storage and Files has the Finder reset. To run it: let Xcode sign `net.smigi.dove.files` for macOS (as for the
+  widgets), run DoveMac once, then switch Dove on in System Settings › General › Login Items & Extensions › File
+  Providers if Finder does not show it; browse, open a file (it downloads) and delete an item folder to check.
+
 ## 9. Where to pick up (2026-10-23)
 
 Done since phase 1 (details in §8): Library pages and item screens, Downloads and On services, Search in every
@@ -408,8 +417,7 @@ focus, download folders outside `~/Downloads`, Services menu, Spotlight, App Int
 
 Left:
 
-1. **Phase 5**: the File Provider location in Finder (`DoveFiles` for macOS); desktop widgets are built, waiting for
-   signing and a first run.
+1. **Phase 5**: built (widgets and the Finder location), waiting for signing and a first run on the owner's Mac.
 2. **Phase 6**: Developer ID, notarization, update check against GitHub Releases, then CI for both platforms (#6).
 3. Small items: none planned.
 4. Not yet seen working on the owner's Mac: Services › Add to Dove, Spotlight results, the intents in Shortcuts and

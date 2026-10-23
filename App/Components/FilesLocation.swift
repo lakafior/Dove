@@ -6,7 +6,7 @@ enum FilesLocation {
     static var domain: NSFileProviderDomain {
         let domain = NSFileProviderDomain(identifier: NSFileProviderDomainIdentifier("library"), displayName: "Dove")
         // Deletes go straight to the service; there is no trash to sync.
-        if #available(iOS 18, *) { domain.supportsSyncingTrash = false }
+        if #available(iOS 18, macOS 15, *) { domain.supportsSyncingTrash = false }
         return domain
     }
 
