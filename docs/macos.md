@@ -1,7 +1,8 @@
 # Dove for macOS: review and architecture plan
 
-Status (2026-10-23): phases 0–4 done and committed (not every piece checked on the owner's Mac, see §9); phases 5 (Finder,
-widgets) and 6 (distribution) are left.
+Status (2026-10-27): phases 0–5 done; the Finder location and the desktop widgets were checked on the owner's Mac
+(2026-10-27) from a notarized DMG. Phase 6 is built — signing, notarization and the release workflow all work — but has
+not yet produced a release from CI. Not every earlier piece has been checked on the Mac, see §9.
 
 Goal (owner): a native Mac app that uses what a computer does better, not the iPad app on a Mac and not
 Catalyst. No hurry: the Mac app comes before the release pipeline (#6), which then builds both platforms.
@@ -128,8 +129,8 @@ Rule of thumb: share what draws a thing, not what arranges things.
 | 2 | ✅ (2026-10-23) **Core flows**: Search → sources `Table` → add; Library (Titles grid, Files table); Downloads to chosen folders with Dock progress | add, list, download and delete work against the owner's services |
 | 3 | ✅ (2026-10-23, no AirPlay picker) **Detail screens and playback**: title/series/book/album/game screens, Play in Infuse/IINA/VLC, audiobook and music player | Play all and audiobook positions sync with the iPhone |
 | 4 | ✅ (2026-10-23) **Mac integration**: drag and drop, ⌘O, Dock drop, magnet default handler, Services menu, MenuBarExtra, notifications, App Intents/Spotlight | each checked on the owner's Mac |
-| 5 | **Finder and widgets**: File Provider location on macOS, desktop widgets | browse and download in Finder |
-| 6 | **Distribution**: Developer ID, notarization, update check, then CI for both platforms (#6) | a notarized DMG from a GitHub release |
+| 5 | ✅ (2026-10-27) **Finder and widgets**: File Provider location on macOS, desktop widgets | browse and download in Finder |
+| 6 | **Distribution**: Developer ID, notarization, update check, then CI for both platforms (#6). Mac signing, notarization and `.github/workflows/release.yml` done 2026-10-27; left: a run from CI, the update check, and the iOS leg | a notarized DMG from a GitHub release |
 
 Phase 0 is the risky one (it touches every screen's environment) and gives nothing visible; it should land on its
 own, checked on a device, before any Mac view is written.
@@ -417,8 +418,16 @@ focus, download folders outside `~/Downloads`, Services menu, Spotlight, App Int
 
 Left:
 
-1. **Phase 5**: built (widgets and the Finder location), waiting for signing and a first run on the owner's Mac.
-2. **Phase 6**: Developer ID, notarization, update check against GitHub Releases, then CI for both platforms (#6).
+1. ~~**Phase 5**~~ — done (2026-10-27): the owner installed the notarized DMG and ran it; the Finder location and the
+   desktop widgets both work.
+2. **Phase 6**, partly done (2026-10-27): `scripts/build-mac.sh` archives and exports a Developer ID build,
+   `scripts/notarize.sh` and `scripts/make-dmg.sh` notarize and package it, and `.github/workflows/release.yml` runs
+   the lot on a tag or by hand. Proven end to end on the owner's Mac: a stapled DMG that Gatekeeper accepts
+   (`source=Notarized Developer ID`). Hardened runtime had to be turned on for `DoveMacWidgets` and `DoveMacFiles`
+   as well — the host target's setting is not inherited, and only notarization catches it; `codesign --verify
+   --deep --strict` passes either way. Left: a run from CI, the update check against GitHub Releases, and the iOS leg
+   (the Apple Distribution certificate is in the repository secrets, but notarization for alternative distribution is
+   not the same flow as `notarytool` and has to be read up first).
 3. Small items: none planned.
 4. Not yet seen working on the owner's Mac: Services › Add to Dove, Spotlight results, the intents in Shortcuts and
    Spotlight, the Watchlist table with entries, upgrades with a real weak spot, a download into a picked folder, the
