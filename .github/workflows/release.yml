@@ -12,6 +12,9 @@ name: Release
 on:
   push:
     tags: [ "v*" ]
+  # Run by hand to exercise signing and notarization without publishing anything:
+  # the DMG comes back as a build artefact and the release step is skipped.
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -33,13 +36,22 @@ jobs:
         with:
           fetch-depth: 0   # build number = commit count
 
-      - name: Check that the tag matches the project version
+      - name: Read the version, and on a tag check that it matches
         run: |
           VERSION="$(sed -nE 's/^ *MARKETING_VERSION: *"?([^"]+)"?/\1/p' project.yml | head -1)"
-          echo "project.yml version: $VERSION, tag: $TAG"
-          if [[ "v$VERSION" != "$TAG" ]]; then
-            echo "::error::Tag $TAG doesn't match MARKETING_VERSION $VERSION in project.yml"
+          if [[ -z "$VERSION" ]]; then
+            echo "::error::No MARKETING_VERSION in project.yml"
             exit 1
+          fi
+          echo "project.yml version: $VERSION"
+          if [[ "$GITHUB_REF_TYPE" == "tag" ]]; then
+            echo "tag: $TAG"
+            if [[ "v$VERSION" != "$TAG" ]]; then
+              echo "::error::Tag $TAG doesn't match MARKETING_VERSION $VERSION in project.yml"
+              exit 1
+            fi
+          else
+            echo "Manual run: building and notarizing, no release will be published."
           fi
           echo "VERSION=$VERSION" >> "$GITHUB_ENV"
 
@@ -110,7 +122,18 @@ jobs:
           mv dist/Dove.dmg "dist/Dove-$VERSION.dmg"
           (cd dist && shasum -a 256 "Dove-$VERSION.dmg" > "Dove-$VERSION.dmg.sha256")
 
+      - name: Upload the DMG as a build artefact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Dove-${{ env.VERSION }}-dmg
+          path: |
+            dist/Dove-${{ env.VERSION }}.dmg
+            dist/Dove-${{ env.VERSION }}.dmg.sha256
+          retention-days: 14
+          if-no-files-found: error
+
       - name: Publish the release
+        if: github.ref_type == 'tag'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
