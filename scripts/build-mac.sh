@@ -46,21 +46,29 @@ xcodebuild archive \
 # Only the Account Holder may create Developer ID profiles, which an App Store Connect key cannot do: in CI
 # the export signs manually with the profiles Xcode made on the owner's Mac ("Mac Team Direct Provisioning
 # Profile: <bundle ID>"), passed in MAC_PROFILES_DIR. Locally Xcode finds or makes them itself.
+# Profiles Xcode made (IsXcodeManaged) only work with automatic signing, which then finds them installed
+# instead of trying to create them; hand-made ones from the developer portal are mapped for manual signing.
 SIGNING="<key>signingStyle</key><string>automatic</string>"
 if [[ -n "${MAC_PROFILES_DIR:-}" ]]; then
   PROFILES=""
+  MANAGED=false
   DECODED="$(mktemp)"
   for profile in "$MAC_PROFILES_DIR"/*.provisionprofile; do
     security cms -D -i "$profile" -o "$DECODED"
+    # Developer ID profiles provision every Mac; development ones list devices.
+    [[ "$(/usr/libexec/PlistBuddy -c 'Print :ProvisionsAllDevices' "$DECODED" 2>/dev/null)" == "true" ]] || continue
+    [[ "$(/usr/libexec/PlistBuddy -c 'Print :IsXcodeManaged' "$DECODED" 2>/dev/null)" == "true" ]] && MANAGED=true
     APP_ID="$(/usr/libexec/PlistBuddy -c 'Print :Entitlements:com.apple.application-identifier' "$DECODED")"
     UUID="$(/usr/libexec/PlistBuddy -c 'Print :UUID' "$DECODED")"
     PROFILES+="<key>${APP_ID#"$TEAM".}</key><string>$UUID</string>"
   done
   rm -f "$DECODED"
-  [[ -n "$PROFILES" ]] || { echo "No profiles in $MAC_PROFILES_DIR" >&2; exit 1; }
-  SIGNING="<key>signingStyle</key><string>manual</string>
+  [[ -n "$PROFILES" ]] || { echo "No Developer ID profiles in $MAC_PROFILES_DIR" >&2; exit 1; }
+  if [[ "$MANAGED" == false ]]; then
+    SIGNING="<key>signingStyle</key><string>manual</string>
   <key>signingCertificate</key><string>Developer ID Application</string>
   <key>provisioningProfiles</key><dict>$PROFILES</dict>"
+  fi
 fi
 
 OPTS="$(mktemp)"

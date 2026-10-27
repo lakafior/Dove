@@ -112,11 +112,15 @@ jobs:
             echo "::error::Secret MAC_DEVELOPER_ID_PROFILES_BASE64 is missing"
             exit 1
           fi
-          DIR="$HOME/Library/Developer/Xcode/UserData/Provisioning Profiles"
-          mkdir -p "$DIR"
-          echo "$PROFILES_BASE64" | base64 --decode | tar -xzf - -C "$DIR"
-          ls "$DIR"
-          echo "MAC_PROFILES_DIR=$DIR" >> "$GITHUB_ENV"
+          # Their own folder for build-mac.sh to read (Xcode's also gets development profiles while archiving),
+          # and a copy where Xcode looks for installed profiles.
+          OWN="$RUNNER_TEMP/developer-id-profiles"
+          XCODE="$HOME/Library/Developer/Xcode/UserData/Provisioning Profiles"
+          mkdir -p "$OWN" "$XCODE"
+          echo "$PROFILES_BASE64" | base64 --decode | tar -xzf - -C "$OWN"
+          cp "$OWN"/*.provisionprofile "$XCODE"/
+          ls "$OWN"
+          echo "MAC_PROFILES_DIR=$OWN" >> "$GITHUB_ENV"
 
       - name: Archive and export the app
         env:
