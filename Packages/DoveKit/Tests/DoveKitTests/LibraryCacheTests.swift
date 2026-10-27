@@ -35,6 +35,8 @@ struct LibraryCacheTests {
     @Test func ignoresAMissingOrForeignFile() throws {
         let url = FileManager.default.temporaryDirectory.appending(path: "dove-tests/\(UUID().uuidString).json")
         #expect(LibraryCache.load(from: url) == nil)
+        // On a fresh machine (CI) no other test has made the folder yet.
+        try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
         try Data(#"{"something":"else"}"#.utf8).write(to: url)
         defer { try? FileManager.default.removeItem(at: url) }
         #expect(LibraryCache.load(from: url) == nil)
