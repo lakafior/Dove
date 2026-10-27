@@ -26,7 +26,9 @@ concurrency:
 jobs:
   mac:
     name: Build, sign, notarize and publish the Mac app
-    runs-on: macos-26
+    # The app builds with Xcode 27 (FoundationModels' `GenerationOptions(samplingMode:)` is `sampling:` in
+    # Xcode 26's SDK). macos-26 images stop at Xcode 26.x; xcode-27 is GitHub's macOS 27 image (preview, 2026-10).
+    runs-on: xcode-27
     env:
       TAG: ${{ github.ref_name }}
 

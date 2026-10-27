@@ -105,8 +105,8 @@ In order. "Owner" is work only Marcin can do (certificates, hardware, policy cal
 
 | # | Item | Who | Waits for |
 |---|---|---|---|
-| 1 | **Onboarding wizard**: the user ticks what they use and own, it fills the settings that already exist and adds none. Built 2026-10-27 (shows on an empty install, Settings › Set up Dove again); not yet walked through in the Simulator or on the Mac | Claude, then owner checks | nothing |
-| 2 | **Split `dove-plugins`**: split locally 2026-10-27 (11 neutral plugins in a new history-free `dove-plugins`, 9 in `dove-plugins-extra`). Left: the first push of the new repository and Pages for both | owner pushes | nothing |
+| 1 | **Onboarding wizard**: the user ticks what they use and own, it fills the settings that already exist and adds none. Built 2026-10-27 (shows on an empty install, Home's Set up card and Settings › Set up Dove again); walked through on a clean iOS Simulator the same day; the Mac sheet not seen yet | Claude | nothing |
+| 2 | **Split `dove-plugins`**: split locally 2026-10-27 (11 neutral plugins in a new history-free `dove-plugins`, 9 in `dove-plugins-extra`). Both public and published on Pages since 2026-10-27 | done | — |
 | 3 | **Store metadata and texts**: drafted 2026-10-27 — [privacy.md](privacy.md), [support.md](support.md), [review-notes.md](review-notes.md) (placeholders: test account, contact e-mail), `PrivacyInfo.xcprivacy` per target (checked in both builds), README section for the Mac. Left: the owner's read-through and a public URL for the two pages | owner reviews | nothing |
 | 4 | **Version scheme**: decide whether the first release is `0.1.0` or `1.0.0`; build number already comes from the commit count | owner | 1–3 |
 | 5 | **Release from CI**: the workflow has never run; a manual run proves it without publishing | Claude | the workflow pushed to the default branch, which `workflow_dispatch` needs |
