@@ -69,3 +69,6 @@ CLAUDE.md
 *.xcodeproj
 .DS_Store
 .swiftpm/
+
+# Release artefacts (scripts/build-mac.sh, make-dmg.sh)
+dist/
