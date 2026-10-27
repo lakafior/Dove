@@ -69,4 +69,4 @@ Dove is not directed at children under 13.
 
 ## Contact
 
-Questions or concerns? Open an issue on GitHub: <https://github.com/lakafior/Dove/issues>
+Questions or concerns? Write to [dove@smigi.net](mailto:dove@smigi.net) or open an issue on GitHub: <https://github.com/lakafior/Dove/issues>

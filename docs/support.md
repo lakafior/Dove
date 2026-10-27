@@ -50,7 +50,7 @@ Private trackers need seeding, so Dove sends them only to services that seed (De
 
 ## Reporting a problem
 
-Report problems on GitHub: [github.com/lakafior/Dove/issues](https://github.com/lakafior/Dove/issues).
+Report problems on GitHub: [github.com/lakafior/Dove/issues](https://github.com/lakafior/Dove/issues), or write to [dove@smigi.net](mailto:dove@smigi.net).
 
 Include:
 - Dove version (shown in Settings)
@@ -62,4 +62,4 @@ Never paste API keys, addon URLs or indexer links: they contain tokens.
 
 ## Privacy
 
-[Dove privacy policy](privacy.md)
+[Dove privacy policy](https://dove.smigi.net/privacy)

@@ -107,18 +107,18 @@ In order. "Owner" is work only Marcin can do (certificates, hardware, policy cal
 |---|---|---|---|
 | 1 | **Onboarding wizard**: the user ticks what they use and own, it fills the settings that already exist and adds none. Built 2026-10-27 (shows on an empty install, Home's Set up card and Settings › Set up Dove again); walked through on a clean iOS Simulator the same day; the Mac sheet not seen yet | Claude | nothing |
 | 2 | **Split `dove-plugins`**: split locally 2026-10-27 (11 neutral plugins in a new history-free `dove-plugins`, 9 in `dove-plugins-extra`). Both public and published on Pages since 2026-10-27 | done | — |
-| 3 | **Store metadata and texts**: drafted 2026-10-27 — [privacy.md](privacy.md), [support.md](support.md), [review-notes.md](review-notes.md) (placeholders: test account, contact e-mail), `PrivacyInfo.xcprivacy` per target (checked in both builds), README section for the Mac. Left: the owner's read-through and a public URL for the two pages | owner reviews | nothing |
-| 4 | **Version scheme**: decide whether the first release is `0.1.0` or `1.0.0`; build number already comes from the commit count | owner | 1–3 |
+| 3 | **Store metadata and texts**: drafted 2026-10-27 — [privacy.md](privacy.md), [support.md](support.md), [review-notes.md](review-notes.md), `PrivacyInfo.xcprivacy` per target (checked in both builds), README section for the Mac. Contact dove@smigi.net. Left: a site on GitHub Pages at `dove.smigi.net` (privacy at `/privacy`, support), and the test account in the review notes | Claude builds the site, owner the DNS and test account | nothing |
+| 4 | **Version scheme**: `1.0.0` (decided 2026-10-27, as for an App Store release), set in `project.yml`; build number from the commit count | done | — |
 | 5 | **Release from CI**: the workflow has never run; a manual run proves it without publishing | Claude | the workflow pushed to the default branch, which `workflow_dispatch` needs |
-| 6 | **Update check** against the GitHub Releases API, user confirms | Claude | a first release to check against |
+| 6 | **Update check** (Mac; iOS updates come through AltStore): built 2026-10-27 — GitHub `releases/latest`, quietly once a day and from Dove › Check for Updates…; an alert with Download (opens the DMG), Skip This Version, Later. Never downloads by itself. Not seen against a real release yet | Claude | a first release to check against |
 | 7 | **iOS leg of CI**: read up 2026-10-27 — not `notarytool`: the build is uploaded to App Store Connect, the version's review type set to Notarization and submitted; on approval Apple generates the alternative distribution package (manifest, signature, IPA variants), which is downloaded through the App Store Connect API and hosted unchanged, plus an AltStore `source.json`. CI can do upload and the package download; the first submission is by hand | Claude | the Alternative Terms Addendum and the AltStore PAL marketplace token in App Store Connect (owner) |
-| 8 | **Hardware pass** over the list below, on the release candidate | owner | 1–7 |
+| 8 | **Hardware pass**: done by the owner (2026-10-27) — daily use on the iPhone (Xcode builds) and on the Mac, now the signed build from the DMG | done | — |
 | 9 | **AltStore PAL listing**: screenshots, age rating, support URL, the terms side of distributing in the EU | owner | 8 |
 
 ### Built but never seen working on real hardware
 
-Not code gaps — unverified ones. Quality on PAL is the whole point of the release, so these get a pass
-before 1.0.
+The list the hardware pass (item 8) covered; the owner signed it off on 2026-10-27 from daily use. Kept
+for a later look if one of these misbehaves.
 
 | Platform | Items |
 |---|---|

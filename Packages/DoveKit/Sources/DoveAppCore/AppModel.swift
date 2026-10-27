@@ -9,6 +9,8 @@ import Observation
 public final class AppModel {
     /// The platform the app runs on: system services and the integrations it keeps current.
     public let platform: any AppPlatform
+    /// Checks GitHub Releases when the user asks, or quietly once a day.
+    public let updates: UpdateModel
     /// Shared with the share extension through the `keychain-access-groups` entitlement.
     public let keychain = SharedConfiguration.keychain()
     public let library = LibraryModel()
@@ -267,6 +269,7 @@ public final class AppModel {
     public init(platform: any AppPlatform) {
         defer { Self.current = self }
         self.platform = platform
+        updates = UpdateModel(platform: platform)
         setupFinished = UserDefaults.standard.bool(forKey: "setupFinished")
         playback = PlaybackModel(keychain: SharedConfiguration.keychain(), platform: platform)
         audiobook = AudiobookPlayer(keychain: SharedConfiguration.keychain(), platform: platform)

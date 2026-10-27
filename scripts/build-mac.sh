@@ -43,6 +43,26 @@ xcodebuild archive \
   "${AUTH[@]}" \
   CURRENT_PROJECT_VERSION="$BUILD"
 
+# Only the Account Holder may create Developer ID profiles, which an App Store Connect key cannot do: in CI
+# the export signs manually with the profiles Xcode made on the owner's Mac ("Mac Team Direct Provisioning
+# Profile: <bundle ID>"), passed in MAC_PROFILES_DIR. Locally Xcode finds or makes them itself.
+SIGNING="<key>signingStyle</key><string>automatic</string>"
+if [[ -n "${MAC_PROFILES_DIR:-}" ]]; then
+  PROFILES=""
+  DECODED="$(mktemp)"
+  for profile in "$MAC_PROFILES_DIR"/*.provisionprofile; do
+    security cms -D -i "$profile" -o "$DECODED"
+    APP_ID="$(/usr/libexec/PlistBuddy -c 'Print :Entitlements:com.apple.application-identifier' "$DECODED")"
+    UUID="$(/usr/libexec/PlistBuddy -c 'Print :UUID' "$DECODED")"
+    PROFILES+="<key>${APP_ID#"$TEAM".}</key><string>$UUID</string>"
+  done
+  rm -f "$DECODED"
+  [[ -n "$PROFILES" ]] || { echo "No profiles in $MAC_PROFILES_DIR" >&2; exit 1; }
+  SIGNING="<key>signingStyle</key><string>manual</string>
+  <key>signingCertificate</key><string>Developer ID Application</string>
+  <key>provisioningProfiles</key><dict>$PROFILES</dict>"
+fi
+
 OPTS="$(mktemp)"
 cat > "$OPTS" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
@@ -52,7 +72,7 @@ cat > "$OPTS" <<PLIST
   <key>method</key><string>developer-id</string>
   <key>destination</key><string>export</string>
   <key>teamID</key><string>$TEAM</string>
-  <key>signingStyle</key><string>automatic</string>
+  $SIGNING
 </dict>
 </plist>
 PLIST

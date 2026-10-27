@@ -18,6 +18,6 @@ let package = Package(
             dependencies: ["DoveKit"],
             resources: [.copy("Fixtures")]
         ),
-        .testTarget(name: "DoveAppCoreTests", dependencies: ["DoveAppCore"])
+        .testTarget(name: "DoveAppCoreTests", dependencies: ["DoveAppCore", "DoveKit"], resources: [.copy("Fixtures")])
     ]
 )

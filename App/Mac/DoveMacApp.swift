@@ -23,6 +23,12 @@ struct DoveMacApp: App {
         .handlesExternalEvents(matching: ["*"])
         .commands {
             CommandGroup(replacing: .newItem) {}
+            CommandGroup(after: .appInfo) {
+                Button("Check for Updates…") {
+                    Task { await delegate.model.updates.checkNow() }
+                }
+                .disabled(delegate.model.updates.isChecking)
+            }
             SourceIntakeCommands(model: delegate.model, router: delegate.platform.router)
             SearchCommands(router: delegate.platform.router)
             ViewModeCommands()

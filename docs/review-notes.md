@@ -36,4 +36,4 @@ A test debrid key can be provided on request: **[test account details here]**.
 Hidden by default behind a setting (`showAdult` in Settings).
 
 ## Contact
-**[owner e-mail]**
+dove@smigi.net · privacy policy: https://dove.smigi.net/privacy

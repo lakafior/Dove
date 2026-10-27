@@ -51,6 +51,7 @@ struct MacRootView: View {
                 finished: model.setupFinished, hasAnythingConfigured: model.hasAnythingConfigured
             )
         }
+        .task { await model.updates.checkAutomatically() }
         .sheet(isPresented: $setupPresented) {
             SetupWizard()
                 .frame(width: 640, height: 560)
@@ -97,6 +98,35 @@ struct MacRootView: View {
         .alert(router.notice ?? "", isPresented: Binding(get: { router.notice != nil }, set: { if !$0 { router.notice = nil } })) {
             Button("OK") {}
         }
+        .alert(updateAlertTitle, isPresented: updateAlertPresented) {
+            if let update = model.updates.available {
+                Button("Download") { Task { await model.updates.download(update) } }
+                Button("Skip This Version") { model.updates.skip(update) }
+                Button("Later", role: .cancel) { model.updates.dismiss() }
+            } else {
+                Button("OK", role: .cancel) { model.updates.dismissManualResult() }
+            }
+        } message: {
+            Text(updateAlertMessage)
+        }
+    }
+
+    private var updateAlertPresented: Binding<Bool> {
+        Binding(
+            get: { model.updates.available != nil || model.updates.isUpToDate || model.updates.lastError != nil },
+            set: { if !$0 { model.updates.dismissAlert() } }
+        )
+    }
+
+    private var updateAlertTitle: String {
+        if let update = model.updates.available { return "Dove \(update.version) is available" }
+        if model.updates.lastError != nil { return "Couldn’t Check for Updates" }
+        return "Dove is up to date"
+    }
+
+    private var updateAlertMessage: String {
+        if let update = model.updates.available { return String(update.notes.prefix(400)) }
+        return model.updates.lastError ?? "You’re running the latest version of Dove."
     }
 
     @ViewBuilder

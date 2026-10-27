@@ -7,6 +7,8 @@ name: Release
 #   DEVELOPER_ID_P12_BASE64 / DEVELOPER_ID_P12_PASSWORD  Developer ID Application cert, signs the Mac app
 #   NOTARY_KEY_P8_BASE64 / NOTARY_KEY_ID / NOTARY_ISSUER_ID   App Store Connect key: notarization and
 #                                                             the provisioning profiles the entitlements need
+#   MAC_DEVELOPER_ID_PROFILES_BASE64   the app's and extensions' Developer ID profiles (.provisionprofile,
+#                                      tar.gz): an API key may not create them, only the Account Holder
 # The iOS leg is not here yet: it needs the Apple Distribution cert (IOS_DISTRIBUTION_P12_*) and the
 # notarization path for alternative distribution, which is not the same as notarytool. See docs/macos.md §9.
 on:
@@ -101,6 +103,20 @@ jobs:
           fi
           echo "$NOTARY_KEY_P8_BASE64" | base64 --decode > "$RUNNER_TEMP/notary.p8"
           echo "NOTARY_KEY_PATH=$RUNNER_TEMP/notary.p8" >> "$GITHUB_ENV"
+
+      - name: Install the Developer ID provisioning profiles
+        env:
+          PROFILES_BASE64: ${{ secrets.MAC_DEVELOPER_ID_PROFILES_BASE64 }}
+        run: |
+          if [[ -z "$PROFILES_BASE64" ]]; then
+            echo "::error::Secret MAC_DEVELOPER_ID_PROFILES_BASE64 is missing"
+            exit 1
+          fi
+          DIR="$HOME/Library/Developer/Xcode/UserData/Provisioning Profiles"
+          mkdir -p "$DIR"
+          echo "$PROFILES_BASE64" | base64 --decode | tar -xzf - -C "$DIR"
+          ls "$DIR"
+          echo "MAC_PROFILES_DIR=$DIR" >> "$GITHUB_ENV"
 
       - name: Archive and export the app
         env:

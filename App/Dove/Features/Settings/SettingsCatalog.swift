@@ -72,7 +72,7 @@ struct SettingsCatalog {
         [services, libraries, search, metadata, playingAndReading, app]
     }
 
-    /// "0.1.0 (1)".
+    /// "1.0.0 (1)".
     static var version: String {
         let info = Bundle.main.infoDictionary
         let short = info?["CFBundleShortVersionString"] as? String ?? "?"
