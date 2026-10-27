@@ -106,11 +106,11 @@ In order. "Owner" is work only Marcin can do (certificates, hardware, policy cal
 |---|---|---|---|
 | 1 | **Onboarding wizard**: the user ticks what they use and own, it fills the settings that already exist and adds none | Claude | nothing |
 | 2 | **Split `dove-plugins`** into a neutral repository the app links to and a second one it never links to | owner decides the line, Claude moves it | nothing |
-| 3 | **Store metadata and texts**: privacy policy, support page, notarization review notes covering the plugin model, `PrivacyInfo.xcprivacy`, README section for the Mac | Claude, delegated | nothing |
+| 3 | **Store metadata and texts**: drafted 2026-10-27 — [privacy.md](privacy.md), [support.md](support.md), [review-notes.md](review-notes.md) (placeholders: test account, contact e-mail), `PrivacyInfo.xcprivacy` per target (checked in both builds), README section for the Mac. Left: the owner's read-through and a public URL for the two pages | owner reviews | nothing |
 | 4 | **Version scheme**: decide whether the first release is `0.1.0` or `1.0.0`; build number already comes from the commit count | owner | 1–3 |
-| 5 | **Release from CI**: the workflow has never run; a manual run proves it without publishing | Claude | 3 |
+| 5 | **Release from CI**: the workflow has never run; a manual run proves it without publishing | Claude | the workflow pushed to the default branch, which `workflow_dispatch` needs |
 | 6 | **Update check** against the GitHub Releases API, user confirms | Claude | a first release to check against |
-| 7 | **iOS leg of CI**: Apple Distribution certificate is in the secrets, but the notarization path for alternative distribution is not the same as `notarytool` and has to be read up first | Claude | 3 |
+| 7 | **iOS leg of CI**: read up 2026-10-27 — not `notarytool`: the build is uploaded to App Store Connect, the version's review type set to Notarization and submitted; on approval Apple generates the alternative distribution package (manifest, signature, IPA variants), which is downloaded through the App Store Connect API and hosted unchanged, plus an AltStore `source.json`. CI can do upload and the package download; the first submission is by hand | Claude | the Alternative Terms Addendum and the AltStore PAL marketplace token in App Store Connect (owner) |
 | 8 | **Hardware pass** over the list below, on the release candidate | owner | 1–7 |
 | 9 | **AltStore PAL listing**: screenshots, age rating, support URL, the terms side of distributing in the EU | owner | 8 |
 

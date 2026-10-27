@@ -78,11 +78,37 @@ Save movies and series with the bookmark on a title screen, or from a search res
   - Search in Dove;
   - Continue Audiobook (plays without opening Dove);
   - Open Watchlist and Open Downloads.
-  
+
   Siri suggests listening and searches you do often.
 - **Spotlight.** Library titles, books, watchlist entries and titles you looked at in Dove show up (with posters) and open straight in Dove; "Search in Dove" searches any text.
 - **Quick Actions** on the app icon: Add from Clipboard, Search, Watchlist, Downloads and Continue Listening.
 - **Background refresh.** When iOS allows it, Dove updates premium days, episode lists, watchlist dates and widgets. iOS decides when that happens, and there are no push notifications.
+
+## macOS
+
+Native Mac app (not Catalyst), macOS 26, sandboxed, same bundle ID and iCloud Keychain sync as iOS.
+
+| Feature | Description |
+|---|---|
+| Window | Sidebar with Search, Library, Downloads, Watchlist, Services; content and detail columns |
+| Sources | Table with resolution, HDR, codec, audio, size, seeders, age, found by, ⚡ per service; sortable; multi-select; Return adds (Automatic) |
+| Library | Titles as adjustable grid or table; Files table with name, service, kind, status, size, added; multi-select actions |
+| Downloads | Table with progress; Reveal in Finder; drag files out; Dock progress bar and badge |
+| Input | Drop `.torrent`/`.nzb`/magnets on window or Dock; ⌘O; File › Add from Clipboard (⇧⌘V); Services menu "Add to Dove" |
+| Menu bar | Extra with downloads, now playing, Add from Clipboard; keeps running after last window closes |
+| Settings | Settings window (⌘,) with a sidebar of the same pages as the iPhone list; shared forms with iOS |
+| Players | Infuse, IINA, VLC first; custom URL template; Kodi over JSON-RPC |
+| Audiobooks | Same player as iOS; Now Playing and media keys work |
+| Spotlight | Library titles, books, watchlist entries indexed; "Search in Dove" searches any text |
+| App Intents | Add to Dove, Search in Dove, Open Watchlist, Open Downloads, Add from Clipboard |
+| Finder | File Provider location in sidebar; browse, open (downloads), delete, drop `.torrent`/`.nzb` |
+| Desktop widgets | Services, Library, Watchlist, Listening widgets (same as iOS) |
+
+Ships as a notarized DMG built by:
+- `scripts/build-mac.sh`
+- `scripts/notarize.sh`
+- `scripts/make-dmg.sh`
+- `.github/workflows/release.yml`
 
 ## Settings and sync
 
@@ -104,9 +130,7 @@ The source type picks the backend family; your priority order picks the service 
 
 ## Status
 
-Personal project, used daily by its author. Everything listed above is built and covered by DoveKit's tests where the logic lives. Some parts are checked only against fixtures or on the Simulator, not yet on a device or against the live service: Premiumize, Debrid-Link and TorBox seeding, some players (SenPlayer, nPlayer, VidHub, Kodi), Kindle, Siri, and the Control Center controls.
-
-Next on the list: TMDB recommendations, natural-language filters with Apple's on-device model, metadata for music and games, more debrid services, a macOS app. See the roadmap in `CLAUDE.md`.
+Personal project, used daily by its author. iOS feature-complete, Mac app through phase 5 (sidebar, source tables, Settings window, menu bar extra, Dock progress, drops, Services menu, Spotlight, App Intents, Finder location, desktop widgets), notarized DMG. Left before public release: onboarding wizard, the plugin-repository split, store metadata, a hardware pass over unverified features. See the roadmap in [docs/roadmap.md](docs/roadmap.md).
 
 ## Project layout
 
@@ -115,20 +139,37 @@ App/Dove/               SwiftUI app: views, AppModel, intents, widgets' snapshot
 App/DoveShare/          Share extension (links, magnets, .torrent, .nzb)
 App/DoveFiles/          File Provider extension (the Files app location)
 App/DoveWidgets/        Widgets, Control Center controls, the downloads Live Activity
+App/Mac/                Mac app: NavigationSplitView shell, Tables, Commands, MenuBarExtra, Settings scene
+App/MacFiles/           Finder location, File Provider extension
+App/MacWidgets/         Desktop widgets
+App/Components/         Views shared by both apps: covers, rows, badges, settings forms
 App/Shared/             SwiftUI shared by the app and its extensions
 App/Activity/           Types shared by the app and the widgets (Live Activity, widget intents)
 Packages/DoveKit/       All logic: models, backends, routing, search, library, Keychain (unit-tested on macOS)
+Packages/DoveKit/       … also builds DoveAppCore: AppModel and the feature models shared by iOS and Mac
+scripts/                Release scripts (build-mac.sh, notarize.sh, make-dmg.sh)
+docs/                   Roadmap, implementation record, Mac plan, plugin API
 project.yml             XcodeGen spec (the .xcodeproj is generated, not committed)
 ```
 
 ## Building
 
-Requirements: Xcode 16+, iOS 17+ (Control Center controls need iOS 18), [XcodeGen](https://github.com/yonaskolb/XcodeGen).
+Requirements: Xcode 16+, iOS 17+ (Control Center controls need iOS 18), macOS 26+ (Mac app), [XcodeGen](https://github.com/yonaskolb/XcodeGen).
 
 ```sh
 brew install xcodegen
 xcodegen generate
 open Dove.xcodeproj
+```
+
+iOS app:
+```sh
+xcodebuild -project Dove.xcodeproj -scheme Dove -destination 'generic/platform=iOS' -allowProvisioningUpdates build
+```
+
+Mac app:
+```sh
+xcodebuild -project Dove.xcodeproj -scheme DoveMac -destination 'platform=macOS' -allowProvisioningUpdates build
 ```
 
 Run the core tests without Xcode (⌘U in Xcode runs them too):
