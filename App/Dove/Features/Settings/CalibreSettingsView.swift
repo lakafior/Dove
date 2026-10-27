@@ -24,7 +24,7 @@ struct CalibreSettingsView: View {
                 Text("Calibre › Preferences › Sharing over the net: start the server and use the Mac's address and port, e.g. http://mini.local:8888 (a .local name answers only on the same Wi-Fi).")
             }
             Section {
-                TextField("http://100.94.236.49:8888", text: $remoteURL)
+                TextField("http://100.x.y.z:8888", text: $remoteURL)
                     .keyboardType(.URL)
                     .textContentType(.URL)
             } header: {
