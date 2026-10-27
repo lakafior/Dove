@@ -7,6 +7,7 @@ struct RootView: View {
     @Environment(AppRouter.self) private var router
     @Environment(\.scenePhase) private var scenePhase
     @State private var openedMessage: String?
+    @State private var setupPresented = false
 
     private var waitingJobs: Int {
         model.downloadJobs.jobs.filter { $0.state == .waiting }.count
@@ -33,6 +34,12 @@ struct RootView: View {
                 .tabItem { Label("Settings", systemImage: "gearshape") }
                 .tag(AppTab.settings)
         }
+        .onAppear {
+            setupPresented = SetupState.shouldPresentAutomatically(
+                finished: model.setupFinished, hasAnythingConfigured: model.hasAnythingConfigured
+            )
+        }
+        .fullScreenCover(isPresented: $setupPresented) { SetupWizard() }
         .onOpenURL { model.open($0) }
         .onContinueUserActivity(CSSearchableItemActionType) { activity in
             if let id = activity.userInfo?[CSSearchableItemActivityIdentifier] as? String { SpotlightIndex.open(id, using: model) }

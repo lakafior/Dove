@@ -11,6 +11,7 @@ struct MacRootView: View {
     @Environment(\.openSettings) private var openSettings
     /// The sidebar starts hidden: the start page has the search field and the library's shelves.
     @State private var columns = NavigationSplitViewVisibility.detailOnly
+    @State private var setupPresented = false
 
     var body: some View {
         NavigationSplitView(columnVisibility: $columns) {
@@ -44,6 +45,15 @@ struct MacRootView: View {
         } detail: {
             detail
                 .safeAreaInset(edge: .bottom, spacing: 0) { MacNowPlayingBar() }
+        }
+        .onAppear {
+            setupPresented = SetupState.shouldPresentAutomatically(
+                finished: model.setupFinished, hasAnythingConfigured: model.hasAnythingConfigured
+            )
+        }
+        .sheet(isPresented: $setupPresented) {
+            SetupWizard()
+                .frame(width: 640, height: 560)
         }
         .overlay {
             if router.isQuickSearchPresented { QuickSearchPanel() }

@@ -34,6 +34,20 @@ public final class AppModel {
     /// A magnet or file opened from another app; RootView shows the add sheet for it.
     public var openedSource: SourceBatch?
 
+    /// The first-run setup was completed on this device.
+    public var setupFinished: Bool {
+        didSet { UserDefaults.standard.set(setupFinished, forKey: "setupFinished") }
+    }
+
+    /// Any existing service, addon, indexer or installed plugin was configured before setup could open.
+    public var hasAnythingConfigured: Bool {
+        BackendID.allCases.filter { !$0.isUsenet && !$0.isStorage }.contains(where: isConfigured)
+            || isConfigured(.nzbdav)
+            || !addonEntries.isEmpty
+            || !newznabIndexers.isEmpty
+            || !plugins.installed.isEmpty
+    }
+
     /// The model of the running app, for App Intents and the scene delegate (Quick Actions), which SwiftUI's
     /// environment does not reach. Set once in `init`; `AppDelegate` keeps it alive.
     public private(set) static weak var current: AppModel?
@@ -253,6 +267,7 @@ public final class AppModel {
     public init(platform: any AppPlatform) {
         defer { Self.current = self }
         self.platform = platform
+        setupFinished = UserDefaults.standard.bool(forKey: "setupFinished")
         playback = PlaybackModel(keychain: SharedConfiguration.keychain(), platform: platform)
         audiobook = AudiobookPlayer(keychain: SharedConfiguration.keychain(), platform: platform)
         downloads = DownloadManager(

@@ -77,8 +77,9 @@ Dove*, not here.
 ### Plugins
 
 On-device JavaScript in a sandbox, network only through `fetch` and only to declared hosts, pinned by
-SHA-256, consent per plugin. API v1 covers search, metadata, resolve, links and browse. Over twenty
-plugins exist in `lakafior/dove-plugins`, from metadata sources to file providers.
+SHA-256, consent per plugin. API v1 covers search, metadata, resolve, links and browse. Twenty plugins
+exist in two repositories: `lakafior/dove-plugins` (metadata sources and public-domain libraries, the one
+the app may link to) and `lakafior/dove-plugins-extra` (everything else, never linked from the app).
 
 ### Platform integration
 
@@ -104,8 +105,8 @@ In order. "Owner" is work only Marcin can do (certificates, hardware, policy cal
 
 | # | Item | Who | Waits for |
 |---|---|---|---|
-| 1 | **Onboarding wizard**: the user ticks what they use and own, it fills the settings that already exist and adds none | Claude | nothing |
-| 2 | **Split `dove-plugins`** into a neutral repository the app links to and a second one it never links to | owner decides the line, Claude moves it | nothing |
+| 1 | **Onboarding wizard**: the user ticks what they use and own, it fills the settings that already exist and adds none. Built 2026-10-27 (shows on an empty install, Settings › Set up Dove again); not yet walked through in the Simulator or on the Mac | Claude, then owner checks | nothing |
+| 2 | **Split `dove-plugins`**: split locally 2026-10-27 (11 neutral plugins in a new history-free `dove-plugins`, 9 in `dove-plugins-extra`). Left: the first push of the new repository and Pages for both | owner pushes | nothing |
 | 3 | **Store metadata and texts**: drafted 2026-10-27 — [privacy.md](privacy.md), [support.md](support.md), [review-notes.md](review-notes.md) (placeholders: test account, contact e-mail), `PrivacyInfo.xcprivacy` per target (checked in both builds), README section for the Mac. Left: the owner's read-through and a public URL for the two pages | owner reviews | nothing |
 | 4 | **Version scheme**: decide whether the first release is `0.1.0` or `1.0.0`; build number already comes from the commit count | owner | 1–3 |
 | 5 | **Release from CI**: the workflow has never run; a manual run proves it without publishing | Claude | the workflow pushed to the default branch, which `workflow_dispatch` needs |

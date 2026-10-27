@@ -9,6 +9,7 @@ import SwiftUI
 struct HomeView: View, @MainActor Equatable {
     @Environment(AppModel.self) private var model
     @Environment(AppRouter.self) private var router
+    @State private var setupPresented = false
     let home: HomeModel
     let onSearch: (HomeModel.RecentSearch) -> Void
 
@@ -49,7 +50,7 @@ struct HomeView: View, @MainActor Equatable {
             if !model.addonSet.canSearch {
                 Text("Add a TMDB key or a Stremio addon that can search, so titles can be found here.")
             }
-            Button("Open Settings") { router.selectedTab = .settings }
+            Button("Start setup") { setupPresented = true }
                 .buttonStyle(.borderedProminent)
                 .padding(.top, 2)
         }
@@ -58,6 +59,7 @@ struct HomeView: View, @MainActor Equatable {
         .padding()
         .background(.tint.opacity(0.1), in: RoundedRectangle(cornerRadius: 16))
         .padding(.horizontal)
+        .fullScreenCover(isPresented: $setupPresented) { SetupWizard() }
     }
 
     // MARK: - Activity

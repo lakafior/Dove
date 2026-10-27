@@ -7,6 +7,7 @@ import SwiftUI
 /// about one service is on that service's page.
 struct SettingsView: View {
     @Environment(AppModel.self) private var model
+    @State private var setupPresented = false
 
     var body: some View {
         NavigationStack {
@@ -14,9 +15,17 @@ struct SettingsView: View {
                 ForEach(SettingsCatalog(model: model).groups) { group in
                     Section {
                         ForEach(group.entries) { entry in
-                            NavigationLink(value: entry.page) {
-                                SettingsRow(entry.title, symbol: entry.symbol, color: entry.color,
-                                            value: entry.value, light: entry.light)
+                            if entry.page == .setup {
+                                Button { setupPresented = true } label: {
+                                    SettingsRow(entry.title, symbol: entry.symbol, color: entry.color,
+                                                value: entry.value, light: entry.light)
+                                }
+                                .tint(.primary)
+                            } else {
+                                NavigationLink(value: entry.page) {
+                                    SettingsRow(entry.title, symbol: entry.symbol, color: entry.color,
+                                                value: entry.value, light: entry.light)
+                                }
                             }
                         }
                     } header: {
@@ -30,6 +39,7 @@ struct SettingsView: View {
             .navigationDestination(for: SettingsPage.self) { $0.destination }
             // Add service pushes a service by value, so saving its key does not pop the page.
             .navigationDestination(for: BackendID.self) { SettingsPage.service($0).destination }
+            .sheet(isPresented: $setupPresented) { SetupWizard() }
         }
     }
 }

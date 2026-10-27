@@ -11,7 +11,7 @@ enum SettingsPage: Hashable {
     case addons, indexers, plugins
     case movies, books, music, games
     case player, reading
-    case notifications, adult, storage, transfer
+    case notifications, adult, storage, transfer, setup
 
     @MainActor @ViewBuilder
     var destination: some View {
@@ -36,6 +36,7 @@ enum SettingsPage: Hashable {
         case .adult: AdultContentSettingsView()
         case .storage: StorageSettingsView()
         case .transfer: SettingsTransferView()
+        case .setup: SetupLauncher()
         }
     }
 }
@@ -147,6 +148,7 @@ struct SettingsCatalog {
                           value: model.showAdult ? "Shown" : "Hidden"),
             SettingsEntry(page: .storage, title: "Storage and Files", symbol: "internaldrive.fill", color: .gray),
             SettingsEntry(page: .transfer, title: "Export and import", symbol: "square.and.arrow.up.on.square.fill", color: .teal),
+            SettingsEntry(page: .setup, title: "Set up Dove again", symbol: "wand.and.stars", color: .blue),
         ])
     }
 
