@@ -1,0 +1,20 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "dove",
+  "compatibility_date": "2026-10-28",
+  "observability": {
+    "enabled": true
+  },
+  "assets": {
+    "directory": ".",
+    // /privacy and /support, as printed in the app's review notes and docs: serve
+    // privacy/index.html there and redirect /privacy/ to it, not the other way round.
+    "html_handling": "drop-trailing-slash"
+  },
+  // Routes, not custom domains: a custom domain gets its own certificate that also covers smigi.net,
+  // and browsers reusing one connection across *.smigi.net then get 421 Misdirected Request. Routes
+  // use the zone's *.smigi.net certificate. Each host needs a proxied DNS record (AAAA 100::).
+  "routes": [
+    { "pattern": "dove.smigi.net/*", "zone_name": "smigi.net" }
+  ]
+}

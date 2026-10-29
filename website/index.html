@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="en">
+<!--
+  This Source Code Form is subject to the terms of the Mozilla Public License,
+  v. 2.0. If a copy of the MPL was not distributed with this file, You can
+  obtain one at https://mozilla.org/MPL/2.0/.
+-->
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Dove — Your debrid and Usenet services, in one app</title>
+  <meta name="description" content="An iPhone and Mac app that sends magnets, .torrent files, hoster links and NZBs to your own debrid and Usenet services, then plays or downloads the result. Bring your own keys: no built-in content sources, no accounts, no trackers. Open source, MPL 2.0.">
+  <meta property="og:title" content="Dove — Your debrid and Usenet services, in one app">
+  <meta property="og:description" content="Send a magnet, a hoster link or an NZB to the services you already pay for, then play it in Infuse or download it. Bring your own keys.">
+  <meta property="og:image" content="https://dove.smigi.net/assets/icon.png">
+  <meta property="og:url" content="https://dove.smigi.net">
+  <meta name="theme-color" content="#1a6fd6">
+  <link rel="canonical" href="https://dove.smigi.net/">
+  <link rel="icon" href="/assets/icon.png" type="image/png">
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+
+<header>
+  <div class="wrap">
+    <a class="logo" href="/">
+      <img src="/assets/icon.png" alt="" width="34" height="34">
+      Dove
+    </a>
+    <nav>
+      <a href="#features">Features</a>
+      <a href="#download">Download</a>
+      <a href="/support">Support</a>
+      <a href="/privacy">Privacy</a>
+      <a href="https://github.com/lakafior/Dove">GitHub</a>
+    </nav>
+  </div>
+</header>
+
+<section class="hero">
+  <div class="wrap">
+    <div>
+      <span class="tag">iPhone · Mac · Open source</span>
+      <h1>Your services, one&nbsp;app.</h1>
+      <p class="lede">Dove sends magnets, <code>.torrent</code> files, hoster links and NZBs to the debrid and Usenet services you already use, then plays the result in Infuse, downloads it, or plays the audiobook itself.</p>
+      <div class="cta">
+        <a class="btn btn-primary" href="https://github.com/lakafior/Dove/releases/latest">Download for Mac</a>
+        <a class="btn btn-secondary" href="https://github.com/lakafior/Dove">View the source</a>
+      </div>
+      <p class="cta-note">iPhone: coming to AltStore&nbsp;PAL.</p>
+    </div>
+    <img class="hero-icon" src="/assets/icon.png" width="256" height="256" alt="The Dove icon: a white dove on blue.">
+  </div>
+</section>
+
+<section class="showcase" aria-label="Dove on Mac and iPhone">
+  <div class="wrap">
+    <div class="section-head"><h2>See it on Mac and iPhone</h2><p>The same app on both, with your settings synced between them. Use the arrows to look around.</p></div>
+    <!-- No JavaScript: one radio per step; the arrows and dots are labels for them. -->
+    <input class="shot-radio" type="radio" name="shot" id="shot-1" checked aria-label="Everything in progress">
+    <input class="shot-radio" type="radio" name="shot" id="shot-2" aria-label="Every release, side by side">
+    <input class="shot-radio" type="radio" name="shot" id="shot-3" aria-label="One library for all services">
+    <input class="shot-radio" type="radio" name="shot" id="shot-4" aria-label="Your keys, your services">
+    <div class="stage">
+      <div class="dev dev-mac">
+        <img class="s1" src="/assets/shots/mac-home.webp" width="1600" height="855" alt="Dove on a Mac: the start page with downloads in progress, recently added titles and the watchlist">
+        <img class="s2" src="/assets/shots/mac-sources.webp" width="1600" height="855" alt="Dove on a Mac: a table of a film's releases with resolution, codecs, size, seeders and where each is cached" loading="lazy">
+        <img class="s3" src="/assets/shots/mac-library.webp" width="1600" height="855" alt="Dove on a Mac: the library as shelves of movies, series and books" loading="lazy">
+        <img class="s4" src="/assets/shots/mac-settings.webp" width="1600" height="1081" alt="Dove on a Mac: the Settings window with a TorBox API key" loading="lazy">
+      </div>
+      <div class="dev dev-iphone">
+        <img class="s1" src="/assets/shots/iphone-search.webp" width="600" height="1303" alt="Dove on an iPhone: the Search tab with downloads in progress and the watchlist">
+        <img class="s2" src="/assets/shots/iphone-sources.webp" width="600" height="1303" alt="Dove on an iPhone: a film's sources by resolution, cached on TorBox" loading="lazy">
+        <img class="s3" src="/assets/shots/iphone-library.webp" width="600" height="1303" alt="Dove on an iPhone: the library with movies, series and books" loading="lazy">
+        <img class="s4" src="/assets/shots/iphone-setup.webp" width="600" height="1303" alt="Dove on an iPhone: the setup screen, where you tick the services you pay for" loading="lazy">
+      </div>
+    </div>
+    <div class="shot-nav">
+      <label class="arrow prev p1" for="shot-4" aria-label="Previous">‹</label>
+      <label class="arrow prev p2" for="shot-1" aria-label="Previous">‹</label>
+      <label class="arrow prev p3" for="shot-2" aria-label="Previous">‹</label>
+      <label class="arrow prev p4" for="shot-3" aria-label="Previous">‹</label>
+      <div class="dots">
+        <label class="dot d1" for="shot-1" aria-label="Show: Everything in progress"></label>
+        <label class="dot d2" for="shot-2" aria-label="Show: Every release, side by side"></label>
+        <label class="dot d3" for="shot-3" aria-label="Show: One library for all services"></label>
+        <label class="dot d4" for="shot-4" aria-label="Show: Your keys, your services"></label>
+      </div>
+      <label class="arrow next n1" for="shot-2" aria-label="Next">›</label>
+      <label class="arrow next n2" for="shot-3" aria-label="Next">›</label>
+      <label class="arrow next n3" for="shot-4" aria-label="Next">›</label>
+      <label class="arrow next n4" for="shot-1" aria-label="Next">›</label>
+    </div>
+    <div class="captions" aria-live="polite">
+      <div class="caption c1"><h3>Everything in progress</h3><p>Paste a title, a magnet or a link. Your services' status, what they are fetching, what is coming to this device, your watchlist and what you added last, all on the first screen.</p></div>
+      <div class="caption c2"><h3>Every release, side by side</h3><p>One row per release, merged across your addons and indexers: resolution, codecs, size, seeders, and a ⚡ where one of your services already has it cached.</p></div>
+      <div class="caption c3"><h3>One library for all services</h3><p>Every service's items in one list, shown as titles with posters: movies, series, books, audiobooks and music, each on its own shelf.</p></div>
+      <div class="caption c4"><h3>Your keys, your services</h3><p>Tick the services you pay for and enter their API keys. They stay in your Keychain and reach your other devices through iCloud Keychain.</p></div>
+    </div>
+  </div>
+</section>
+
+<section class="alt" aria-label="More on iPhone">
+  <div class="wrap">
+    <ul class="phones">
+      <li>
+        <img src="/assets/shots/iphone-series.webp" width="600" height="1303" loading="lazy" alt="A series screen: seasons, episodes held, and Play all">
+        <h3>Series, episode by episode</h3>
+        <p>Seasons and episodes matched to the right files, even inside packs. Play a season or the whole series as one Infuse playlist.</p>
+      </li>
+      <li>
+        <img src="/assets/shots/iphone-audiobook.webp" width="600" height="1303" loading="lazy" alt="The audiobook player: cover, chapter, progress, speed, sleep timer and chapters">
+        <h3>Audiobooks in Dove</h3>
+        <p>Chapters, speed, a sleep timer, lock screen and AirPlay, with your place synced between devices.</p>
+      </li>
+      <li>
+        <img src="/assets/shots/iphone-downloads.webp" width="600" height="1303" loading="lazy" alt="Downloads: items your services are fetching and files coming to the phone">
+        <h3>Downloads, both kinds</h3>
+        <p>What your services are fetching and what is coming to the phone, with pause, resume and a Live Activity.</p>
+      </li>
+    </ul>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <div class="split">
+      <div>
+        <h2>Bring your own.</h2>
+        <p>Dove ships with no content sources. It works with what you set up yourself:</p>
+        <ul class="bring">
+          <li><b>Debrid services:</b> Real-Debrid, TorBox, Offcloud, Debrid-Link, Premiumize, AllDebrid.</li>
+          <li><b>Usenet:</b> your own nzbdav or InfiniDysk server, or TorBox, Offcloud and Premiumize with Usenet on.</li>
+          <li><b>Indexers:</b> Newznab and Torznab (Jackett, Prowlarr, Usenet indexers), searched from your device.</li>
+          <li><b>Stremio addons</b>, such as AIOStreams or Torrentio.</li>
+          <li><b>Plugins</b> from repositories you add.</li>
+        </ul>
+        <p>Dove has no server of its own. Everything goes straight from your device to the services you configured.</p>
+        <p><a href="/privacy">Read the privacy policy →</a></p>
+      </div>
+      <ul class="facts">
+        <li><span>Works on</span> <b>iPhone, Mac</b></li>
+        <li><span>Built-in content sources</span> <b>none</b></li>
+        <li><span>Accounts</span> <b>none</b></li>
+        <li><span>Servers of Dove's</span> <b>none</b></li>
+        <li><span>Trackers &amp; analytics</span> <b>none</b></li>
+        <li><span>Where your keys live</span> <b>Keychain</b></li>
+        <li><span>Licence</span> <b>MPL 2.0</b></li>
+        <li><span>Requires</span> <b>iOS 17 or macOS 26</b></li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section id="features" class="alt">
+  <div class="wrap">
+    <div class="section-head">
+      <h2>What it does</h2>
+      <p>Find a movie, a season, a book or an album, send it to your services, then watch, listen or download.</p>
+    </div>
+    <div class="grid">
+      <div class="feature">
+        <h3>Priority with fallback</h3>
+        <p>Put your services in order, separately for torrents and links and for NZBs. “Automatic” tries them in that order and falls through to the next on any error.</p>
+      </div>
+      <div class="feature">
+        <h3>Private trackers</h3>
+        <p>Private torrents go only to services that seed. A release one of your services already has cached goes there as a bare magnet, so your ratio does not move.</p>
+      </div>
+      <div class="feature">
+        <h3>Search you set up</h3>
+        <p>Movies and TV through TMDB or a Stremio addon, then sources from your addons and indexers, searched in parallel. Books, audiobooks, music and software through your indexers.</p>
+      </div>
+      <div class="feature">
+        <h3>Ranked for Apple TV</h3>
+        <p>“Recommended” puts what plays well on Apple TV first, then what is ready, then quality. Filter by resolution, HDR, codec, audio, language and more, or describe what you want in plain words.</p>
+      </div>
+      <div class="feature">
+        <h3>Any way in</h3>
+        <p>Paste or share one link or several, a magnet, a <code>.torrent</code> or an <code>.nzb</code>. A movie's page from IMDb, TMDB, Letterboxd, Trakt or JustWatch opens that title with its sources.</p>
+      </div>
+      <div class="feature">
+        <h3>Library review</h3>
+        <p>New episodes of shows you follow, gaps in seasons you hold part of, and releases that could be better. Reported to you, never acted on.</p>
+      </div>
+      <div class="feature">
+        <h3>Your player</h3>
+        <p>Infuse (with playlists and episode names), VLC, Outplayer, SenPlayer, nPlayer, VidHub, IINA on the Mac, Kodi, or a URL template of your own.</p>
+      </div>
+      <div class="feature">
+        <h3>Download to the device</h3>
+        <p>In the background, with pause, resume and a retry with a fresh link. “Download only” adds, waits, downloads the right files and removes the item from the service.</p>
+      </div>
+      <div class="feature">
+        <h3>Books where they belong</h3>
+        <p>Send a book to Apple Books, your Kindle or your own Calibre server, or save files to iCloud Drive.</p>
+      </div>
+      <div class="feature">
+        <h3>Watchlist</h3>
+        <p>Save movies and series. New episodes, release dates, and a notification when something you saved comes out.</p>
+      </div>
+      <div class="feature">
+        <h3>Files and Finder</h3>
+        <p>Your services appear as a location in Files and in Finder: browse, open, delete, or drop a <code>.torrent</code> or <code>.nzb</code> into a service's folder to add it.</p>
+      </div>
+      <div class="feature">
+        <h3>Plugins, sandboxed</h3>
+        <p>JavaScript plugins add sources and metadata. They run on your device, reach only the hosts they declare, are pinned by checksum and run only once you enable them.</p>
+      </div>
+      <div class="feature">
+        <h3>At home on iPhone</h3>
+        <p>Widgets, Control Center, Live Activity, Siri and Shortcuts, Spotlight and Quick Actions.</p>
+      </div>
+      <div class="feature">
+        <h3>A real Mac app</h3>
+        <p>Native, not Catalyst: sortable source tables, a menu bar extra, Dock progress, drops on the window or the Dock, the Services menu and desktop widgets.</p>
+      </div>
+      <div class="feature">
+        <h3>Synced, end to end</h3>
+        <p>Keys, addons, indexers and priorities sync through iCloud Keychain. Export them to a file for installs it does not reach.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="download">
+  <div class="wrap">
+    <div class="section-head">
+      <h2>Get Dove</h2>
+      <p>Open source. You need an account with at least one debrid or Usenet service.</p>
+    </div>
+    <div class="platforms">
+      <div class="platform">
+        <h3>Mac</h3>
+        <p>A notarized DMG from GitHub Releases. macOS 26 or later. Dove checks for updates once a day and never downloads one by itself.</p>
+        <a class="btn btn-primary" href="https://github.com/lakafior/Dove/releases/latest">Download for Mac</a>
+        <p class="note">The first release is on its way. Until it is out, this link opens an empty list.</p>
+      </div>
+      <div class="platform">
+        <h3>iPhone</h3>
+        <p>Dove is coming to AltStore PAL, the alternative app marketplace in the EU. iOS 17 or later.</p>
+        <span class="soon">Coming to AltStore PAL</span>
+        <p class="note">Or build it yourself: the <a href="https://github.com/lakafior/Dove#building">source and build steps</a> are on GitHub.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <span>© 2026 Smigi · Dove is free software under the
+      <a href="https://github.com/lakafior/Dove/blob/main/LICENSE">MPL 2.0</a> ·
+      Use it only with content you have the right to access</span>
+    <span>
+      <a href="https://github.com/lakafior/Dove">GitHub</a> ·
+      <a href="/support">Support</a> ·
+      <a href="/privacy">Privacy</a> ·
+      <a href="mailto:dove@smigi.net">dove@smigi.net</a>
+    </span>
+  </div>
+</footer>
+
+<!-- smigi.net window chrome: traffic lights + minimize-to-dock.
+     Loads from localhost during development, smigi.net in production. -->
+<script>
+  (function () {
+    var local = location.hostname === "localhost" || location.hostname === "127.0.0.1";
+    var s = document.createElement("script");
+    s.src = (local ? "" : "https://smigi.net") + "/os/chrome.js";
+    s.dataset.app = "dove";
+    s.dataset.title = "Dove";
+    document.head.appendChild(s);
+  })();
+</script>
+
+</body>
+</html>

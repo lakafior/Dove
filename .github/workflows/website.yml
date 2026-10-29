@@ -1,0 +1,49 @@
+# Deploys website/ (dove.smigi.net) as a Cloudflare Worker with static assets.
+#
+# Repository secrets:
+#   CLOUDFLARE_API_TOKEN   Workers Scripts: Edit (account) and Workers Routes: Edit (zone smigi.net),
+#                          e.g. the "Edit Cloudflare Workers" template scoped to that zone
+#   CLOUDFLARE_ACCOUNT_ID  the account that owns smigi.net
+#
+# The route and the zone are in website/wrangler.jsonc; the proxied DNS record
+# (AAAA dove 100::) is set up once in the dashboard, not here.
+
+name: Website
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "website/**"
+      - ".github/workflows/website.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# One deploy at a time; a newer push replaces a deploy still waiting.
+concurrency:
+  group: website
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy to Cloudflare
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Deploy
+        working-directory: website
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        # Pinned so a new wrangler release cannot change a deploy unannounced.
+        run: npx --yes wrangler@4.155.0 deploy

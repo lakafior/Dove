@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<!--
+  This Source Code Form is subject to the terms of the Mozilla Public License,
+  v. 2.0. If a copy of the MPL was not distributed with this file, You can
+  obtain one at https://mozilla.org/MPL/2.0/.
+-->
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Support — Dove</title>
+  <meta name="description" content="Getting started with Dove, answers to common questions, and how to report a problem.">
+  <meta name="theme-color" content="#1a6fd6">
+  <link rel="canonical" href="https://dove.smigi.net/support">
+  <link rel="icon" href="/assets/icon.png" type="image/png">
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+
+<header>
+  <div class="wrap">
+    <a class="logo" href="/">
+      <img src="/assets/icon.png" alt="" width="34" height="34">
+      Dove
+    </a>
+    <nav>
+      <a href="/">Home</a>
+      <a href="/support" aria-current="page">Support</a>
+      <a href="/privacy">Privacy</a>
+      <a href="https://github.com/lakafior/Dove">GitHub</a>
+    </nav>
+  </div>
+</header>
+
+<div class="wrap prose">
+
+  <h1>Support</h1>
+  <p>Dove sends torrents, hoster links and NZBs to your own debrid and Usenet services, then plays or downloads the result. It has no built-in content sources: you add your own API keys, Stremio addons and indexers.</p>
+
+  <h2 id="getting-started">Getting started</h2>
+  <ol>
+    <li><b>Add at least one service account.</b>
+      You need an account with a debrid service (Real-Debrid, TorBox, Offcloud, Debrid-Link, Premiumize, AllDebrid) or a Usenet service (nzbdav/InfiniDysk, TorBox, Offcloud, Premiumize) and its API key.
+      Enter it in <b>Settings › Services › Add service</b>.</li>
+    <li><b>Add a source.</b>
+      <ul>
+        <li>Paste a magnet, a <code>.torrent</code> link, a hoster link or an NZB link in the smart field on the Search tab.</li>
+        <li>Share a link, a <code>.torrent</code> file or an <code>.nzb</code> file to Dove from another app.</li>
+        <li>Drop a <code>.torrent</code> or <code>.nzb</code> file into a service’s folder in the Files app.</li>
+      </ul>
+    </li>
+  </ol>
+
+  <h2 id="faq">FAQ</h2>
+  <h3>Why does Real-Debrid say “infringing file”?</h3>
+  <p>Real-Debrid blocks some release names (<code>WEB-DL</code>, <code>WEBRip</code>, <code>BluRay.x264</code>…) and sometimes pauses all adds on an account for 20 seconds to 5 minutes. Try another release, or wait and try again.</p>
+
+  <h3>Why does Real-Debrid say a torrent is not cached when I know it is?</h3>
+  <p>Real-Debrid removed its instant-availability check. You cannot know if a torrent is cached before adding it.</p>
+
+  <h3>Why does an NZB fail at once with “Compressed RAR archives are unsupported”?</h3>
+  <p>nzbdav and InfiniDysk stream archives without unpacking them, so only uncompressed (stored) RAR and 7z releases work. The NZB cannot tell in advance. Dove offers to send it to your next Usenet service, or to play it through that service, instead.</p>
+
+  <h3>Which players does Dove use?</h3>
+  <p>Infuse (recommended; it also gets episode names and playlists), VLC, Outplayer, SenPlayer, nPlayer, VidHub, and Kodi through its remote control. A custom URL template covers any other player that opens links. Pick yours in <b>Settings › Player</b>; the choice is per device.</p>
+
+  <h3>Why do statuses not update while Dove is closed?</h3>
+  <p>iOS limits background refresh to save battery. Dove updates statuses when you open the app and on pull-to-refresh. There are no push notifications.</p>
+
+  <h3>Why does the Files app say “Turn On” for Dove?</h3>
+  <p>The Files app asks once to enable the Dove location. Tap <b>Turn On</b> in the banner.</p>
+
+  <h3>Why does Calibre say “read-only”?</h3>
+  <p>Calibre’s Content server needs “Require username and password” and an account with write access. Dove sends Basic authentication, so the server’s authentication type must be Basic.</p>
+
+  <h3>Why does AllDebrid block my new API key?</h3>
+  <p>AllDebrid may block a new API key or IP until you confirm it by e-mail. Check your inbox for a confirmation link.</p>
+
+  <h3>Why do my settings not sync to another device?</h3>
+  <p>Settings sync through iCloud Keychain (end-to-end encrypted). Make sure iCloud Keychain is on on both devices and both use the same Apple ID.</p>
+
+  <h3>Why does a hoster link fail on a service that lists the site?</h3>
+  <p>Some services (TorBox, Offcloud) accept unsupported links and fail later. Automatic skips services that do not list the site or have it down.</p>
+
+  <h3>Why are private-tracker torrents sent only to some services?</h3>
+  <p>Private trackers need seeding, so Dove sends them only to services that seed (Debrid-Link, TorBox on a paid plan). If one of your services already has the release cached, Dove sends it there as a bare magnet, so your passkey never leaves the device.</p>
+
+  <h3>Why can’t Dove add the plugin repository?</h3>
+  <p>DNS filters such as NextDNS, AdGuard DNS or Pi-hole sometimes block <code>*.github.io</code>, where plugin repositories are hosted. Dove then cannot load <code>https://lakafior.github.io/dove-plugins/index.json</code>. Allow <code>lakafior.github.io</code> in your filter (or the host of any other repository you add) and try again.</p>
+
+  <h2 id="report">Reporting a problem</h2>
+  <p>Report problems on GitHub: <a href="https://github.com/lakafior/Dove/issues">github.com/lakafior/Dove/issues</a>, or write to <a href="mailto:dove@smigi.net">dove@smigi.net</a>.</p>
+  <p>Include:</p>
+  <ul>
+    <li>Dove version (shown in Settings)</li>
+    <li>Device and iOS/macOS version</li>
+    <li>Service you used</li>
+    <li>Steps to reproduce</li>
+  </ul>
+  <p>Never paste API keys, addon URLs or indexer links: they contain tokens.</p>
+
+  <h2 id="privacy">Privacy</h2>
+  <p><a href="/privacy">Dove privacy policy</a></p>
+
+</div>
+
+<footer>
+  <div class="wrap">
+    <span>© 2026 Smigi · Dove is free software under the
+      <a href="https://github.com/lakafior/Dove/blob/main/LICENSE">MPL 2.0</a> ·
+      Use it only with content you have the right to access</span>
+    <span>
+      <a href="https://github.com/lakafior/Dove">GitHub</a> ·
+      <a href="/support">Support</a> ·
+      <a href="/privacy">Privacy</a> ·
+      <a href="mailto:dove@smigi.net">dove@smigi.net</a>
+    </span>
+  </div>
+</footer>
+
+<!-- smigi.net window chrome: traffic lights + minimize-to-dock.
+     Loads from localhost during development, smigi.net in production. -->
+<script>
+  (function () {
+    var local = location.hostname === "localhost" || location.hostname === "127.0.0.1";
+    var s = document.createElement("script");
+    s.src = (local ? "" : "https://smigi.net") + "/os/chrome.js";
+    s.dataset.app = "dove";
+    s.dataset.title = "Dove";
+    document.head.appendChild(s);
+  })();
+</script>
+
+</body>
+</html>

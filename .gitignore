@@ -72,3 +72,7 @@ CLAUDE.md
 
 # Release artefacts (scripts/build-mac.sh, make-dmg.sh)
 dist/
+
+# Website (wrangler dev / deploy)
+website/.wrangler/
+website/node_modules/

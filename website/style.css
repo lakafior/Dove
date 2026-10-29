@@ -1,0 +1,382 @@
+/* This Source Code Form is subject to the terms of the Mozilla Public License,
+   v. 2.0. If a copy of the MPL was not distributed with this file, You can
+   obtain one at https://mozilla.org/MPL/2.0/. */
+
+/* No framework, no build step, no JavaScript of our own. Same shape as
+   kickon.smigi.net and dutch.smigi.net, in Dove's colours: the icon's blue. */
+
+:root {
+  --blue: #1a6fd6;     /* the icon's blue, dark enough for white button text (4.9:1) */
+  --blue-ink: #155fc4; /* blue text that reads on white */
+  --ink: #12161d;
+  --body: #4a5260;
+  --line: #e2e7ee;
+  --bg: #ffffff;
+  --panel: #f5f8fc;
+  --radius: 14px;
+  --wrap: 940px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --blue-ink: #6fb3ff;
+    --ink: #f1f4f9;
+    --body: #a6b0be;
+    --line: #232b38;
+    --bg: #0a0e16;     /* the icon's dark appearance, darker */
+    --panel: #111723;
+  }
+}
+
+* { box-sizing: border-box; }
+
+html { -webkit-text-size-adjust: 100%; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--body);
+  font: 17px/1.65 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+        "Helvetica Neue", Arial, sans-serif;
+  text-rendering: optimizeLegibility;
+}
+
+.wrap {
+  width: 100%;
+  max-width: var(--wrap);
+  margin: 0 auto;
+  padding: 0 24px;
+}
+
+h1, h2, h3 { color: var(--ink); line-height: 1.15; margin: 0 0 .5em; }
+h1 { font-size: clamp(2.1rem, 6vw, 3.3rem); letter-spacing: -.02em; font-weight: 700; }
+h2 { font-size: clamp(1.5rem, 3.6vw, 2.1rem); letter-spacing: -.015em; font-weight: 650; }
+h3 { font-size: 1.06rem; font-weight: 650; }
+p { margin: 0 0 1em; }
+a { color: var(--blue-ink); }
+code { font-size: .9em; overflow-wrap: anywhere; }
+
+/* ---- header ---- */
+
+header {
+  border-bottom: 1px solid var(--line);
+  position: sticky;
+  top: var(--mw-bar-h, 0px); /* clears the smigi.net titlebar when present */
+  background: color-mix(in srgb, var(--bg) 88%, transparent);
+  backdrop-filter: saturate(160%) blur(12px);
+  z-index: 10;
+}
+
+/* In windowed mode the page scrolls inside the frame, so stick to its top */
+html.mw-windowed header { top: 0; }
+header .wrap {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 62px;
+  flex-wrap: wrap;
+}
+.logo {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 650;
+  color: var(--ink);
+  text-decoration: none;
+  font-size: 1.06rem;
+}
+.logo img { display: block; }
+nav { display: flex; gap: 4px 20px; flex-wrap: wrap; }
+nav a { color: var(--body); text-decoration: none; font-size: .95rem; }
+nav a:hover, nav a[aria-current] { color: var(--ink); }
+
+/* ---- hero ---- */
+
+.hero { padding: 76px 0 40px; }
+.hero .wrap {
+  display: grid;
+  grid-template-columns: 1.15fr .85fr;
+  gap: 56px;
+  align-items: center;
+}
+.lede { font-size: 1.2rem; max-width: 38ch; }
+.tag {
+  display: inline-block;
+  font-size: .8rem;
+  font-weight: 600;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: var(--blue-ink);
+  background: rgba(26, 111, 214, .12);
+  border-radius: 999px;
+  padding: 5px 12px;
+  margin-bottom: 20px;
+}
+
+.cta { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 26px; }
+.cta-note { margin-top: 12px; font-size: .9rem; color: var(--body); }
+.btn {
+  display: inline-block;
+  padding: 13px 22px;
+  border-radius: 11px;
+  font-weight: 600;
+  font-size: 1rem;
+  text-decoration: none;
+  border: 1px solid transparent;
+}
+.btn-primary { color: #fff; background: var(--blue); }
+.btn-secondary { color: var(--ink); border-color: var(--line); background: var(--panel); }
+
+.hero-icon {
+  display: block;
+  width: 100%;
+  max-width: 260px;
+  height: auto;
+  margin-inline: auto;
+  filter: drop-shadow(0 18px 40px rgba(26, 111, 214, .25));
+}
+
+/* ---- showcase: Mac and iPhone, stepped with the arrows ----
+   No JavaScript: one hidden radio per step. Each device stacks its four
+   screenshots in one grid cell and shows the one whose radio is checked;
+   the arrows and dots are labels for the radios. */
+
+.showcase { padding-bottom: 72px; }
+.showcase .wrap { max-width: 1080px; }
+.showcase .section-head { margin: 0 auto 28px; text-align: center; }
+
+.shot-radio {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.stage {
+  position: relative;
+  max-width: 900px;
+  margin-inline: auto;
+  /* the Mac sits at the back; the iPhone stands in front of it */
+  padding: 0 10% 7% 0;
+}
+.dev { display: grid; }
+.dev img {
+  grid-area: 1 / 1;
+  width: 100%;
+  height: auto;
+  opacity: 0;
+  transition: opacity .35s ease;
+}
+/* Settings is a smaller window than the other three: same box, centred. */
+.dev-mac img { aspect-ratio: 1600 / 855; object-fit: contain; }
+.dev-mac, .dev-iphone { filter: drop-shadow(0 18px 30px rgba(0, 0, 0, .3)); }
+.dev-iphone {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 21%;
+}
+.dev-iphone img, .phones img { border-radius: 10% / 4.6%; }
+
+.shot-nav {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  margin-top: 26px;
+}
+.arrow {
+  display: none;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  background: var(--panel);
+  color: var(--ink);
+  font-size: 1.7rem;
+  line-height: 1;
+  cursor: pointer;
+  user-select: none;
+}
+.arrow:hover { border-color: var(--blue); }
+.dots { display: flex; gap: 10px; }
+.dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--line);
+  cursor: pointer;
+}
+
+.captions { display: grid; max-width: 56ch; margin: 22px auto 0; text-align: center; }
+.caption {
+  grid-area: 1 / 1;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity .35s ease;
+}
+.caption p { margin: 0; }
+
+#shot-1:checked ~ .stage .s1, #shot-2:checked ~ .stage .s2,
+#shot-3:checked ~ .stage .s3, #shot-4:checked ~ .stage .s4,
+#shot-1:checked ~ .captions .c1, #shot-2:checked ~ .captions .c2,
+#shot-3:checked ~ .captions .c3, #shot-4:checked ~ .captions .c4 {
+  opacity: 1;
+  visibility: visible;
+}
+#shot-1:checked ~ .shot-nav :is(.p1, .n1), #shot-2:checked ~ .shot-nav :is(.p2, .n2),
+#shot-3:checked ~ .shot-nav :is(.p3, .n3), #shot-4:checked ~ .shot-nav :is(.p4, .n4) {
+  display: grid;
+}
+#shot-1:checked ~ .shot-nav .d1, #shot-2:checked ~ .shot-nav .d2,
+#shot-3:checked ~ .shot-nav .d3, #shot-4:checked ~ .shot-nav .d4 {
+  background: var(--blue);
+}
+/* Keyboard: the radios take focus; show it on the matching dot. */
+#shot-1:focus-visible ~ .shot-nav .d1, #shot-2:focus-visible ~ .shot-nav .d2,
+#shot-3:focus-visible ~ .shot-nav .d3, #shot-4:focus-visible ~ .shot-nav .d4 {
+  outline: 2px solid var(--blue);
+  outline-offset: 3px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dev img, .caption { transition: none; }
+}
+
+/* ---- three more iPhone screens, side by side ---- */
+
+.phones {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 32px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.phones img {
+  display: block;
+  width: 100%;
+  max-width: 260px;
+  height: auto;
+  margin: 0 auto 18px;
+  box-shadow: 0 14px 30px rgba(0, 0, 0, .14);
+}
+.phones h3 { margin-bottom: .35em; }
+.phones p { margin: 0; font-size: .97rem; }
+
+/* Phones: the Mac goes edge to edge, the iPhone grows and overlaps it more;
+   the three screens scroll sideways instead of shrinking to stamps. */
+@media (max-width: 600px) {
+  .showcase .wrap { padding-inline: 12px; }
+  .stage { padding: 0 0 30% 0; }
+  .dev-iphone { width: 30%; }
+  .phones {
+    grid-template-columns: none;
+    grid-auto-flow: column;
+    grid-auto-columns: 72%;
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    padding-bottom: 12px;
+  }
+  .phones li { scroll-snap-align: start; }
+}
+
+/* ---- sections ---- */
+
+section { padding: 64px 0; }
+section.alt { background: var(--panel); border-block: 1px solid var(--line); }
+.section-head { max-width: 58ch; margin-bottom: 36px; }
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 28px 32px;
+}
+.feature p { margin: 0; font-size: .97rem; }
+.feature h3 { margin-bottom: .35em; }
+
+.split {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 48px;
+  align-items: center;
+}
+
+.bring { margin: 0 0 1em; padding-left: 1.15em; }
+.bring li { margin-bottom: .45em; }
+
+.facts { list-style: none; margin: 0; padding: 0; }
+.facts li {
+  padding: 13px 0;
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  justify-content: space-between;
+  gap: 18px;
+  font-size: .97rem;
+}
+.facts li:last-child { border-bottom: 0; }
+.facts b { color: var(--ink); font-weight: 600; text-align: right; }
+
+/* ---- download ---- */
+
+.platforms {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+}
+.platform {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--bg);
+  padding: 28px;
+}
+.platform p { font-size: .97rem; }
+.platform .btn { margin-top: 6px; }
+.platform .note { margin: 14px 0 0; }
+.soon {
+  display: inline-block;
+  padding: 13px 22px;
+  border-radius: 11px;
+  border: 1px dashed var(--line);
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.note { font-size: .9rem; }
+
+/* ---- footer ---- */
+
+footer {
+  border-top: 1px solid var(--line);
+  padding: 34px 0 46px;
+  font-size: .9rem;
+}
+footer .wrap { display: flex; justify-content: space-between; gap: 18px; flex-wrap: wrap; }
+footer a { color: var(--body); }
+
+/* ---- prose (privacy, support) ---- */
+
+/* padding-block, not the `padding` shorthand: this class sits on the same
+   element as .wrap, and a shorthand here would reset .wrap's horizontal padding
+   to zero and run the text into the edge of the screen. */
+.prose { max-width: 68ch; padding-block: 56px 72px; }
+.prose h2 { margin-top: 1.9em; }
+.prose h3 { margin-top: 1.6em; }
+.prose ul, .prose ol { padding-left: 1.15em; }
+.prose li { margin-bottom: .45em; }
+.prose .updated { font-size: .9rem; color: var(--body); }
+.prose b, .prose strong { color: var(--ink); font-weight: 600; }
+
+@media (max-width: 760px) {
+  header .wrap { gap: 2px 16px; padding-block: 10px; }
+  /* the links get a row of their own, spread across it, so none wraps alone */
+  nav { width: 100%; justify-content: space-between; column-gap: 10px; }
+  nav a { font-size: .9rem; }
+  .hero { padding-top: 48px; }
+  .hero .wrap, .split, .platforms { grid-template-columns: 1fr; gap: 36px; }
+  .platforms { gap: 20px; }
+  .hero-icon { max-width: 160px; }
+  .lede { max-width: none; }
+  section { padding: 48px 0; }
+}

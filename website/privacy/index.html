@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<!--
+  This Source Code Form is subject to the terms of the Mozilla Public License,
+  v. 2.0. If a copy of the MPL was not distributed with this file, You can
+  obtain one at https://mozilla.org/MPL/2.0/.
+-->
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Privacy Policy — Dove</title>
+  <meta name="description" content="Dove collects no personal data. It has no server and no accounts; it talks only to the services you configure, straight from your device.">
+  <meta name="theme-color" content="#1a6fd6">
+  <link rel="canonical" href="https://dove.smigi.net/privacy">
+  <link rel="icon" href="/assets/icon.png" type="image/png">
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+
+<header>
+  <div class="wrap">
+    <a class="logo" href="/">
+      <img src="/assets/icon.png" alt="" width="34" height="34">
+      Dove
+    </a>
+    <nav>
+      <a href="/">Home</a>
+      <a href="/support">Support</a>
+      <a href="/privacy" aria-current="page">Privacy</a>
+      <a href="https://github.com/lakafior/Dove">GitHub</a>
+    </nav>
+  </div>
+</header>
+
+<div class="wrap prose">
+
+  <h1>Privacy Policy</h1>
+  <p class="updated">Effective 27 October 2026. Applies to the Dove apps for iPhone and Mac and to this website.</p>
+  <p><b>Dove collects no personal data.</b> Dove is an iOS and macOS app that helps you manage files from your own services. The developer does not run any servers for Dove and does not receive any of your data.</p>
+
+  <h2>Data Dove does not collect</h2>
+  <ul>
+    <li>No accounts or sign-ups</li>
+    <li>No analytics or tracking</li>
+    <li>No crash reporting of its own (if you opt in to sharing analytics with developers in your device's settings, Apple may pass on crash logs; they contain no account data)</li>
+    <li>No ads</li>
+  </ul>
+
+  <h2>Data you bring to Dove</h2>
+  <p>Dove connects to services you already use. Their own privacy policies apply to what they do with your data:</p>
+  <ul>
+    <li><b>Debrid services</b> (Real-Debrid, TorBox, Offcloud, Debrid-Link, Premiumize, AllDebrid): Dove sends magnets, torrent files, hoster links and NZBs to them from your device.</li>
+    <li><b>Usenet services</b> (nzbdav/InfiniDysk, TorBox, Offcloud, Premiumize): Dove sends NZBs to them from your device.</li>
+    <li><b>Indexers</b> (Newznab/Torznab): Dove searches them from your device with your API keys.</li>
+    <li><b>Stremio addons</b>: Dove searches them from your device.</li>
+    <li><b>Calibre</b>: Dove lists your books and sends new ones to your own Calibre Content server.</li>
+    <li><b>iCloud Drive</b>: files you send there are stored in your own iCloud account.</li>
+    <li><b>Kodi</b>: Dove sends play commands to your Kodi server.</li>
+    <li><b>Plugins</b>: Dove runs JavaScript you install, which may connect to sites the plugin declares.</li>
+  </ul>
+
+  <h2>Metadata lookups</h2>
+  <p>Dove looks up titles through public services:</p>
+  <ul>
+    <li>TMDB (The Movie Database)</li>
+    <li>Open Library</li>
+    <li>Apple's iTunes Search / Apple Books</li>
+    <li>Google Books</li>
+    <li>Hardcover</li>
+    <li>MusicBrainz</li>
+    <li>Apple Music</li>
+    <li>IGDB</li>
+    <li>Wikidata</li>
+  </ul>
+  <p>The only data sent is the title being looked up.</p>
+
+  <h2>On-device processing</h2>
+  <ul>
+    <li>Natural-language filters and "find by description" use Apple's Foundation Models on your device.</li>
+    <li>Secrets (API keys, passwords) live in your device's Keychain.</li>
+    <li>Settings sync to your other devices through iCloud Keychain (end-to-end encrypted).</li>
+    <li>Some data stays on one device only: library matches, content kinds, downloads.</li>
+  </ul>
+
+  <h2>Downloaded files</h2>
+  <ul>
+    <li>Files you download stay on your device.</li>
+    <li>They are excluded from iCloud backup.</li>
+  </ul>
+
+  <h2>Sending files</h2>
+  <ul>
+    <li>Sending a book by e-mail or to Kindle goes through your system mail or the service you pick.</li>
+  </ul>
+
+  <h2>Plugins</h2>
+  <ul>
+    <li>Plugins are JavaScript you install from repositories you add.</li>
+    <li>Each plugin declares which hosts it connects to.</li>
+    <li>You must enable each plugin before it runs.</li>
+    <li>What a plugin sends to the hosts it declares is governed by those hosts' privacy policies.</li>
+  </ul>
+
+  <h2>Children</h2>
+  <p>Dove is not directed at children under 13.</p>
+
+  <h2>Contact</h2>
+  <p>Questions or concerns? Write to <a href="mailto:dove@smigi.net">dove@smigi.net</a> or open an issue on GitHub: <a href="https://github.com/lakafior/Dove/issues">github.com/lakafior/Dove/issues</a></p>
+
+  <h2>This website</h2>
+  <p>This site has no cookies, analytics or trackers, and loads nothing from other companies. It is served by Cloudflare, which processes the technical data any web server sees (such as your IP address) to deliver the pages, and keeps short-lived request logs that the developer uses only to fix problems with the site.</p>
+
+</div>
+
+<footer>
+  <div class="wrap">
+    <span>© 2026 Smigi · Dove is free software under the
+      <a href="https://github.com/lakafior/Dove/blob/main/LICENSE">MPL 2.0</a> ·
+      Use it only with content you have the right to access</span>
+    <span>
+      <a href="https://github.com/lakafior/Dove">GitHub</a> ·
+      <a href="/support">Support</a> ·
+      <a href="/privacy">Privacy</a> ·
+      <a href="mailto:dove@smigi.net">dove@smigi.net</a>
+    </span>
+  </div>
+</footer>
+
+<!-- smigi.net window chrome: traffic lights + minimize-to-dock.
+     Loads from localhost during development, smigi.net in production. -->
+<script>
+  (function () {
+    var local = location.hostname === "localhost" || location.hostname === "127.0.0.1";
+    var s = document.createElement("script");
+    s.src = (local ? "" : "https://smigi.net") + "/os/chrome.js";
+    s.dataset.app = "dove";
+    s.dataset.title = "Dove";
+    document.head.appendChild(s);
+  })();
+</script>
+
+</body>
+</html>

@@ -48,6 +48,9 @@ Some services (TorBox, Offcloud) accept unsupported links and fail later. Automa
 **Why are private-tracker torrents sent only to some services?**
 Private trackers need seeding, so Dove sends them only to services that seed (Debrid-Link, TorBox on a paid plan). If one of your services already has the release cached, Dove sends it there as a bare magnet, so your passkey never leaves the device.
 
+**Why can’t Dove add the plugin repository?**
+DNS filters such as NextDNS, AdGuard DNS or Pi-hole sometimes block `*.github.io`, where plugin repositories are hosted. Dove then cannot load `https://lakafior.github.io/dove-plugins/index.json`. Allow `lakafior.github.io` in your filter (or the host of any other repository you add) and try again.
+
 ## Reporting a problem
 
 Report problems on GitHub: [github.com/lakafior/Dove/issues](https://github.com/lakafior/Dove/issues), or write to [dove@smigi.net](mailto:dove@smigi.net).

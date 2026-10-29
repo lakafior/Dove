@@ -250,3 +250,28 @@ looks anything up. Films would also match through the demo addon; books and albu
 `-demo -demoAudiobook` opens the player on the demo LibriVox Sherlock Holmes; in demo mode `AudiobookDemo` serves
 generated tone files for any demo audiobook, so Play works from the library too.
 
+### Website (2026-10-29)
+
+`website/` is dove.smigi.net, built like the owner's other sites (Kickon, Dutch, Worldward): plain HTML and one
+`style.css`, no build step, no JavaScript of its own, no external fonts or trackers. The only script is the smigi.net
+window chrome (`https://smigi.net/os/chrome.js`, `data-app="dove"`) that every sister site loads; Dove is not in
+smigi.net's dock yet (`smigi-net/script.js`). English only (the owner's call: app and docs are English, AltStore PAL
+is EU-wide). Pages: `/` (showcase stepped with hidden radios and labels, as on Kickon, one Mac and one iPhone shot per
+step; features taken from README and the roadmap's Delivered section), `/privacy` (`docs/privacy.md` plus a section on
+the site itself), `/support` (`docs/support.md`; the DNS-filter FAQ about `*.github.io` was added to both).
+
+- Images: `docs/screenshots/` resized with `sips` (iPhone 600 px, Mac 1600 px wide) and encoded with `cwebp`
+  (`sips` lists WebP but writes nothing). The originals stay. `mac-settings` is a smaller window (1600×1081): it
+  shares the other Mac shots' box with `object-fit: contain`. The icon is rendered from `AppIcon.icon` with Icon
+  Composer's `ictool` (`--platform macOS --rendition Default`, 256 px).
+- Worker: a *route* `dove.smigi.net/*` in zone `smigi.net`, not a custom domain (a custom domain's certificate also
+  covers smigi.net, and browsers reusing one connection across `*.smigi.net` then get 421 Misdirected Request), so it
+  needs a proxied `AAAA dove 100::`. `html_handling: drop-trailing-slash` serves `/privacy` and `/support` as written
+  in `review-notes.md` and `support.md` (`/privacy/` redirects there); pages therefore use root-relative links.
+  `.assetsignore` keeps `wrangler.jsonc` out of the served files.
+- Deploy: `.github/workflows/website.yml`, on pushes to `main` touching `website/**` (or by hand), Node 22,
+  `npx wrangler@4.155.0 deploy`, secrets `CLOUDFLARE_API_TOKEN` (Workers Scripts: Edit, Workers Routes: Edit on
+  smigi.net) and `CLOUDFLARE_ACCOUNT_ID`.
+- The white text on the primary button needs `#1a6fd6` or darker (4.9:1); the icon's lighter blue gave 3.6:1.
+- The Mac download links to `releases/latest`; until the first release that opens an empty list, which the page says.
+  Drop that note once `v1.0.0` is out.
