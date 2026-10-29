@@ -24,7 +24,7 @@ public final class HomeModel {
     private static let recentLimit = 12
 
     public init() {
-        if let data = UserDefaults.standard.data(forKey: Self.recentKey),
+        if let data = DoveStorage.defaults.data(forKey: Self.recentKey),
            let saved = try? JSONDecoder().decode([RecentSearch].self, from: data) {
             recentSearches = saved
         }
@@ -51,6 +51,6 @@ public final class HomeModel {
     }
 
     private func saveRecent() {
-        UserDefaults.standard.set(try? JSONEncoder().encode(recentSearches), forKey: Self.recentKey)
+        DoveStorage.defaults.set(try? JSONEncoder().encode(recentSearches), forKey: Self.recentKey)
     }
 }

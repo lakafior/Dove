@@ -81,7 +81,7 @@ public final class AudiobookPlayer {
     /// Per device, like the chosen video player. Audiobooks only: music always plays at 1×.
     public var rate: Float {
         didSet {
-            UserDefaults.standard.set(rate, forKey: Self.rateKey)
+            DoveStorage.defaults.set(rate, forKey: Self.rateKey)
             player.defaultRate = playbackRate
             if player.rate != 0 { player.rate = playbackRate }
             updateNowPlaying()
@@ -128,7 +128,7 @@ public final class AudiobookPlayer {
         self.keychain = keychain
         self.platform = platform
         positions = SharedConfiguration.audiobookPositions(from: keychain)
-        let stored = UserDefaults.standard.float(forKey: Self.rateKey)
+        let stored = DoveStorage.defaults.float(forKey: Self.rateKey)
         rate = stored > 0 ? stored : 1
         player.defaultRate = rate
         timeObserver = player.addPeriodicTimeObserver(forInterval: CMTime(seconds: 0.5, preferredTimescale: 600), queue: .main) { [weak self] time in

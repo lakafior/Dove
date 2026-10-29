@@ -17,7 +17,7 @@ public final class AppModel {
     /// Plugin repositories and installed plugins (`docs/plugins.md`).
     public let plugins = PluginsModel(store: PluginStore(
         keychain: SharedConfiguration.keychain(),
-        scriptsDirectory: URL.applicationSupportDirectory.appending(path: "Dove/Plugins")
+        scriptsDirectory: DoveStorage.applicationSupport.appending(path: "Plugins")
     ))
     /// New and missing episodes, and releases worth replacing.
     public let review = LibraryReviewModel()
@@ -33,12 +33,17 @@ public final class AppModel {
     public let speed = SpeedTestModel()
     public private(set) var backends: [any LibraryBackend] = []
 
+    #if DEBUG
+    /// Demo mode's library matches being written; the library waits for them (`startDemo`).
+    @ObservationIgnored var demoSeeding: Task<Void, Never>?
+    #endif
+
     /// A magnet or file opened from another app; RootView shows the add sheet for it.
     public var openedSource: SourceBatch?
 
     /// The first-run setup was completed on this device.
     public var setupFinished: Bool {
-        didSet { UserDefaults.standard.set(setupFinished, forKey: "setupFinished") }
+        didSet { DoveStorage.defaults.set(setupFinished, forKey: "setupFinished") }
     }
 
     /// Any existing service, addon, indexer or installed plugin was configured before setup could open.
@@ -221,7 +226,7 @@ public final class AppModel {
 
     /// Where downloads of each kind go by default (synced).
     /// Folders the user picked as places for downloads (this Mac only: a bookmark means nothing elsewhere).
-    @ObservationIgnored public let pickedFolders = PickedFolders(fileURL: .applicationSupportDirectory.appending(path: "Dove/picked-folders.json"))
+    @ObservationIgnored public let pickedFolders = PickedFolders(fileURL: DoveStorage.applicationSupport.appending(path: "picked-folders.json"))
     /// `pickedFolders` as the views read it.
     public private(set) var folderPlaces: [PickedFolder] = []
 
@@ -268,28 +273,35 @@ public final class AppModel {
 
     public init(platform: any AppPlatform) {
         defer { Self.current = self }
+        #if DEBUG
+        // Before anything reads the Keychain or the network: demo content in, the real services out of reach.
+        if DemoMode.isActive { Self.prepareDemo() }
+        let platform: any AppPlatform = DemoMode.isActive ? DemoPlatform(wrapping: platform) : platform
+        #endif
         self.platform = platform
         updates = UpdateModel(platform: platform)
-        setupFinished = UserDefaults.standard.bool(forKey: "setupFinished")
+        // Demo mode shows the app set up; the wizard still opens from Settings.
+        setupFinished = DemoMode.isActive || DoveStorage.defaults.bool(forKey: "setupFinished")
         playback = PlaybackModel(keychain: SharedConfiguration.keychain(), platform: platform)
         audiobook = AudiobookPlayer(keychain: SharedConfiguration.keychain(), platform: platform)
         downloads = DownloadManager(
-            configuration: DownloadManager.backgroundConfiguration(identifier: AppModel.downloadSessionID),
+            // Demo mode must not reattach (or cancel) the real app's background downloads.
+            configuration: DemoMode.isActive ? .ephemeral : DownloadManager.backgroundConfiguration(identifier: AppModel.downloadSessionID),
             directory: platform.downloadsDirectory,
-            store: DownloadStore(directory: .applicationSupportDirectory.appending(path: "Dove/Downloads"))
+            store: DownloadStore(directory: DoveStorage.applicationSupport.appending(path: "Downloads"))
         )
         // Keys saved before the shared Keychain group existed move into it once, so the extension sees them.
-        if SharedConfiguration.keychainGroup != nil, !UserDefaults.standard.bool(forKey: Self.migratedKey) {
+        if SharedConfiguration.keychainGroup != nil, !DoveStorage.defaults.bool(forKey: Self.migratedKey) {
             keychain.migrateToAccessGroup()
-            if let legacy = UserDefaults.standard.stringArray(forKey: Self.legacyOrderKey) {
+            if let legacy = DoveStorage.defaults.stringArray(forKey: Self.legacyOrderKey) {
                 SharedConfiguration.saveDebridOrder(legacy.compactMap(BackendID.init(rawValue:)), to: keychain)
             }
-            UserDefaults.standard.set(true, forKey: Self.migratedKey)
+            DoveStorage.defaults.set(true, forKey: Self.migratedKey)
         }
         // Items written before iCloud Keychain sync are rewritten as synchronizable, once.
-        if !UserDefaults.standard.bool(forKey: Self.synchronizedKey) {
+        if !DoveStorage.defaults.bool(forKey: Self.synchronizedKey) {
             keychain.migrateToAccessGroup()
-            UserDefaults.standard.set(true, forKey: Self.synchronizedKey)
+            DoveStorage.defaults.set(true, forKey: Self.synchronizedKey)
         }
         debridOrder = SharedConfiguration.debridOrder(from: keychain)
         usenetOrder = SharedConfiguration.usenetOrder(from: keychain)
@@ -310,7 +322,7 @@ public final class AppModel {
             // First launch of this build: bring the old UserDefaults values along, then save them synced.
             // A fresh install has none: it saves nothing, so it cannot overwrite preferences that iCloud
             // Keychain has not delivered yet.
-            let defaults = UserDefaults.standard
+            let defaults = DoveStorage.defaults
             let legacyKeys = [Self.legacyDownloadOnlyKey, Self.legacyFilterKey, Self.legacyVariantKey]
             let hasLegacy = legacyKeys.contains { defaults.object(forKey: $0) != nil }
             downloadOnly = defaults.bool(forKey: Self.legacyDownloadOnlyKey)
@@ -364,7 +376,7 @@ public final class AppModel {
             return AVURLAsset(url: url, options: ["AVURLAssetHTTPHeaderFieldsKey": request.allHTTPHeaderFields ?? [:]])
         }
         downloadJobs = DownloadJobs(
-            store: DownloadJobStore(fileURL: .applicationSupportDirectory.appending(path: "Dove/Downloads/jobs.json")),
+            store: DownloadJobStore(fileURL: DoveStorage.applicationSupport.appending(path: "Downloads/jobs.json")),
             downloads: downloads
         ) { [weak self] id in self?.backend(id) }
         downloadAlerts = DownloadAlerts(downloads: downloads, jobs: downloadJobs, platform: platform)
@@ -373,6 +385,9 @@ public final class AppModel {
         downloads.onSettled { [weak self] record in
             if record.state == .finished, record.destination == .iCloud { self?.iCloudFileArrived() }
         }
+        #if DEBUG
+        if DemoMode.isActive { startDemo() }
+        #endif
     }
 
     /// After an add in "download only" mode: hand the item to `downloadJobs`. Returns the message to show.
@@ -502,6 +517,8 @@ public final class AppModel {
     /// Looks the container up off the main thread (the lookup may block), then lists it as a library place and
     /// lets downloads go there.
     public func resolveICloud() async {
+        // Demo mode lists no iCloud Drive: it is the user's real one.
+        guard !DemoMode.isActive else { iCloudChecked = true; return }
         let folder = await Task.detached(priority: .utility) {
             FileManager.default.url(forUbiquityContainerIdentifier: nil)?.appending(path: "Documents")
         }.value
@@ -637,7 +654,7 @@ public final class AppModel {
     public private(set) var newznabIndexers: [NewznabIndexer] = []
     /// Rebuilt whenever the list changes; usage and caps persist in its state file.
     public private(set) var newznab = NewznabSearch(indexers: [], stateURL: nil)
-    private static let newznabStateURL = URL.applicationSupportDirectory.appending(path: "Dove/newznab.json")
+    private static let newznabStateURL = DoveStorage.applicationSupport.appending(path: "newznab.json")
 
     public func reloadNewznab() {
         newznabIndexers = SharedConfiguration.newznabIndexers(from: keychain)

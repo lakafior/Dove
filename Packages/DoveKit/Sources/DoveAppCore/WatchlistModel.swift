@@ -14,7 +14,7 @@ public final class WatchlistModel {
     public private(set) var releases: [String: MovieRelease]
 
     private let keychain: KeychainStore
-    private static let releasesURL = URL.applicationSupportDirectory.appending(path: "Dove/watchlist-releases.json")
+    private static let releasesURL = DoveStorage.applicationSupport.appending(path: "watchlist-releases.json")
     /// What each entry last announced (`WatchlistStatus.announcement`), so a notice goes out once.
     private static let announcedKey = "watchlistAnnounced"
     private var announced: [String: String]
@@ -24,7 +24,7 @@ public final class WatchlistModel {
         self.keychain = keychain
         list = Watchlist.load(from: keychain)
         releases = (try? JSONDecoder().decode([String: MovieRelease].self, from: Data(contentsOf: Self.releasesURL))) ?? [:]
-        announced = UserDefaults.standard.dictionary(forKey: Self.announcedKey) as? [String: String] ?? [:]
+        announced = DoveStorage.defaults.dictionary(forKey: Self.announcedKey) as? [String: String] ?? [:]
     }
 
     /// After a settings import or another device's change.
@@ -111,7 +111,7 @@ public final class WatchlistModel {
         }
         let ids = Set(list.entries.map(\.id))
         announced = announced.filter { ids.contains($0.key) }
-        UserDefaults.standard.set(announced, forKey: Self.announcedKey)
+        DoveStorage.defaults.set(announced, forKey: Self.announcedKey)
     }
 
     private func post(_ entry: Watchlist.Entry, status: WatchlistStatus?) {

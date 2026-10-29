@@ -99,7 +99,7 @@ public final class PluginsModel {
 
     /// Asks every repository again: at launch at most once a day, or now (`force`).
     public func refreshIndexes(force: Bool = false) async {
-        let defaults = UserDefaults.standard
+        let defaults = DoveStorage.defaults
         if !force, let last = defaults.object(forKey: Self.lastCheckKey) as? Date, Date().timeIntervalSince(last) < 24 * 3600,
            !indexes.isEmpty || repositories.isEmpty {
             return

@@ -1,4 +1,5 @@
 import Foundation
+import DoveKit
 import UserNotifications
 
 /// What Dove notifies about. Each can be turned off in Settings › Notifications (this device, UserDefaults);
@@ -42,15 +43,16 @@ public enum NotificationKind: String, CaseIterable, Identifiable {
 
     /// On unless the user turned it off.
     public var isOn: Bool {
-        get { UserDefaults.standard.object(forKey: key) as? Bool ?? true }
-        nonmutating set { UserDefaults.standard.set(newValue, forKey: key) }
+        get { DoveStorage.defaults.object(forKey: key) as? Bool ?? true }
+        nonmutating set { DoveStorage.defaults.set(newValue, forKey: key) }
     }
 }
 
 public enum LocalNotifications {
     /// Asks iOS once, the first time a kind that is on has something to say.
     public static func askIfNeeded(for kind: NotificationKind) {
-        guard kind.isOn, kind.needsPermission else { return }
+        // Demo mode (`DemoMode`) neither asks nor posts: its downloads are made up.
+        guard kind.isOn, kind.needsPermission, !DemoMode.isActive else { return }
         Task {
             let center = UNUserNotificationCenter.current()
             guard await center.notificationSettings().authorizationStatus == .notDetermined else { return }
@@ -60,7 +62,7 @@ public enum LocalNotifications {
 
     /// Posts at once, unless the user turned the kind off (iOS drops it anyway without permission).
     public static func post(_ kind: NotificationKind, id: String, title: String, body: String, thread: String) {
-        guard kind.isOn else { return }
+        guard kind.isOn, !DemoMode.isActive else { return }
         let content = UNMutableNotificationContent()
         content.title = title
         content.body = body

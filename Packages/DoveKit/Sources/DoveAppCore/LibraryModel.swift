@@ -62,23 +62,23 @@ public final class LibraryModel {
     public private(set) var batch: (label: String, done: Int, total: Int)?
 
     /// Matches survive launches; they are not secrets.
-    private let store = MatchStore(fileURL: URL.applicationSupportDirectory.appending(path: "Dove/library-matches.json"))
-    private let bookStore = MetadataStore<BookSummary>(fileURL: URL.applicationSupportDirectory.appending(path: "Dove/library-books.json"))
-    private let albumStore = MetadataStore<AlbumSummary>(fileURL: URL.applicationSupportDirectory.appending(path: "Dove/library-albums.json"))
-    private let gameStore = MetadataStore<GameSummary>(fileURL: URL.applicationSupportDirectory.appending(path: "Dove/library-games.json"))
+    private let store = MatchStore(fileURL: DoveStorage.applicationSupport.appending(path: "library-matches.json"))
+    private let bookStore = MetadataStore<BookSummary>(fileURL: DoveStorage.applicationSupport.appending(path: "library-books.json"))
+    private let albumStore = MetadataStore<AlbumSummary>(fileURL: DoveStorage.applicationSupport.appending(path: "library-albums.json"))
+    private let gameStore = MetadataStore<GameSummary>(fileURL: DoveStorage.applicationSupport.appending(path: "library-games.json"))
     /// Set by `AppModel.reloadBookMetadata` (region, language, the user's keys).
     public var bookMetadata = BookMetadata(configuration: .device())
     /// The last list, shown at once on launch while the services are asked again.
-    private static let cacheURL = URL.applicationSupportDirectory.appending(path: "Dove/library-items.json")
+    private static let cacheURL = DoveStorage.applicationSupport.appending(path: "library-items.json")
     /// Kinds learned from an item's files once it was opened (Real-Debrid and Offcloud list items without files),
     /// and kinds the user set. In the App Group container: the Files extension hides adult items with them.
     private var kinds: KindOverrides
     private static let kindsURL = SharedConfiguration.kindsURL
     /// Where learned kinds lived before the user could set them and Files needed them.
-    private static let legacyKindsURL = URL.applicationSupportDirectory.appending(path: "Dove/library-kinds.json")
+    private static let legacyKindsURL = DoveStorage.applicationSupport.appending(path: "library-kinds.json")
     /// Release names and titles from the search, for items the services list under a random name.
     private var hints: AddedHints
-    private static let hintsURL = URL.applicationSupportDirectory.appending(path: "Dove/library-hints.json")
+    private static let hintsURL = DoveStorage.applicationSupport.appending(path: "library-hints.json")
 
     public init() {
         hints = AddedHints.load(from: Self.hintsURL) ?? AddedHints()
@@ -220,6 +220,9 @@ public final class LibraryModel {
     public func start(using app: AppModel) async {
         guard !hasStarted else { return }
         hasStarted = true
+        #if DEBUG
+        await app.demoSeeding?.value
+        #endif
         matches = await store.all().compactMapValues(\.media)
         bookMatches = await bookStore.all().compactMapValues(\.media)
         albumMatches = await albumStore.all().compactMapValues(\.media)

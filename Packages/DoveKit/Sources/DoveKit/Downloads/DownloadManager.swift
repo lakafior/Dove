@@ -56,8 +56,16 @@ public final class DownloadManager: NSObject {
         super.init()
         session = URLSession(configuration: configuration, delegate: self, delegateQueue: .main)
         records = store.load()
-        Task { await reconnect() }
+        // Demo mode's records have no tasks behind them on purpose (`showDemo`).
+        if !DemoMode.isActive { Task { await reconnect() } }
     }
+
+    #if DEBUG
+    /// Demo mode (`DemoMode`): made-up downloads to show, frozen where they are. Never saved.
+    public func showDemo(_ demo: [DownloadRecord]) {
+        records = demo
+    }
+    #endif
 
     public func onSettled(_ handler: @escaping @MainActor (DownloadRecord) -> Void) {
         settledHandlers.append(handler)

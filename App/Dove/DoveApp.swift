@@ -25,6 +25,8 @@ struct DoveApp: App {
                     await hosts
                 }
         }
+        // `DoveStorage`: demo mode keeps its view settings apart from the user's.
+        .defaultAppStorage(DoveStorage.defaults)
     }
 }
 

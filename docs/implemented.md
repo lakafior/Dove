@@ -199,3 +199,50 @@ Not wanted: OAuth device-code login (API keys are fine); RD transcoding (`stream
 ### Update check (2026-10-27)
 
 Mac only: iOS updates come through AltStore. `UpdateChecker` (DoveKit, tested) asks `https://api.github.com/repos/lakafior/Dove/releases/latest` (unauthenticated: 60 requests an hour per IP; `Accept: application/vnd.github+json`, `X-GitHub-Api-Version: 2022-11-28`, a User-Agent, which GitHub requires). That endpoint skips drafts and prereleases; 404 means no release yet (up to date), 403/429 the rate limit. `AppVersion` compares numerically per component and ignores a leading `v`, so the tag `v1.0.0` (what `release.yml` checks against `MARKETING_VERSION`) matches `1.0.0`. The DMG is the first asset ending in `.dmg`, else the release page. `UpdateModel` (DoveAppCore): `checkAutomatically()` from `MacRootView` at most once in 24 h (`updateLastCheck`), quiet on errors, honours `updateSkippedTag`; `checkNow()` from Dove › Check for Updates… reports "up to date" and errors too. Download only opens the URL; nothing is fetched or installed by Dove. Written by a delegated Codex job, reviewed and tidied by hand.
+
+### Demo mode and screenshots (2026-10-27/29)
+
+`-demo` at launch, Debug builds only (`DemoMode.isActive` is `#if DEBUG`; Release compiles every demo file out):
+Dove shows a made-up TorBox account of public-domain works so README, the website and the AltStore listing get
+screenshots without anyone's real library. `scripts/screenshots.sh` runs two UI test targets (`DoveUITests` on a
+fresh "Dove Screenshots" simulator, iPhone 18 Pro Max 6.9" at native 1320×2868, status bar overridden to 9:41;
+`DoveMacUITests` on this Mac, window screenshots) and copies the PNGs to `docs/screenshots/`. The tests only attach
+each screenshot under its file name (`Screenshot.save`); the script exports them from the result bundles with
+`xcrun xcresulttool export attachments` (names come back as `<name>_0_<UUID>.png` in `manifest.json`). Writing files
+from the test failed on the Mac: the UI test runner is sandboxed (`NSCocoaErrorDomain 513`). The result bundles also
+hold screen recordings of the whole display, so they stay in a temporary folder. One launch per screen, so one failure
+leaves the rest. Once a "WidgetRenderer_Default quit unexpectedly" system dialog (not Dove's) landed on the Mac window
+screenshot: look at the images before committing them. AVAudioFile cannot write MP3, so the demo's tone files are WAV
+whatever the release's extension.
+
+Isolation, because on the Mac the demo runs in the real app's container (same bundle ID):
+- `DoveStorage` (DoveKit): `applicationSupport`, `caches` and `defaults` replace every `URL.applicationSupportDirectory/Dove`,
+  `cachesDirectory/Dove` and `UserDefaults.standard`; in demo mode a `tmp/DoveDemo` folder (wiped per launch) and the
+  suite `net.smigi.dove.demo`. SwiftUI's `@AppStorage` follows through `.defaultAppStorage(DoveStorage.defaults)` on
+  every scene (iOS window, Mac window, menu bar extra, Settings), plus an explicit `store:` on the Mac app's own one.
+- `KeychainStore.inMemory` / `.demo`: `SharedConfiguration.keychain()` returns the in-memory store, seeded with a TorBox
+  key (so Settings shows it set up) and the demo addon. `SharedConfiguration.backends` answers `[DemoBackend()]`.
+- `appGroupContainer` is nil: no widget snapshot, `kinds.json` in the demo folder.
+- `DemoPlatform` wraps the app's `AppPlatform`: screens, links and artwork pass through; Files/Finder location,
+  Spotlight, widgets, Live Activity and Siri suggestions are no-ops. `SpotlightIndex.describe` marks screens not eligible.
+- Downloads use an ephemeral session (the real background session's identifier would reattach, and `reconnect` cancel,
+  the real app's tasks) and skip `reconnect`; `DownloadManager.showDemo` sets frozen records. No iCloud Drive, no
+  notification prompt or posts (`LocalNotifications`), `setupFinished` true (the wizard still opens from Settings).
+
+Network: `DemoURLProtocol` is registered for the run (`URLProtocol.registerClass`, reaches `URLSession.shared` and
+so every default transport in the package) and answers every http(s) request from `DemoServer`, except Wikimedia's
+image hosts (`commons`, `upload`, `thumb.wikimedia.org`), which load for real. Simpler than threading a transport
+through `AppModel`, and nothing in demo mode can reach a real service by accident. `DemoServer` is a Stremio addon at
+`https://demo.dove.invalid/` ("Public Domain": catalog with search, meta, streams for six films and four Beverly
+Hillbillies season 1 episodes known to be public domain); stream text is Torrentio-shaped (👤 💾 ⚙️, `[TB+]`), and
+info hashes ending in `ca` are what `DemoBackend.cachedHashes` reports cached (the ⚡). Posters and covers are
+`commons.wikimedia.org/wiki/Special:FilePath/<file>?width=500` links (redirects to the thumbnail; every file checked
+"Public domain" through the Commons API).
+
+Matches: `AppModel.startDemo` writes the posters, book covers and albums with the public `setMatch`/`setBookMatch`/
+`setAlbumMatch` under each item's guess key, in a task `LibraryModel.start` awaits (`demoSeeding`), so the matcher never
+looks anything up. Films would also match through the demo addon; books and albums would otherwise ask Open Library.
+
+`-demo -demoAudiobook` opens the player on the demo LibriVox Sherlock Holmes; in demo mode `AudiobookDemo` serves
+generated tone files for any demo audiobook, so Play works from the library too.
+

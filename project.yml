@@ -413,6 +413,37 @@ targets:
         ENABLE_USER_SCRIPT_SANDBOXING: YES
         SWIFT_STRICT_CONCURRENCY: complete
 
+  # The screenshot tour (scripts/screenshots.sh): the app in demo mode (`-demo`), one PNG per screen.
+  DoveUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources:
+      - UITests/iOS
+      - UITests/Shared
+    dependencies:
+      - target: Dove
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: net.smigi.dove.uitests
+        GENERATE_INFOPLIST_FILE: YES
+        TARGETED_DEVICE_FAMILY: "1"
+        SWIFT_STRICT_CONCURRENCY: complete
+
+  DoveMacUITests:
+    type: bundle.ui-testing
+    platform: macOS
+    deploymentTarget: "26.0"
+    sources:
+      - UITests/Mac
+      - UITests/Shared
+    dependencies:
+      - target: DoveMac
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: net.smigi.dove.macuitests
+        GENERATE_INFOPLIST_FILE: YES
+        SWIFT_STRICT_CONCURRENCY: complete
+
 schemes:
   Dove:
     build:
@@ -435,3 +466,22 @@ schemes:
       config: Debug
     archive:
       config: Release
+  # scripts/screenshots.sh: Debug builds only (demo mode is compiled out of Release).
+  DoveScreenshots:
+    build:
+      targets:
+        Dove: all
+        DoveUITests: [test]
+    test:
+      config: Debug
+      targets:
+        - DoveUITests
+  DoveMacScreenshots:
+    build:
+      targets:
+        DoveMac: all
+        DoveMacUITests: [test]
+    test:
+      config: Debug
+      targets:
+        - DoveMacUITests

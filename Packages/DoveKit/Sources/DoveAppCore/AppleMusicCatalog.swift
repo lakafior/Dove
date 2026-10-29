@@ -17,7 +17,7 @@ public struct AppleMusicCatalog: AlbumCatalog {
 
     /// On, and allowed.
     public static var isEnabled: Bool {
-        UserDefaults.standard.bool(forKey: preferenceKey) && MusicAuthorization.currentStatus == .authorized
+        DoveStorage.defaults.bool(forKey: preferenceKey) && MusicAuthorization.currentStatus == .authorized
     }
 
     public func albums(matching query: String) async throws -> [AlbumSummary] {

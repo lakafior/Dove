@@ -129,7 +129,7 @@ public actor HostCatalog {
 
     /// Caches/Dove/hosts.json of the running process.
     public static var defaultURL: URL {
-        URL.cachesDirectory.appending(path: "Dove/hosts.json")
+        DoveStorage.caches.appending(path: "hosts.json")
     }
 
     public var snapshot: [BackendID: HostList] { lists }

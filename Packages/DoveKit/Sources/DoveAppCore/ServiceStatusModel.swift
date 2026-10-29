@@ -27,7 +27,7 @@ public final class ServiceStatusModel {
     private var savedAt: Date?
 
     public init() {
-        if let data = UserDefaults.standard.data(forKey: Self.savedKey),
+        if let data = DoveStorage.defaults.data(forKey: Self.savedKey),
            let saved = try? JSONDecoder().decode(Saved.self, from: data) {
             accounts = saved.accounts
             savedAt = saved.savedAt
@@ -73,7 +73,7 @@ public final class ServiceStatusModel {
         // A service that did not answer keeps what it said last time.
         accounts.merge(loaded) { $1 }
         savedAt = .now
-        UserDefaults.standard.set(try? JSONEncoder().encode(Saved(savedAt: .now, accounts: accounts)), forKey: Self.savedKey)
+        DoveStorage.defaults.set(try? JSONEncoder().encode(Saved(savedAt: .now, accounts: accounts)), forKey: Self.savedKey)
     }
 
     /// "213 days left", "Expires today", "Expired", "Free plan", or nil when nothing is known.
