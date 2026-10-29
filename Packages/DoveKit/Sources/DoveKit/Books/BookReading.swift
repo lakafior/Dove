@@ -173,7 +173,7 @@ public enum BookFiles {
 public struct BookFileCache: Sendable {
     public let directory: URL
 
-    public init(directory: URL = .cachesDirectory.appending(path: "Dove/Books")) {
+    public init(directory: URL = DoveStorage.caches.appending(path: "Books")) {
         self.directory = directory
     }
 

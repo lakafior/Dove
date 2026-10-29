@@ -20,7 +20,7 @@ public final class UpdateModel {
     private let skippedTagKey = "updateSkippedTag"
 
     public init(platform: any AppPlatform, transport: any HTTPTransport = URLSession.shared,
-                defaults: UserDefaults = .standard, now: @escaping () -> Date = Date.init,
+                defaults: UserDefaults = DoveStorage.defaults, now: @escaping () -> Date = Date.init,
                 currentVersion: AppVersion? = nil) {
         self.platform = platform
         checker = UpdateChecker(transport: transport)

@@ -1,5 +1,6 @@
 import FileProvider
 import Foundation
+import DoveKit
 
 /// The "Dove" location in the Files app, served by the `DoveFiles` extension.
 enum FilesLocation {
@@ -22,7 +23,7 @@ enum FilesLocation {
             try? await NSFileProviderManager.remove(domain)
             return
         }
-        let defaults = UserDefaults.standard
+        let defaults = DoveStorage.defaults
         if defaults.integer(forKey: generationKey) != generation {
             try? await NSFileProviderManager.remove(domain)
             defaults.set(generation, forKey: generationKey)

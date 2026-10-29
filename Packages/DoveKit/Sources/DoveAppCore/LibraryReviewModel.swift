@@ -14,8 +14,8 @@ public final class LibraryReviewModel {
     public private(set) var isRunning = false
     private var dismissals: ReviewDismissals
 
-    private let store = EpisodeScheduleStore(fileURL: URL.applicationSupportDirectory.appending(path: "Dove/library-episodes.json"))
-    private static let dismissalsURL = URL.applicationSupportDirectory.appending(path: "Dove/library-review-dismissed.json")
+    private let store = EpisodeScheduleStore(fileURL: DoveStorage.applicationSupport.appending(path: "library-episodes.json"))
+    private static let dismissalsURL = DoveStorage.applicationSupport.appending(path: "library-review-dismissed.json")
     /// Metadata addons and TMDB answer quickly, but a library can hold dozens of series.
     private static let concurrency = 3
 

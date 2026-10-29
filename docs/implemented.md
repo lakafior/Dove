@@ -203,3 +203,50 @@ Mac only: iOS updates come through AltStore. `UpdateChecker` (DoveKit, tested) a
 ### Release from CI (2026-10-27)
 
 `release.yml` ran green on its fifth try (run 40583955689, artefact `Dove-1.0.0-dmg`, 19 MB). What it took: (1) a test that wrote into `dove-tests/` assumed another test had made the folder (`LibraryCacheTests.ignoresAMissingOrForeignFile`); a clean runner has none. (2) The app builds with Xcode 27 (FoundationModels' `GenerationOptions(samplingMode:)` is `sampling:` in Xcode 26's SDK) and `macos-26` images stop at Xcode 26.x, so the job runs on `xcode-27` (GitHub's macOS 27 image, a public preview in 2026-10). (3) Only the Account Holder may create Developer ID provisioning profiles; an App Store Connect API key gets "does not have permission to create Developer ID provisioning profiles". The three Xcode-managed "Mac Team Direct Provisioning Profile" files from the owner's Mac (`net.smigi.dove`, `.files`, `.widgets`, valid to 2044) travel in the secret `MAC_DEVELOPER_ID_PROFILES_BASE64` (tar.gz, base64), are copied where Xcode looks, and the export stays automatic: Xcode-managed profiles are refused by manual signing ("is Xcode managed, but signing settings require a manually managed profile"), but automatic signing finds them installed. `build-mac.sh` reads only the secret's own folder (Xcode's also holds the development profiles the archive downloads) and only profiles with `ProvisionsAllDevices`; hand-made portal profiles would switch it to manual signing with a bundle ID → UUID map. The Developer ID Application certificate in those profiles expires 2027-02-01: renew it before then, regenerate the profiles on the Mac (build once with Xcode) and replace both `DEVELOPER_ID_P12_*` and `MAC_DEVELOPER_ID_PROFILES_BASE64`.
+
+### Demo mode and screenshots (2026-10-27/29)
+
+`-demo` at launch, Debug builds only (`DemoMode.isActive` is `#if DEBUG`; Release compiles every demo file out):
+Dove shows a made-up TorBox account of public-domain works so README, the website and the AltStore listing get
+screenshots without anyone's real library. `scripts/screenshots.sh` runs two UI test targets (`DoveUITests` on a
+fresh "Dove Screenshots" simulator, iPhone 18 Pro Max 6.9" at native 1320×2868, status bar overridden to 9:41;
+`DoveMacUITests` on this Mac, window screenshots) and copies the PNGs to `docs/screenshots/`. The tests only attach
+each screenshot under its file name (`Screenshot.save`); the script exports them from the result bundles with
+`xcrun xcresulttool export attachments` (names come back as `<name>_0_<UUID>.png` in `manifest.json`). Writing files
+from the test failed on the Mac: the UI test runner is sandboxed (`NSCocoaErrorDomain 513`). The result bundles also
+hold screen recordings of the whole display, so they stay in a temporary folder. One launch per screen, so one failure
+leaves the rest. Once a "WidgetRenderer_Default quit unexpectedly" system dialog (not Dove's) landed on the Mac window
+screenshot: look at the images before committing them. AVAudioFile cannot write MP3, so the demo's tone files are WAV
+whatever the release's extension.
+
+Isolation, because on the Mac the demo runs in the real app's container (same bundle ID):
+- `DoveStorage` (DoveKit): `applicationSupport`, `caches` and `defaults` replace every `URL.applicationSupportDirectory/Dove`,
+  `cachesDirectory/Dove` and `UserDefaults.standard`; in demo mode a `tmp/DoveDemo` folder (wiped per launch) and the
+  suite `net.smigi.dove.demo`. SwiftUI's `@AppStorage` follows through `.defaultAppStorage(DoveStorage.defaults)` on
+  every scene (iOS window, Mac window, menu bar extra, Settings), plus an explicit `store:` on the Mac app's own one.
+- `KeychainStore.inMemory` / `.demo`: `SharedConfiguration.keychain()` returns the in-memory store, seeded with a TorBox
+  key (so Settings shows it set up) and the demo addon. `SharedConfiguration.backends` answers `[DemoBackend()]`.
+- `appGroupContainer` is nil: no widget snapshot, `kinds.json` in the demo folder.
+- `DemoPlatform` wraps the app's `AppPlatform`: screens, links and artwork pass through; Files/Finder location,
+  Spotlight, widgets, Live Activity and Siri suggestions are no-ops. `SpotlightIndex.describe` marks screens not eligible.
+- Downloads use an ephemeral session (the real background session's identifier would reattach, and `reconnect` cancel,
+  the real app's tasks) and skip `reconnect`; `DownloadManager.showDemo` sets frozen records. No iCloud Drive, no
+  notification prompt or posts (`LocalNotifications`), `setupFinished` true (the wizard still opens from Settings).
+
+Network: `DemoURLProtocol` is registered for the run (`URLProtocol.registerClass`, reaches `URLSession.shared` and
+so every default transport in the package) and answers every http(s) request from `DemoServer`, except Wikimedia's
+image hosts (`commons`, `upload`, `thumb.wikimedia.org`), which load for real. Simpler than threading a transport
+through `AppModel`, and nothing in demo mode can reach a real service by accident. `DemoServer` is a Stremio addon at
+`https://demo.dove.invalid/` ("Public Domain": catalog with search, meta, streams for six films and four Beverly
+Hillbillies season 1 episodes known to be public domain); stream text is Torrentio-shaped (👤 💾 ⚙️, `[TB+]`), and
+info hashes ending in `ca` are what `DemoBackend.cachedHashes` reports cached (the ⚡). Posters and covers are
+`commons.wikimedia.org/wiki/Special:FilePath/<file>?width=500` links (redirects to the thumbnail; every file checked
+"Public domain" through the Commons API).
+
+Matches: `AppModel.startDemo` writes the posters, book covers and albums with the public `setMatch`/`setBookMatch`/
+`setAlbumMatch` under each item's guess key, in a task `LibraryModel.start` awaits (`demoSeeding`), so the matcher never
+looks anything up. Films would also match through the demo addon; books and albums would otherwise ask Open Library.
+
+`-demo -demoAudiobook` opens the player on the demo LibriVox Sherlock Holmes; in demo mode `AudiobookDemo` serves
+generated tone files for any demo audiobook, so Play works from the library too.
+

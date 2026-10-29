@@ -10,11 +10,44 @@ import Foundation
 enum AudiobookDemo {
     static let argument = "-demoAudiobook"
     private static let itemID = "demo-audiobook"
-    private static let directory = URL.cachesDirectory.appending(path: "Dove/DemoAudiobook")
+    private static let directory = DoveStorage.caches.appending(path: "DemoAudiobook")
 
     static func startIfRequested(on model: AppModel) {
+        if DemoMode.isActive { serveDemoLibrary(on: model) }
         guard ProcessInfo.processInfo.arguments.contains(argument) else { return }
-        start(on: model)
+        if DemoMode.isActive {
+            Task { await startDemoLibraryBook(on: model) }
+        } else {
+            start(on: model)
+        }
+    }
+
+    /// Demo mode (`DemoMode`): the demo library's audiobooks play tones too, so Play works on them like on a real one.
+    private static func serveDemoLibrary(on model: AppModel) {
+        let real = model.audiobook.assetProvider
+        model.audiobook.assetProvider = { item, track in
+            guard item.backend == .torBox, item.id.hasPrefix("torrent:demo-") else {
+                guard let real else { throw CancellationError() }
+                return try await real(item, track)
+            }
+            // Written as WAV whatever the release's extension: AVAudioFile cannot write MP3.
+            let url = directory.appending(path: item.id).appending(path: track.path + ".wav")
+            try writeTone(to: url, frequency: 330, seconds: 20)
+            return AVURLAsset(url: url)
+        }
+    }
+
+    /// `-demo -demoAudiobook`: the player on the demo library's LibriVox Sherlock Holmes, for the screenshot.
+    private static func startDemoLibraryBook(on model: AppModel) async {
+        guard let book = DemoCatalog.audiobooks.first,
+              let item = try? await DemoBackend().items().first(where: { $0.name.hasPrefix(book.title) && $0.name.hasSuffix("Audiobook") }),
+              case .success(let tracks) = AudiobookTracks.tracks(in: item.files)
+        else { return }
+        model.audiobook.start(AudiobookPlayer.Session(
+            key: "audiobook|demo|\(item.id)", title: book.title, author: book.author, cover: book.cover,
+            item: item, tracks: tracks
+        ))
+        model.audiobook.isPresented = true
     }
 
     static func start(on model: AppModel) {

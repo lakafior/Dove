@@ -87,14 +87,60 @@ public struct KeychainStore: Sendable {
     public let service: String
     public let accessGroup: String?
     public let synchronizable: Bool
+    private let memory: InMemoryKeychain?
+
+    private final class InMemoryKeychain: @unchecked Sendable {
+        private let lock = NSLock()
+        private var values: [String: String]
+
+        init(_ values: [String: String]) { self.values = values }
+
+        func get(_ account: String) -> String? {
+            lock.lock()
+            defer { lock.unlock() }
+            return values[account]
+        }
+
+        func set(_ value: String?, for account: String) {
+            lock.lock()
+            defer { lock.unlock() }
+            if let value, !value.isEmpty { values[account] = value }
+            else { values.removeValue(forKey: account) }
+        }
+
+        func remove(_ account: String) {
+            lock.lock()
+            defer { lock.unlock() }
+            values.removeValue(forKey: account)
+        }
+    }
 
     public init(service: String = "app.dove.credentials", accessGroup: String? = nil, synchronizable: Bool = true) {
         self.service = service
         self.accessGroup = accessGroup
         self.synchronizable = synchronizable
+        self.memory = nil
+    }
+
+    private init(memory: InMemoryKeychain) {
+        self.service = "app.dove.credentials"
+        self.accessGroup = nil
+        self.synchronizable = false
+        self.memory = memory
+    }
+
+    public static func inMemory(_ values: [CredentialKey: String] = [:]) -> KeychainStore {
+        KeychainStore(memory: InMemoryKeychain(Dictionary(uniqueKeysWithValues: values.map { ($0.key.rawValue, $0.value) })))
+    }
+
+    public static let demo = KeychainStore.inMemory()
+
+    public static func seedDemo(_ values: [CredentialKey: String]) {
+        for (key, value) in values { try? demo.set(value, for: key) }
     }
 
     public func get(_ key: CredentialKey) throws -> String? {
+        if let memory { return memory.get(key.rawValue) }
         var query = baseQuery(key)
         query[kSecReturnData as String] = true
         query[kSecMatchLimit as String] = kSecMatchLimitOne
@@ -114,6 +160,10 @@ public struct KeychainStore: Sendable {
 
     /// Passing nil or an empty string removes the value.
     public func set(_ value: String?, for key: CredentialKey) throws {
+        if let memory {
+            memory.set(value, for: key.rawValue)
+            return
+        }
         // Removes the item from every group it may be in (the old app-only one included).
         let deleteStatus = SecItemDelete(baseQuery(key) as CFDictionary)
         guard deleteStatus == errSecSuccess || deleteStatus == errSecItemNotFound else {
@@ -143,6 +193,7 @@ public struct KeychainStore: Sendable {
 
     /// Rewrites every stored value so it lands in `accessGroup`, synchronizable. Safe to run more than once.
     public func migrateToAccessGroup() {
+        if memory != nil { return }
         for key in CredentialKey.allCases {
             if let value = try? get(key) { try? set(value, for: key) }
         }
@@ -150,6 +201,10 @@ public struct KeychainStore: Sendable {
 
     /// Deletes items of keys this build no longer has (their names), on every device iCloud Keychain reaches.
     public func removeRetired(_ names: [String]) {
+        if let memory {
+            for name in names { memory.remove(name) }
+            return
+        }
         for name in names {
             SecItemDelete(baseQuery(account: name) as CFDictionary)
         }
@@ -192,22 +247,27 @@ public enum SharedConfiguration {
     }
 
     public static func keychain() -> KeychainStore {
-        KeychainStore(accessGroup: keychainGroup)
+        if DemoMode.isActive { return .demo }
+        return KeychainStore(accessGroup: keychainGroup)
     }
 
     /// `DoveAppGroup` in the Info.plist: the container the app and the Files extension share.
     public static var appGroupContainer: URL? {
-        (Bundle.main.object(forInfoDictionaryKey: "DoveAppGroup") as? String)
+        guard !DemoMode.isActive else { return nil }
+        return (Bundle.main.object(forInfoDictionaryKey: "DoveAppGroup") as? String)
             .flatMap { FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: $0) }
     }
 
     /// Learned and user-set item kinds (`KindOverrides`); the Files extension reads them to hide adult items.
     public static var kindsURL: URL {
-        (appGroupContainer ?? .applicationSupportDirectory.appending(path: "Dove")).appending(path: "Library/kinds.json")
+        (appGroupContainer ?? DoveStorage.applicationSupport).appending(path: "Library/kinds.json")
     }
 
     /// Every configured library backend, from the Keychain. Shared by the app and the share extension.
     public static func backends(from keychain: KeychainStore) -> [any LibraryBackend] {
+        #if DEBUG
+        if DemoMode.isActive { return [DemoBackend()] }
+        #endif
         var list: [any LibraryBackend] = []
         if let key = try? keychain.get(.realDebridAPIKey), !key.isEmpty {
             list.append(RealDebridBackend(apiKey: key))

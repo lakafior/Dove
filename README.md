@@ -4,6 +4,21 @@ An iOS client for debrid services and Usenet. Find a movie, a season, a book or 
 
 > Bring your own services: Dove ships with no content sources. You add your own API keys, Stremio addons and indexers.
 
+## Screenshots
+
+<p>
+  <img src="docs/screenshots/iphone-search.png" width="200" alt="Search home: services, downloads in progress, watchlist, recently added">
+  <img src="docs/screenshots/iphone-sources.png" width="200" alt="A film's sources: resolutions, sizes, seeders, cached on TorBox">
+  <img src="docs/screenshots/iphone-library.png" width="200" alt="Library shelves: movies, series, books">
+  <img src="docs/screenshots/iphone-audiobook.png" width="200" alt="The audiobook player">
+</p>
+
+<img src="docs/screenshots/mac-home.png" width="820" alt="The Mac app: sidebar and start page">
+
+Everything shown is public domain (films, LibriVox audiobooks, Wolne Lektury books, Musopen recordings) with
+posters from Wikimedia Commons, served by Dove's demo mode: no accounts or keys involved. `scripts/screenshots.sh`
+regenerates every image in [docs/screenshots](docs/screenshots).
+
 ## Services
 
 | Source | Services | Playback |
@@ -176,6 +191,13 @@ Run the core tests without Xcode (⌘U in Xcode runs them too):
 
 ```sh
 cd Packages/DoveKit && swift test
+```
+
+Screenshots (Debug builds launched with `-demo`: made-up public-domain library, no real Keychain, files or
+services; a fresh "Dove Screenshots" simulator for the iPhone, this Mac for the Mac app):
+
+```sh
+./scripts/screenshots.sh        # or: ios, mac
 ```
 
 No third-party runtime dependencies: Foundation, SwiftUI, `URLSession`, `XMLParser` and Apple's frameworks only.

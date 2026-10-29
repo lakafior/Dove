@@ -81,9 +81,10 @@ enum SpotlightIndex {
     /// The activity a title or book screen advertises while it is open (`.userActivity`), linked to its indexed item.
     static func describe(_ activity: NSUserActivity, id: String, title: String) {
         activity.title = title
-        activity.isEligibleForSearch = true
+        // Demo mode's titles stay out of the system's search and suggestions.
+        activity.isEligibleForSearch = !DemoMode.isActive
         #if os(iOS)
-        activity.isEligibleForPrediction = true
+        activity.isEligibleForPrediction = !DemoMode.isActive
         #endif
         activity.userInfo = ["id": id]
         let attributes = CSSearchableItemAttributeSet(contentType: .content)
@@ -96,9 +97,10 @@ enum SpotlightIndex {
     /// added come back from the system search. No linked item: iOS decides how long it stays.
     static func describe(_ activity: NSUserActivity, media: MediaSummary) {
         activity.title = media.name
-        activity.isEligibleForSearch = true
+        // Demo mode's titles stay out of the system's search and suggestions.
+        activity.isEligibleForSearch = !DemoMode.isActive
         #if os(iOS)
-        activity.isEligibleForPrediction = true
+        activity.isEligibleForPrediction = !DemoMode.isActive
         #endif
         activity.userInfo = ["id": "media:\(media.id)", "media": (try? JSONEncoder().encode(media)) ?? Data()]
         activity.requiredUserInfoKeys = ["id", "media"]

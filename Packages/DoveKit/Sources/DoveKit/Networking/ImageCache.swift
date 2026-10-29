@@ -7,7 +7,7 @@ import Foundation
 public actor ImageCache {
     /// Its own session without `URLCache`: these files are the cache, a second copy would only take space.
     public static let shared = ImageCache(
-        directory: URL.cachesDirectory.appending(path: "Dove/Images"),
+        directory: DoveStorage.caches.appending(path: "Images"),
         transport: URLSession(configuration: {
             let configuration = URLSessionConfiguration.default
             configuration.urlCache = nil

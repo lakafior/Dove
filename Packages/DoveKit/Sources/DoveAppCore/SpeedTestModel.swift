@@ -19,7 +19,7 @@ public final class SpeedTestModel {
 
     public init(meter: any ThroughputMeasuring = URLSessionThroughput()) {
         self.meter = meter
-        samples = UserDefaults.standard.data(forKey: Self.key)
+        samples = DoveStorage.defaults.data(forKey: Self.key)
             .flatMap { try? JSONDecoder().decode([BackendID: SpeedSample].self, from: $0) } ?? [:]
     }
 
@@ -57,6 +57,6 @@ public final class SpeedTestModel {
     }
 
     private func save() {
-        if let data = try? JSONEncoder().encode(samples) { UserDefaults.standard.set(data, forKey: Self.key) }
+        if let data = try? JSONEncoder().encode(samples) { DoveStorage.defaults.set(data, forKey: Self.key) }
     }
 }

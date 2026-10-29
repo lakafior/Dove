@@ -10,7 +10,7 @@ enum MacMenuBarSettings {
 
     /// Both default to on: downloads go on after the last window closes, and the menu bar shows that Dove is there.
     static var keepsRunning: Bool {
-        UserDefaults.standard.object(forKey: keepRunning) as? Bool ?? true
+        DoveStorage.defaults.object(forKey: keepRunning) as? Bool ?? true
     }
 }
 

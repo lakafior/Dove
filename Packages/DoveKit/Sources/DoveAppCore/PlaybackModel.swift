@@ -12,12 +12,12 @@ public final class PlaybackModel {
     private let platform: any AppPlatform
 
     public var player: ExternalPlayer {
-        didSet { UserDefaults.standard.set(player.rawValue, forKey: Self.playerKey) }
+        didSet { DoveStorage.defaults.set(player.rawValue, forKey: Self.playerKey) }
     }
 
     /// `ExternalPlayer.custom`'s template, with `{url}`, `{encodedUrl}` and `{filename}`.
     public var customTemplate: String {
-        didSet { UserDefaults.standard.set(customTemplate, forKey: Self.templateKey) }
+        didSet { DoveStorage.defaults.set(customTemplate, forKey: Self.templateKey) }
     }
 
     public private(set) var kodi: KodiServer?
@@ -28,8 +28,8 @@ public final class PlaybackModel {
     public init(keychain: KeychainStore, platform: any AppPlatform) {
         self.keychain = keychain
         self.platform = platform
-        player = UserDefaults.standard.string(forKey: Self.playerKey).flatMap(ExternalPlayer.init) ?? .infuse
-        customTemplate = UserDefaults.standard.string(forKey: Self.templateKey) ?? ""
+        player = DoveStorage.defaults.string(forKey: Self.playerKey).flatMap(ExternalPlayer.init) ?? .infuse
+        customTemplate = DoveStorage.defaults.string(forKey: Self.templateKey) ?? ""
         reloadKodi()
     }
 

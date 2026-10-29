@@ -7,7 +7,7 @@ import UserNotifications
 @main
 struct DoveMacApp: App {
     @NSApplicationDelegateAdaptor private var delegate: MacAppDelegate
-    @AppStorage(MacMenuBarSettings.showExtra) private var showMenuBarExtra = true
+    @AppStorage(MacMenuBarSettings.showExtra, store: DoveStorage.defaults) private var showMenuBarExtra = true
 
     var body: some Scene {
         // A window group (not `Window`), so a click on the Dock icon brings it back after it was closed; File › New
@@ -20,6 +20,8 @@ struct DoveMacApp: App {
                 .handlesExternalEvents(preferring: ["*"], allowing: ["*"])
         }
         .defaultSize(width: 1100, height: 720)
+        // `DoveStorage`: demo mode keeps its view settings apart from the user's.
+        .defaultAppStorage(DoveStorage.defaults)
         .handlesExternalEvents(matching: ["*"])
         .commands {
             CommandGroup(replacing: .newItem) {}
@@ -43,11 +45,13 @@ struct DoveMacApp: App {
             MacMenuBarLabel()
                 .environment(delegate.model)
         }
+        .defaultAppStorage(DoveStorage.defaults)
 
         Settings {
             MacSettingsView()
                 .environment(delegate.model)
         }
+        .defaultAppStorage(DoveStorage.defaults)
     }
 }
 
