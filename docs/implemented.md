@@ -273,5 +273,9 @@ the site itself), `/support` (`docs/support.md`; the DNS-filter FAQ about `*.git
   `npx wrangler@4.155.0 deploy`, secrets `CLOUDFLARE_API_TOKEN` (Workers Scripts: Edit, Workers Routes: Edit on
   smigi.net) and `CLOUDFLARE_ACCOUNT_ID`.
 - The white text on the primary button needs `#1a6fd6` or darker (4.9:1); the icon's lighter blue gave 3.6:1.
-- The Mac download links to `releases/latest`; until the first release that opens an empty list, which the page says.
+- `/plugins` (2026-10-29): how to add a repository, the sandbox in one paragraph, `dove-plugins` with its plugins, and how a
+  third party gets a repository listed (e-mail or issue). It lists only repositories whose plugins reach sources the user may
+  use (metadata, public domain, own servers): `dove-plugins-extra` is left off, as in the app (roadmap: never linked). On
+  phones the home page hides its Features link (`nav .wide`), or six links wrap to two rows.
+- The Mac download links to `releases/latest` (v1.0.0 out 2026-10-29; the "empty list until the first release" note is gone).
   Drop that note once `v1.0.0` is out.

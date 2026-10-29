@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<!--
+  This Source Code Form is subject to the terms of the Mozilla Public License,
+  v. 2.0. If a copy of the MPL was not distributed with this file, You can
+  obtain one at https://mozilla.org/MPL/2.0/.
+-->
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Plugins — Dove</title>
+  <meta name="description" content="Plugin repositories for Dove: book, audiobook and game metadata and public-domain libraries, run on your device in a sandbox.">
+  <meta name="theme-color" content="#1a6fd6">
+  <link rel="canonical" href="https://dove.smigi.net/plugins">
+  <link rel="icon" href="/assets/icon.png" type="image/png">
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+
+<header>
+  <div class="wrap">
+    <a class="logo" href="/">
+      <img src="/assets/icon.png" alt="" width="34" height="34">
+      Dove
+    </a>
+    <nav>
+      <a href="/">Home</a>
+      <a href="/plugins" aria-current="page">Plugins</a>
+      <a href="/support">Support</a>
+      <a href="/privacy">Privacy</a>
+      <a href="https://github.com/lakafior/Dove">GitHub</a>
+    </nav>
+  </div>
+</header>
+
+<div class="wrap prose">
+
+  <h1>Plugins</h1>
+  <p>Plugins add sources to Dove's search: covers and details for books, audiobooks and games, and files from
+    libraries without an official API. Dove ships with none. You add a plugin repository by its address, the same
+    way you add a Stremio addon or an indexer, and install the plugins you want from it.</p>
+
+  <h2 id="add">Adding a repository</h2>
+  <ol>
+    <li>In Dove, open Settings › Search and metadata › Plugins › Add repository.</li>
+    <li>Paste the repository's address (it ends in <code>index.json</code>).</li>
+    <li>Install a plugin. Dove shows the sites it may reach first, then asks for its settings, if it has any.</li>
+  </ol>
+  <p>Plugins run on your iPhone or Mac, in a JavaScript sandbox with no access to your files, your services' keys,
+    other plugins or Dove's data. A plugin can reach only the sites its listing names. Dove installs a script only when it matches
+    the checksum in the repository's index, and updates only when you tap Update.</p>
+
+  <h2 id="repositories">Repositories</h2>
+
+  <div class="repo">
+    <h3>Dove plugins <span class="by">by the Dove developer</span></h3>
+    <p>Metadata sources for Books, Audiobooks and Games, and two public-domain libraries.</p>
+    <p class="index-url"><code>https://lakafior.github.io/dove-plugins/index.json</code></p>
+    <ul>
+      <li><b>Internet Archive</b>: public archive.org items in every category: books, LibriVox audiobooks,
+        music, films, games and software. Items archive.org only lends are left out.</li>
+      <li><b>Wolne Lektury</b>: free Polish books (EPUB and more) and their recorded audiobooks.</li>
+      <li><b>Polskie książki</b>: Polish book and audiobook details from lubimyczytac.pl, Audioteka and Storytel.</li>
+      <li><b>Audible</b>: audiobook details from Audible's catalog, for the store you pick.</li>
+      <li><b>Steam</b>, <b>GOG</b>, <b>LaunchBox Games DB</b>: game titles, box covers, years and genres. No account.</li>
+      <li><b>RAWG</b>, <b>SteamGridDB</b>, <b>TheGamesDB</b>, <b>ScreenScraper</b>: game details and covers
+        with your own free key (ScreenScraper: developer credentials).</li>
+    </ul>
+    <p><a href="https://github.com/lakafior/dove-plugins">Source on GitHub</a></p>
+  </div>
+
+  <h2 id="yours">Made a repository?</h2>
+  <p>Anyone can publish one: a plugin is a single JavaScript file, and a repository is an <code>index.json</code>
+    listing them, hosted anywhere over HTTPS. The contract is
+    <a href="https://github.com/lakafior/Dove/blob/main/docs/plugins.md">Dove's plugin API</a>; the
+    <a href="https://github.com/lakafior/dove-plugins">Dove plugins</a> repository is a working example with a
+    build script.</p>
+  <p>To have yours listed here, write to <a href="mailto:dove@smigi.net">dove@smigi.net</a> or open an issue on
+    <a href="https://github.com/lakafior/Dove/issues">GitHub</a> with its address and a line on what it does. This
+    page lists repositories whose plugins reach sources you are allowed to use: metadata, public-domain and
+    open libraries, your own servers and accounts.</p>
+
+  <p class="note">Plugins are written by their authors, not by the Dove developer, and reach sites that Dove
+    does not control. Check what a plugin reaches before you install it, and use it only with content you have
+    the right to access.</p>
+
+</div>
+
+<footer>
+  <div class="wrap">
+    <span>© 2026 Smigi · Dove is free software under the
+      <a href="https://github.com/lakafior/Dove/blob/main/LICENSE">MPL 2.0</a> ·
+      Use it only with content you have the right to access</span>
+    <span>
+      <a href="https://github.com/lakafior/Dove">GitHub</a> ·
+      <a href="/plugins">Plugins</a> ·
+      <a href="/support">Support</a> ·
+      <a href="/privacy">Privacy</a> ·
+      <a href="mailto:dove@smigi.net">dove@smigi.net</a>
+    </span>
+  </div>
+</footer>
+
+<!-- smigi.net window chrome: traffic lights + minimize-to-dock.
+     Loads from localhost during development, smigi.net in production. -->
+<script>
+  (function () {
+    var local = location.hostname === "localhost" || location.hostname === "127.0.0.1";
+    var s = document.createElement("script");
+    s.src = (local ? "" : "https://smigi.net") + "/os/chrome.js";
+    s.dataset.app = "dove";
+    s.dataset.title = "Dove";
+    document.head.appendChild(s);
+  })();
+</script>
+
+</body>
+</html>

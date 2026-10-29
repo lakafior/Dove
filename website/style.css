@@ -368,11 +368,31 @@ footer a { color: var(--body); }
 .prose .updated { font-size: .9rem; color: var(--body); }
 .prose b, .prose strong { color: var(--ink); font-weight: 600; }
 
+/* ---- plugin repositories ---- */
+
+.repo {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 24px 26px 8px;
+  margin: 0 0 20px;
+}
+.repo h3 { margin-top: 0; font-size: 1.15rem; }
+.repo .by { font-weight: 400; font-size: .9rem; color: var(--body); margin-left: 6px; }
+.index-url code {
+  display: block;
+  padding: 10px 14px;
+  border-radius: 9px;
+  background: var(--panel);
+  color: var(--ink);
+  user-select: all;
+}
+
 @media (max-width: 760px) {
   header .wrap { gap: 2px 16px; padding-block: 10px; }
   /* the links get a row of their own, spread across it, so none wraps alone */
   nav { width: 100%; justify-content: space-between; column-gap: 10px; }
   nav a { font-size: .9rem; }
+  nav .wide { display: none; } /* six links do not fit one row; Features starts right below the hero */
   .hero { padding-top: 48px; }
   .hero .wrap, .split, .platforms { grid-template-columns: 1fr; gap: 36px; }
   .platforms { gap: 20px; }

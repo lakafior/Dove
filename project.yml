@@ -37,6 +37,8 @@ targets:
     info:
       path: App/Dove/Info.plist
       properties:
+        # Only HTTPS and Apple's own crypto: exempt, so App Store Connect stops asking on every build.
+        ITSAppUsesNonExemptEncryption: false
         # Read at runtime by SharedConfiguration.keychainGroup.
         DoveKeychainGroup: $(AppIdentifierPrefix)net.smigi.dove.shared
         # Item kinds shared with the Files extension (SharedConfiguration.kindsURL).
