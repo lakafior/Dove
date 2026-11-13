@@ -1,0 +1,98 @@
+name: AltStore PAL
+
+# The last leg of a release: once Apple has notarized the iOS version release.yml submitted, attach its
+# alternative distribution package to the GitHub release and list the version in the AltStore source
+# (lakafior/smigi-net, altstore/source.json, served at https://smigi.net/altstore/source.json).
+#
+# Apple's review takes hours to a day or two and sends no signal here, so this looks every six hours and
+# does nothing until the newest release's version is Ready for Distribution; run it by hand to skip the wait.
+# scripts/altstore-publish.py does the work and skips what is already done.
+#
+# Secrets:
+#   NOTARY_KEY_P8_BASE64 / NOTARY_KEY_ID / NOTARY_ISSUER_ID   App Store Connect key (reads the package ID)
+#   SMIGI_NET_TOKEN   a fine-grained token with Contents: Read and write on lakafior/smigi-net only
+on:
+  schedule:
+    - cron: "23 */6 * * *"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag (empty: the latest release)"
+        required: false
+
+permissions:
+  contents: write   # attaches the package files to the release
+
+concurrency:
+  group: altstore
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Publish the notarized version to AltStore PAL
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      GH_TOKEN: ${{ github.token }}
+      SMIGI_NET_TOKEN: ${{ secrets.SMIGI_NET_TOKEN }}
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      - name: Find the release and whether there is anything to do
+        id: plan
+        env:
+          INPUT_TAG: ${{ inputs.tag }}
+        run: |
+          TAG="${INPUT_TAG:-$(gh release view --json tagName --jq .tagName)}"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          if [[ -z "$SMIGI_NET_TOKEN" ]]; then
+            # A warning, not a failure: a failing schedule would send mail every six hours.
+            echo "::warning::Secret SMIGI_NET_TOKEN is missing: nothing published"
+            echo "go=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "go=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Check out the AltStore source
+        if: steps.plan.outputs.go == 'true'
+        uses: actions/checkout@v4
+        with:
+          repository: lakafior/smigi-net
+          token: ${{ secrets.SMIGI_NET_TOKEN }}
+          path: smigi-net
+
+      - name: Write the App Store Connect key
+        if: steps.plan.outputs.go == 'true'
+        env:
+          NOTARY_KEY_P8_BASE64: ${{ secrets.NOTARY_KEY_P8_BASE64 }}
+        run: |
+          echo "$NOTARY_KEY_P8_BASE64" | base64 --decode > "$RUNNER_TEMP/notary.p8"
+          echo "NOTARY_KEY_PATH=$RUNNER_TEMP/notary.p8" >> "$GITHUB_ENV"
+
+      - name: Attach the package and list the version
+        if: steps.plan.outputs.go == 'true'
+        env:
+          NOTARY_KEY_ID: ${{ secrets.NOTARY_KEY_ID }}
+          NOTARY_ISSUER_ID: ${{ secrets.NOTARY_ISSUER_ID }}
+          TAG: ${{ steps.plan.outputs.tag }}
+        run: python3 scripts/altstore-publish.py --tag "$TAG" --source smigi-net/altstore/source.json
+
+      - name: Push the source
+        if: steps.plan.outputs.go == 'true'
+        working-directory: smigi-net
+        env:
+          TAG: ${{ steps.plan.outputs.tag }}
+        run: |
+          if git diff --quiet; then
+            echo "The source did not change."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -am "AltStore source: Dove ${TAG#v}"
+          git push
+
+      - name: Remove the key
+        if: always()
+        run: rm -f "$RUNNER_TEMP/notary.p8"

@@ -18,7 +18,7 @@ Find a film, a season, a book or an album, send it to your services, then play, 
 [![No dependencies](https://img.shields.io/badge/dependencies-none-brightgreen)](#building)
 
 [![Download for Mac](https://img.shields.io/badge/Download_for_Mac-DMG-1a6fd6?style=for-the-badge&logo=apple&logoColor=white)](https://github.com/lakafior/Dove/releases/latest)
-[![iPhone: coming to AltStore PAL](https://img.shields.io/badge/iPhone-coming_to_AltStore_PAL-555?style=for-the-badge&logo=apple&logoColor=white)](#download)
+[![iPhone: on AltStore PAL](https://img.shields.io/badge/iPhone-on_AltStore_PAL-1a6fd6?style=for-the-badge&logo=apple&logoColor=white)](#download)
 [![dove.smigi.net](https://img.shields.io/badge/dove.smigi.net-website-555?style=for-the-badge)](https://dove.smigi.net)
 
 [Download](#download) · [Features](#features) · [Plugins](#plugins) · [Privacy and support](#privacy-and-support) · [Building](#building) · [License](#license)
@@ -45,7 +45,11 @@ Find a film, a season, a book or an album, send it to your services, then play, 
 | Platform | How |
 |---|---|
 | **Mac** (macOS 26+) | [Latest release](https://github.com/lakafior/Dove/releases/latest): a notarized DMG. Open it and drag Dove to Applications. Dove checks for a new release once a day and never downloads one by itself. |
-| **iPhone** (iOS 17+) | Coming to AltStore PAL. Until then, [build it yourself](#building). |
+| **iPhone** (iOS 17+), EU | [AltStore PAL](https://altstore.io): in Sources, tap + and add `https://smigi.net/altstore/source.json`, then install Dove. Notarized by Apple; updates arrive through AltStore. |
+| **iPhone**, anywhere else | `Dove-<version>-unsigned.ipa` from the [latest release](https://github.com/lakafior/Dove/releases/latest), signed with your own Apple ID by a sideloading tool (AltStore Classic, SideStore…), or [build it yourself](#building). Signed with another Apple ID, the parts that need Dove's own App Group, keychain group and iCloud container (the Files location, widgets, the share sheet reading your keys, the iCloud Drive folder) may not work. |
+
+The `.ipa` files with long hexadecimal names in a release, with `manifest.json` and `signature`, are AltStore PAL's
+package: only AltStore can install them.
 
 Settings, keys and addons sync between your devices through iCloud Keychain (end-to-end encrypted).
 
@@ -115,6 +119,8 @@ open Dove.xcodeproj
 | Core tests (no simulator) | `cd Packages/DoveKit && swift test` |
 | Screenshots (demo mode) | `./scripts/screenshots.sh` (or `ios`, `mac`) |
 | Notarized DMG | `.github/workflows/release.yml` on a `v*` tag, or `scripts/build-mac.sh`, `notarize.sh`, `make-dmg.sh` |
+| Unsigned IPA | the same workflow, or `./scripts/build-ios.sh unsigned` |
+| AltStore PAL version | the same workflow uploads and submits for notarization (`scripts/build-ios.sh upload`, `asc-notarize.py`); `.github/workflows/altstore.yml` publishes it once Apple approves (`scripts/altstore-publish.py`) |
 
 <details>
 <summary>How it fits together</summary>

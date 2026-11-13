@@ -279,3 +279,64 @@ the site itself), `/support` (`docs/support.md`; the DNS-filter FAQ about `*.git
   phones the home page hides its Features link (`nav .wide`), or six links wrap to two rows.
 - The Mac download links to `releases/latest` (v1.0.0 out 2026-10-29; the "empty list until the first release" note is gone).
   Drop that note once `v1.0.0` is out.
+
+### AltStore PAL (2026-11-13)
+
+How the iOS build gets from "notarized" to installable. Docs: faq.altstore.io/developers (`distribute-with-altstore-pal`,
+`make-a-source`, `rest-api`, `source-discoverability`); their PAL example-source link is dead.
+
+- IDs: the app's Apple ID `6828342385` is the source's `marketplaceID`. The ADP ID is not shown by the `asc` CLI
+  (0.18.9 has no command for it, and its `versions list` prints the state as `PREPARE_FOR_SUBMISSION` for a version the
+  API calls `READY_FOR_DISTRIBUTION`); the App Store Connect API has it:
+  `GET /v1/apps/{id}/appStoreVersions?include=alternativeDistributionPackage`.
+- The package is fetched from AltStore, not Apple: `GET https://api.altstore.io/adps/{adpID}` gives `status` and, when
+  done, a `downloadURL` (a zip; the signed link lasts minutes, the download five days: ask again for a fresh link).
+  It answered 404 for 1.0.0 although the marketplace was connected, so Apple's notification had not reached AltStore;
+  `POST /adps {"adpID"}` (202) queued it and it was ready in about three minutes.
+- The zip holds `manifest.json`, `signature` and `variant/<uuid>.ipa` (four for 1.0.0, 12 MB each). The IPAs are
+  encrypted, not zip files: entitlements cannot be read back from them, and they are no use for sideloading.
+  Host every file unchanged (`manifest.json` byte for byte).
+- Hosting: the files are attached to the GitHub release of the same tag (flat names, so one iOS version per tag), and
+  the source lists each under `assetURLs` (key = file name without extension). Considered and dropped: files in
+  `website/` (48 MB in git per version) and R2 (needs a card on the Cloudflare account). The Mac update check picks the
+  `.dmg` by suffix, so extra assets do not disturb it.
+- Source: one for all of the owner's apps, in the `smigi-net` repository (`altstore/source.json`), because
+  `fediUsername` (`smigi`) belongs to the source, cannot be changed, and names the automated `@smigi@alt.store` account
+  that announces every app in it. `appPermissions` must match the signed app or AltStore refuses to install: listed
+  from the entitlements files of the app and its extensions (App Group, keychain group, three iCloud keys) and the two
+  usage descriptions. The owner's install from the source on 2026-11-13 went through with that list and "everything
+  works" (the WebP screenshots were not asked about separately).
+- Discovery is the last step, after a test install: `POST https://api.altstore.io/federate {"source": url}`. Sent
+  2026-11-13, answered 200 with an empty body; `explore.alt.store/@smigi` and its webfinger still answered 404 a few
+  minutes later (`@utm` answers 200), so the account is not created at once. No documented way back; changes go
+  through apps@altstore.io.
+
+### iOS release from CI (2026-11-13)
+
+Written after 1.0.0 went out by hand; nothing below has run on GitHub yet, and the write calls to App Store Connect
+have never run at all. Expect to fix things on the first tag.
+
+- `release.yml` › `ios` (after `mac`, which creates the release): `scripts/build-ios.sh unsigned` builds Release for
+  `generic/platform=iOS` with `CODE_SIGNING_ALLOWED=NO` and zips `Payload/Dove.app` into
+  `Dove-<version>-unsigned.ipa` (18 MB for 1.0.0; built locally, no `_CodeSignature` inside). Then, on a tag only,
+  `build-ios.sh upload` archives and exports with `method app-store-connect`, `destination upload`, automatic signing
+  through the App Store Connect key, and `scripts/asc-notarize.py` waits for the build to be processed, creates the
+  version with `reviewType: NOTARIZATION` (or patches an existing one), attaches the build and submits it through
+  `reviewSubmissions` → `reviewSubmissionItems` → `submitted: true`. Apple's docs confirm `reviewType` on create and
+  update; they do not say that a notarization submission uses `reviewSubmissions`, which is the likeliest thing to be
+  wrong. The build number is the commit count, as on the Mac (1.0.0's build 1 came from Xcode Cloud).
+- `altstore.yml` (every six hours and by hand; Apple's approval sends no signal): `scripts/altstore-publish.py --tag
+  --source` reads the package ID from App Store Connect, gets the zip from AltStore, attaches the files to the
+  release and puts the version first in `smigi-net/altstore/source.json`, which the workflow commits and pushes with
+  `SMIGI_NET_TOKEN` (a fine-grained token for that one repository). It exits early when the version is listed and
+  the release has `manifest.json`, and says "not ready" until the version is `READY_FOR_DISTRIBUTION`. Its dry run
+  against 1.0.0 rebuilt the live source entry field for field (bar the hand-written description).
+- `scripts/asc_api.py`: JWT for the App Store Connect API with the standard library; ES256 is signed by `openssl dgst
+  -sha256 -sign` and the DER signature turned into r||s.
+- api.altstore.io sits behind Cloudflare, which answers Python's default User-Agent with 403 `error code: 1010`; any
+  other User-Agent works. The first version of the script took that for "not processed yet" and polled forever.
+- The version string in App Store Connect for 1.0.0 is `1.0` (typed by hand); the tag and `MARKETING_VERSION` are
+  `1.0.0`. The scripts use `MARKETING_VERSION`, so later versions match; `altstore-publish.py --asc-version` covers 1.0.
+- The package's `.ipa` names are UUIDs and `manifest.json`/`signature` are fixed names, so one iOS version per tag.
+- `xcodegen generate` adds `ITSAppUsesNonExemptEncryption` to `App/Dove/Info.plist` (it is in `project.yml`; the
+  committed plist was behind).
