@@ -308,8 +308,15 @@ How the iOS build gets from "notarized" to installable. Docs: faq.altstore.io/de
   works" (the WebP screenshots were not asked about separately).
 - Discovery is the last step, after a test install: `POST https://api.altstore.io/federate {"source": url}`. Sent
   2026-11-13, answered 200 with an empty body; `explore.alt.store/@smigi` and its webfinger still answered 404 a few
-  minutes later (`@utm` answers 200), so the account is not created at once. No documented way back; changes go
-  through apps@altstore.io.
+  minutes later (`@utm` answers 200), so the account is not created at once: it appeared with the date 2026-11-14.
+  No documented way back; changes go through apps@altstore.io.
+- After that, explore re-reads the source by itself; no second `/federate`. Adding Aicord 0.1.12 on 2026-11-16 gave,
+  the same day, the new source description on the profile and two posts: the app (its description and first three
+  screenshots) and the version (version, build, its `localizedDescription`), dated by the entry's `date`. The avatar
+  is the source's `iconURL` and the banner its `headerURL` (without one, explore made a banner from the first app's
+  icon); explore keeps its own copies. A `news` item becomes a post too (title, caption, link), dated by its `date`:
+  the 2026-11-16 one appeared within half an hour. New `iconURL`/`headerURL` (new file names, pushed the same day)
+  had not reached the profile after half an hour, although the description had changed with the earlier push.
 
 ### iOS release from CI (2026-11-13)
 
