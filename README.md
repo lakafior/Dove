@@ -68,8 +68,8 @@ Settings, keys and addons sync between your devices through iCloud Keychain (end
 | **In** | Smart field, clipboard, share sheet, `.torrent`/`.nzb` files, several links at once, title links from IMDb, TMDB, Apple TV, Letterboxd, Trakt, Rotten Tomatoes, JustWatch. |
 | **Library** | Every service in one list, as posters or files. Series mapped to episodes even inside packs, with missing ones named. A review after each refresh: new episodes, gaps, releases that could be better. Reinsert, move, copy, delete. |
 | **Play** | Infuse (playlists, episode names), VLC, Outplayer, SenPlayer, nPlayer, VidHub, IINA, Kodi or a custom URL template. |
-| **Download** | Background downloads with resume, "Download only" (add, fetch, delete from the service), Live Activity. Files go to the device, iCloud Drive, Calibre or a service. |
-| **Listen and read** | Audiobook player with chapters, speed, sleep timer and positions synced across devices; music queue; books to Apple Books, Kindle or PocketBook. |
+| **Download** | Background downloads with resume, "Download only" (add, fetch, delete from the service), Live Activity. Files go to the device, iCloud Drive, Calibre or a service; audiobooks to Audiobookshelf. |
+| **Listen and read** | Audiobook player with chapters, speed, sleep timer and positions synced across devices; music queue; an ebook reader for EPUB and PDF (iPhone) that keeps your place across devices; books to Apple Books, Kindle or PocketBook. |
 | **Watchlist** | New episodes and release dates, with a local notification when something lands. |
 | **System** | Widgets, Control Center, Siri and Shortcuts, Spotlight, Quick Actions, a Files and Finder location. On the Mac: a native app (not Catalyst) with source tables, menu bar extra, Dock progress and drops. |
 

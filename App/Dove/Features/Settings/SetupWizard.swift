@@ -138,6 +138,7 @@ struct SetupWizard: View {
             configured.insert(.books)
         }
         if model.isConfigured(.calibre) { configured.insert(.calibre) }
+        if model.isConfigured(.audiobookshelf) { configured.insert(.audiobookshelf) }
         if model.isConfigured(.iCloudDrive) { configured.insert(.iCloudDrive) }
         if model.playback.player != .infuse, model.playback.isUsable(model.playback.player) { configured.insert(.player) }
         if !model.kindleAddress.isEmpty || !model.pocketBookAddress.isEmpty || !model.emailAddress.isEmpty {
@@ -188,6 +189,7 @@ private extension SetupStep.Page {
         case .books: .books
         case .iCloudDrive: .service(.iCloudDrive)
         case .calibre: .service(.calibre)
+        case .audiobookshelf: .service(.audiobookshelf)
         case .saveTo: .saveTo
         case .player: .player
         case .reading: .reading

@@ -186,7 +186,7 @@ public struct LibraryRequest: Equatable, Sendable {
     static let serviceWords: [BackendID: [String]] = [
         .realDebrid: ["rd", "real debrid"], .torBox: ["tb", "torbox"], .offcloud: ["oc"], .debridLink: ["dl", "debrid link"],
         .premiumize: ["pm"], .allDebrid: ["ad", "all debrid"], .nzbdav: ["usenet", "infinidysk"], .iCloudDrive: ["icloud"],
-        .calibre: ["calibre"],
+        .calibre: ["calibre"], .audiobookshelf: ["abs", "audiobookshelf"],
     ]
 
     static let genreWords = [

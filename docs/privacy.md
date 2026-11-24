@@ -20,6 +20,7 @@ Dove connects to services you already use. Their own privacy policies apply to w
 - **Indexers** (Newznab/Torznab): Dove searches them from your device with your API keys.
 - **Stremio addons**: Dove searches them from your device.
 - **Calibre**: Dove lists your books and sends new ones to your own Calibre Content server.
+- **Audiobookshelf**: Dove lists your audiobooks and sends new ones to your own Audiobookshelf server.
 - **iCloud Drive**: files you send there are stored in your own iCloud account.
 - **Kodi**: Dove sends play commands to your Kodi server.
 - **Plugins**: Dove runs JavaScript you install, which may connect to sites the plugin declares.

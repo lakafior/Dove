@@ -51,6 +51,7 @@ extension BackendID {
         case .nzbdav: "nzbdav"
         case .iCloudDrive: "icloud"
         case .calibre: "calibre"
+        case .audiobookshelf: "audiobookshelf"
         }
     }
 

@@ -31,6 +31,7 @@ struct AudiobookPlaySection: View {
                 Button("Start over", systemImage: "backward.end.alt") { startOver() }
                     .disabled(isPreparing)
             }
+            ShelfSendButton(book: book)
         } footer: {
             if let message {
                 Text(message)
@@ -302,14 +303,17 @@ struct AudiobookPlayerView: View {
         return "\(chapter) · part \(player.trackIndex + 1) of \(session.tracks.count)"
     }
 
-    /// Position within the current part (a chapter of an mp3 release, or the whole m4b).
+    /// Position within the current chapter when the part has chapter marks (an m4b: a 10-hour slider moves minutes
+    /// a point), else within the part (one chapter of an mp3 release).
     private func scrubber(_ player: AudiobookPlayer) -> some View {
         let duration = max(player.duration ?? 0, 1)
+        let span = scrubSpan(player, duration: duration)
         let shown = scrubbing ?? player.elapsed
+        let local = min(max(0, shown - span.start), span.length)
         return VStack(spacing: 4) {
             Slider(
-                value: Binding(get: { min(shown, duration) }, set: { scrubbing = $0 }),
-                in: 0...duration
+                value: Binding(get: { local }, set: { scrubbing = span.start + $0 }),
+                in: 0...span.length
             ) { editing in
                 if !editing, let scrubbing {
                     player.seek(to: scrubbing)
@@ -317,18 +321,33 @@ struct AudiobookPlayerView: View {
                 }
             }
             .disabled(player.duration == nil)
+            .accessibilityLabel(span.isChapter ? "Position in chapter" : "Position")
+            .accessibilityValue("\(time(local)) of \(time(span.length))")
             HStack {
-                Text(time(shown))
+                Text(time(local))
                 Spacer()
                 if player.rate != 1, player.duration != nil, player.session?.isMusic != true {
-                    Text("\(time((duration - shown) / Double(player.rate))) left at \(rateLabel(player.rate))")
+                    Text("\(time((span.length - local) / Double(player.rate))) left at \(rateLabel(player.rate))")
                 }
                 Spacer()
-                Text("-" + time(max(0, duration - shown)))
+                Text("-" + time(max(0, span.length - local)))
             }
             .font(.caption.monospacedDigit())
             .foregroundStyle(.secondary)
+            if span.isChapter {
+                Text("\(time(max(0, duration - shown) / Double(player.rate))) left in this file")
+                    .font(.caption2.monospacedDigit())
+                    .foregroundStyle(.tertiary)
+            }
         }
+    }
+
+    private func scrubSpan(_ player: AudiobookPlayer, duration: Double) -> (start: Double, length: Double, isChapter: Bool) {
+        guard player.session?.isMusic != true,
+              let chapter = player.currentChapter, let length = chapter.duration, length > 1,
+              player.chapters.count(where: { $0.trackIndex == player.trackIndex }) > 1
+        else { return (0, duration, false) }
+        return (chapter.start, length, true)
     }
 
     private func speedMenu(_ player: AudiobookPlayer) -> some View {

@@ -37,7 +37,7 @@ Dove*, not here.
 | Sources in | Smart field, clipboard, share extension, `.torrent`/`.nzb` files, several links at once, title links from IMDb/TMDB/Apple TV/Letterboxd/Trakt/RT/JustWatch |
 | Download manager | Background session, progress, pause/resume, retry with a fresh link, notifications, Live Activity |
 | Download-only jobs | Add → wait → download the picked files → delete from the service |
-| Places a file can go | This device, iCloud Drive, Calibre, or a debrid cloud that fetches plain links; default per content kind, filed by `LibraryFolderLayout` |
+| Places a file can go | This device, iCloud Drive, Calibre, or a debrid cloud that fetches plain links; default per content kind, filed by `LibraryFolderLayout`. Audiobooks also go to Audiobookshelf (a Save to place for plugin files, and "Send to Audiobookshelf" on a book's screen, 2026-11-24), which is listed in the Library like Calibre and offered in the setup wizard |
 | Files app / Finder | File Provider location: browse services, download on open, delete, drop a `.torrent` in to add it |
 
 ### Search
@@ -70,9 +70,9 @@ Dove*, not here.
 | Capability | Covers |
 |---|---|
 | External players | Infuse, VLC, Outplayer, SenPlayer, nPlayer, VidHub, Kodi and a custom URL template; playlists where the player supports them |
-| Audiobooks | Dove's own player: chapters, speed, sleep timer, lock screen, AirPlay, positions synced across devices |
+| Audiobooks | Dove's own player: chapters, speed, sleep timer, lock screen, AirPlay, positions synced across devices; resumes after a call, pauses when headphones go, asks again for an expired link (2026-11-24) |
 | Music | Queue across albums, shuffle, track names from files, lock-screen metadata |
-| Books | Apple Books, Send to Kindle, Send-to-PocketBook, or any e-mail address |
+| Books | Dove's own reader on the iPhone (EPUB through epub.js, PDF through PDFKit; place synced across devices, 2026-11-24), Apple Books, Send to Kindle, Send-to-PocketBook, or any e-mail address |
 
 ### Plugins
 
@@ -133,7 +133,8 @@ for a later look if one of these misbehaves.
 |---|---|
 | More debrid services | EasyDebrid, Put.io, PikPak, Seedr — judged against what AIOStreams supports |
 | `.dlc` containers | Only Premiumize opens them; on the list, not planned |
-| Audiobookshelf as a place | Send audiobooks there, "In Audiobookshelf" on book screens. The owner does not use it, so it waits for demand |
+| Audiobookshelf: owner's server | Tested live 2026-11-24 against a throwaway 2.38.0 server (list, cover, download, upload, refusals). Left: the in-app Send button with a real release, and the owner's own server |
+| Reader on the Mac | The iPhone's reader is iOS only; the Mac opens books in Books. AudiobookSwift's Mac reader uses an AGPL MOBI parser, so it would not come over as is |
 | Ratings and anime numbering | OMDb would add IMDb and Rotten Tomatoes scores, TVDB anime episode numbering. Idea, not planned |
 | CarPlay for audiobooks | Needs an entitlement granted on request; worth asking once signing is settled |
 | Game items | Nothing planned; real game releases in the Library and iCloud filing not seen on a device yet |

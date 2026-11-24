@@ -16,13 +16,14 @@ extension CredentialKey {
         case .torBoxAPIKey, .realDebridAPIKey, .offcloudAPIKey, .debridLinkAPIKey, .premiumizeAPIKey, .allDebridAPIKey,
              .nzbdavAPIKey, .nzbdavWebDAVUser, .nzbdavWebDAVPassword, .nzbdavFrontendKey, .tmdbAPIKey,
              .googleBooksAPIKey, .hardcoverToken, .igdbClientID, .igdbClientSecret, .pluginSettings, .calibreUser, .calibrePassword,
+             .audiobookshelfToken,
              .stremioAddons, .aioStreamsPassword:
             .secret
         case .newznabIndexers, .kodi:
             .mixed
         case .nzbdavURL, .debridOrder, .usenetOrder, .torBoxUsenet, .torBoxPlan, .privateTrackers, .offcloudUsenet,
-             .premiumizeUsenet, .preferences, .audiobookPositions, .watchlist, .pluginRepositories, .plugins,
-             .calibreURL, .calibreRemoteURL:
+             .premiumizeUsenet, .preferences, .audiobookPositions, .readingPositions, .watchlist, .pluginRepositories, .plugins,
+             .calibreURL, .calibreRemoteURL, .audiobookshelfURL, .audiobookshelfLibrary:
             .setting
         }
     }

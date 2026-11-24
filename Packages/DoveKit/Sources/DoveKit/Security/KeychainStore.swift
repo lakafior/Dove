@@ -23,6 +23,12 @@ public enum CredentialKey: String, Sendable, CaseIterable {
     /// A Calibre user account (Sharing over the net › User accounts). Optional: without it, read-only.
     case calibreUser
     case calibrePassword
+    /// The Audiobookshelf server's address (`http://192.168.1.10:13378`, with its path when it has one).
+    case audiobookshelfURL
+    /// An Audiobookshelf API key (Settings › API Keys), sent as a bearer token.
+    case audiobookshelfToken
+    /// The library audiobooks are sent to; unset takes the first audiobook library.
+    case audiobookshelfLibrary
     case tmdbAPIKey
     /// Google Books API key (book covers and titles). Optional.
     case googleBooksAPIKey
@@ -65,6 +71,8 @@ public enum CredentialKey: String, Sendable, CaseIterable {
     case preferences
     /// JSON of `AudiobookPositions`: where each audiobook was left, so another device continues there.
     case audiobookPositions
+    /// JSON of `ReadingPositions`: where each ebook was left in Dove's reader.
+    case readingPositions
     /// JSON of `Watchlist`: movies and series saved for later. Not a secret; synced like `preferences`.
     case watchlist
 }
@@ -328,6 +336,15 @@ public enum SharedConfiguration {
         }
         guard !addresses.isEmpty else { return nil }
         return CalibreBackend(addresses: addresses, user: value(.calibreUser), password: (try? keychain.get(.calibrePassword)) ?? "")
+    }
+
+    /// Audiobookshelf, when its address and key are set. App only.
+    public static func audiobookshelf(from keychain: KeychainStore) -> AudiobookshelfBackend? {
+        let value = { (key: CredentialKey) in (try? keychain.get(key))?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "" }
+        guard let url = URL(string: value(.audiobookshelfURL)), url.scheme == "http" || url.scheme == "https", url.host() != nil,
+              !value(.audiobookshelfToken).isEmpty
+        else { return nil }
+        return AudiobookshelfBackend(baseURL: url, token: value(.audiobookshelfToken), libraryID: value(.audiobookshelfLibrary))
     }
 
     public static let debrids = BackendID.allCases.filter { !$0.isUsenet && !$0.isStorage }

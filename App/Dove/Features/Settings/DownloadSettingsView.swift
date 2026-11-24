@@ -28,7 +28,7 @@ struct DownloadSettingsView: View {
                     .disabled(model.places(for: kind).count < 2)
                 }
             } footer: {
-                Text("Downloads from plugins use these; a long press on Download picks another place for one file. Offcloud, TorBox and Premiumize fetch the file into their cloud (Real-Debrid, AllDebrid and Debrid-Link only take hosters they list). Calibre takes books: Dove downloads the file and adds it with the book's details. iCloud Drive: \(model.iCloudState).")
+                Text("Downloads from plugins use these; a long press on Download picks another place for one file. Offcloud, TorBox and Premiumize fetch the file into their cloud (Real-Debrid, AllDebrid and Debrid-Link only take hosters they list). Calibre takes books, Audiobookshelf audiobooks: Dove downloads the files and sends them there with the book's details. iCloud Drive: \(model.iCloudState).")
             }
             #if os(macOS)
             foldersSection

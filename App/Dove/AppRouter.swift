@@ -20,6 +20,9 @@ final class AppRouter {
     var searchRequest: String?
     /// The Search tab's stack, so Spotlight and Quick Actions can open a title or the watchlist there.
     var searchPath = NavigationPath()
+    /// The book open in Dove's reader, full screen from the root (a cover inside a book screen's list would close
+    /// when the list redraws).
+    var reading: ReaderRequest?
 
     func show(_ destination: AppModel.Destination) {
         switch destination {

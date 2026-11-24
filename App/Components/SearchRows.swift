@@ -54,14 +54,15 @@ struct BookRow: View {
     }
 }
 
-/// "In Calibre" (or "In library" for a copy on a service) under a search result the library already holds.
+/// "In Calibre", "In Audiobookshelf" (or "In library" for a copy on a service) under a search result the library
+/// already holds.
 struct HeldBookMark: View {
     let title: BookTitle
 
     var body: some View {
         Label(title.heldLabel, systemImage: "checkmark.circle.fill")
             .font(.caption.weight(.semibold))
-            .foregroundStyle(title.backends.contains(.calibre) ? BackendID.calibre.tint : .green)
+            .foregroundStyle(title.heldPlace?.tint ?? .green)
     }
 }
 
@@ -132,9 +133,14 @@ extension GameSummary {
 }
 
 extension BookTitle {
-    /// Where the library keeps it, Calibre first: it is the user's own copy.
+    /// The user's own place that holds it (Calibre, then Audiobookshelf), if one does.
+    var heldPlace: BackendID? {
+        [BackendID.calibre, .audiobookshelf].first(where: backends.contains)
+    }
+
+    /// Where the library keeps it, a place of the user's first: it is their own copy.
     var heldLabel: String {
-        backends.contains(.calibre) ? "In Calibre" : "In library"
+        heldPlace.map { "In \($0.displayName)" } ?? "In library"
     }
 
     /// The formats the library's copies come in ("EPUB, MOBI"), from file names.

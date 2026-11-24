@@ -5,19 +5,20 @@ import SwiftUI
 /// Every Settings page. The iPhone's Settings list and the Mac's Settings sidebar show the same pages, in the same
 /// sections and order, each opening the same form.
 enum SettingsPage: Hashable {
-    /// A service or a place: its own page (nzbdav, Calibre and iCloud Drive have theirs, debrids share one).
+    /// A service or a place: its own page (nzbdav, Calibre, Audiobookshelf and iCloud Drive have theirs, debrids share one).
     case service(BackendID)
     case addService, routing, saveTo
     case addons, indexers, plugins
     case movies, books, music, games
     case player, reading
-    case notifications, adult, storage, transfer, setup
+    case notifications, adult, storage, transfer, setup, about
 
     @MainActor @ViewBuilder
     var destination: some View {
         switch self {
         case .service(.nzbdav): NzbdavSettingsView()
         case .service(.calibre): CalibreSettingsView()
+        case .service(.audiobookshelf): AudiobookshelfSettingsView()
         case .service(.iCloudDrive): ICloudDriveSettingsView()
         case .service(let backend): DebridServiceView(backend: backend)
         case .addService: AddServiceView()
@@ -37,6 +38,7 @@ enum SettingsPage: Hashable {
         case .storage: StorageSettingsView()
         case .transfer: SettingsTransferView()
         case .setup: SetupLauncher()
+        case .about: AboutView()
         }
     }
 }
@@ -80,6 +82,11 @@ struct SettingsCatalog {
         return "\(short) (\(build))"
     }
 
+    /// "1.0.0".
+    static var shortVersion: String {
+        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "?"
+    }
+
     // MARK: - Sections
 
     /// Services with a key; the rest wait under Add service. With none set up, every service is listed.
@@ -108,6 +115,9 @@ struct SettingsCatalog {
                           color: BackendID.iCloudDrive.settingsColor, value: model.iCloudState),
             SettingsEntry(page: .service(.calibre), title: "Calibre", symbol: BackendID.calibre.settingsSymbol,
                           color: BackendID.calibre.settingsColor, value: serviceValue(.calibre), light: serviceLight(.calibre)),
+            SettingsEntry(page: .service(.audiobookshelf), title: "Audiobookshelf", symbol: BackendID.audiobookshelf.settingsSymbol,
+                          color: BackendID.audiobookshelf.settingsColor, value: serviceValue(.audiobookshelf),
+                          light: serviceLight(.audiobookshelf)),
             SettingsEntry(page: .saveTo, title: "Save to", symbol: "tray.and.arrow.down.fill", color: .blue),
         ])
     }
@@ -137,7 +147,7 @@ struct SettingsCatalog {
     private var playingAndReading: SettingsGroup {
         SettingsGroup(title: "Playing and reading", entries: [
             SettingsEntry(page: .player, title: "Player", symbol: "play.fill", color: .red, value: model.playback.player.displayName),
-            SettingsEntry(page: .reading, title: "Reading", symbol: "book.fill", color: .yellow, value: model.readIn?.displayName ?? "Ask"),
+            SettingsEntry(page: .reading, title: "Reading", symbol: "book.fill", color: .yellow, value: model.availableReadIn?.displayName ?? "Ask"),
         ])
     }
 
@@ -149,6 +159,7 @@ struct SettingsCatalog {
             SettingsEntry(page: .storage, title: "Storage and Files", symbol: "internaldrive.fill", color: .gray),
             SettingsEntry(page: .transfer, title: "Export and import", symbol: "square.and.arrow.up.on.square.fill", color: .teal),
             SettingsEntry(page: .setup, title: "Set up Dove again", symbol: "wand.and.stars", color: .blue),
+            SettingsEntry(page: .about, title: "About", symbol: "info.circle.fill", color: .gray, value: Self.shortVersion),
         ])
     }
 

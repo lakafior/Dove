@@ -4,10 +4,10 @@ import Testing
 
 struct SetupPlanTests {
     @Test func buildsOnlySelectedStepsInOrder() {
-        let choices: Set<SetupChoice> = [.service(.realDebrid), .service(.nzbdav), .indexers, .addons, .movies, .games, .books, .iCloudDrive, .calibre, .player, .reading]
+        let choices: Set<SetupChoice> = [.service(.realDebrid), .service(.nzbdav), .indexers, .addons, .movies, .games, .books, .iCloudDrive, .calibre, .audiobookshelf, .player, .reading]
         #expect(SetupPlan.steps(for: choices).map(\.page) == [
             .service(.realDebrid), .service(.nzbdav), .routing, .indexers, .addons, .movies, .games,
-            .books, .iCloudDrive, .calibre, .saveTo, .player, .reading, .adult, .done
+            .books, .iCloudDrive, .calibre, .audiobookshelf, .saveTo, .player, .reading, .adult, .done
         ])
     }
 

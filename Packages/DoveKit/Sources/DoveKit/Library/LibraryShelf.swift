@@ -197,7 +197,7 @@ public enum LibraryShelf {
         }
         // The same work under two matches (Calibre's own record and a metadata service's) is one book: same format
         // and title, and authors on both sides sharing a name word. The first group keeps its ID (services come
-        // before Calibre, so an open screen stays); Calibre's description wins, being the user's own.
+        // before Calibre, so an open screen stays); Calibre's or Audiobookshelf's description wins, being the user's own.
         var byTitle: [String: String] = [:]
         for id in order {
             guard let title = books[id] else { continue }
@@ -213,7 +213,9 @@ public enum LibraryShelf {
                 continue
             }
             books[target]!.items += title.items
-            if title.book?.id.hasPrefix("calibre:") == true { books[target]!.book = title.book }
+            if let id = title.book?.id, id.hasPrefix("calibre:") || id.hasPrefix(AudiobookshelfBackend.itemPrefix) {
+                books[target]!.book = title.book
+            }
             books[id] = nil
         }
         return order.compactMap { books[$0] }

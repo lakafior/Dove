@@ -189,6 +189,17 @@ public final class AppModel {
         didSet { savePreferences() }
     }
 
+    /// `readIn` when this device offers it (Dove's reader is synced from the iPhone but absent on the Mac).
+    public var availableReadIn: ReadingTarget? {
+        readIn.flatMap { readingTargets.contains($0) ? $0 : nil }
+    }
+
+    /// Sends to Audiobookshelf in flight, by book ID, and the last outcome of each, so a redrawn book screen shows
+    /// the same transfer instead of offering a second one.
+    public internal(set) var shelfSends: [String: ShelfSendStep] = [:]
+    public internal(set) var shelfSendResults: [String: String] = [:]
+    @ObservationIgnored var shelfSendTasks: [String: Task<Void, Never>] = [:]
+
     /// Send to Kindle address; empty hides Kindle.
     public var kindleAddress = "" {
         didSet { savePreferences() }
@@ -206,7 +217,7 @@ public final class AppModel {
 
     public func mailAddress(for target: ReadingTarget) -> String {
         switch target {
-        case .appleBooks: ""
+        case .dove, .appleBooks: ""
         case .kindle: kindleAddress
         case .pocketBook: pocketBookAddress
         case .email: emailAddress
@@ -216,7 +227,7 @@ public final class AppModel {
     /// Clearing the preferred target's address makes Read ask again.
     public func setMailAddress(_ address: String, for target: ReadingTarget) {
         switch target {
-        case .appleBooks: return
+        case .dove, .appleBooks: return
         case .kindle: kindleAddress = address
         case .pocketBook: pocketBookAddress = address
         case .email: emailAddress = address
@@ -234,9 +245,15 @@ public final class AppModel {
         didSet { savePreferences() }
     }
 
-    /// Mail targets are offered only with an address to send to.
+    /// Mail targets are offered only with an address to send to; Dove's reader only on the iPhone (the Mac opens
+    /// books in its own readers).
     public var readingTargets: [ReadingTarget] {
-        ReadingTarget.allCases.filter { !$0.isMail || !mailAddress(for: $0).isEmpty }
+        ReadingTarget.allCases.filter { target in
+            #if os(macOS)
+            if target == .dove { return false }
+            #endif
+            return !target.isMail || !mailAddress(for: target).isEmpty
+        }
     }
 
     /// Filters, variant and "download only" travel with the keys through iCloud Keychain.
@@ -493,16 +510,26 @@ public final class AppModel {
     /// Rebuilds backends from the Keychain. Call after credentials change.
     public func reloadBackends() {
         let calibre = SharedConfiguration.calibre(from: keychain)
+        let audiobookshelf = SharedConfiguration.audiobookshelf(from: keychain)
         backends = SharedConfiguration.backends(from: keychain)
             + (iCloudFolder.map { [FolderBackend(directory: $0)] } ?? [])
             + (calibre.map { [$0] } ?? [])
-        // Calibre's covers are `calibre://cover/…` URLs: fetched at the address that answers, with the login.
-        var coverResolver: (@Sendable (URL) async throws -> URLRequest)?
+            + (audiobookshelf.map { [$0] } ?? [])
+        // Calibre's and Audiobookshelf's covers are URLs of Dove's own schemes (`calibre://cover/…`): fetched at the
+        // server's address, with the login or key, which stay out of the cache's keys.
+        var calibreCovers: (@Sendable (URL) async throws -> URLRequest)?
         if let calibre {
-            coverResolver = { url in try await calibre.coverRequest(for: url) }
+            calibreCovers = { url in try await calibre.coverRequest(for: url) }
         }
-        let resolver = coverResolver
-        Task { await ImageCache.shared.setResolver(for: CalibreBackend.coverScheme, resolver) }
+        var shelfCovers: (@Sendable (URL) async throws -> URLRequest)?
+        if let audiobookshelf {
+            shelfCovers = { url in try await audiobookshelf.coverRequest(for: url) }
+        }
+        let resolvers = (calibre: calibreCovers, shelf: shelfCovers)
+        Task {
+            await ImageCache.shared.setResolver(for: CalibreBackend.coverScheme, resolvers.calibre)
+            await ImageCache.shared.setResolver(for: AudiobookshelfBackend.coverScheme, resolvers.shelf)
+        }
         let hasServices = backends.contains { !$0.id.isStorage }
         Task { await platform.servicesChanged(hasServices: hasServices) }
     }
@@ -573,7 +600,8 @@ public final class AppModel {
         return destination.displayName
     }
 
-    /// The places for one kind: Calibre takes ebooks too (Dove downloads the file and adds it there).
+    /// The places for one kind: Calibre takes ebooks too, Audiobookshelf audiobooks (Dove downloads the files and
+    /// sends them there).
     /// `place(for:)` to read, the user's choice to write: what Settings › Save to binds to.
     public subscript(destinationFor kind: ContentKind) -> FilePlace {
         get { place(for: kind) }
@@ -582,6 +610,7 @@ public final class AppModel {
 
     public func places(for kind: ContentKind) -> [FilePlace] {
         places + (kind == .books && backend(.calibre) != nil ? [.service(.calibre)] : [])
+            + (kind == .audiobooks && backend(.audiobookshelf) != nil ? [.service(.audiobookshelf)] : [])
     }
 
     /// Configured services that fetch any HTTP link into their cloud, in the debrid priority order.
@@ -596,6 +625,7 @@ public final class AppModel {
         case .download(.iCloud): iCloudFolder != nil
         case .download(.folder(let id)): pickedFolders.isReachable(id)
         case .service(.calibre): backend(.calibre) != nil
+        case .service(.audiobookshelf): backend(.audiobookshelf) != nil
         case .service(let id): backend(id)?.acceptsDirectLinks == true
         }
     }
@@ -928,6 +958,30 @@ public final class AppModel {
                 }
                 let fileName = Self.calibreFileName(book: book, fileName: link.name)
                 return try await addToCalibre(file: temporary, fileName: fileName, book: book).message
+            case .service(.audiobookshelf):
+                // Dove fetches the files (headers and all) and uploads them: Audiobookshelf cannot fetch links.
+                guard kind == .audiobooks else { throw PluginError("Audiobookshelf takes audiobooks; pick This iPhone or iCloud Drive.") }
+                guard let shelf = backend(.audiobookshelf) as? AudiobookshelfBackend else {
+                    throw BackendError.api(message: "Set up Audiobookshelf in Settings › Your libraries first.")
+                }
+                let name = book?.title ?? title ?? links.first.map { ($0.name as NSString).deletingPathExtension } ?? "Audiobook"
+                let folder = FileManager.default.temporaryDirectory.appending(path: "abs-get-\(UUID().uuidString)", directoryHint: .isDirectory)
+                defer { try? FileManager.default.removeItem(at: folder) }
+                var files: [URL] = []
+                for link in links {
+                    let (temporary, response) = try await URLSession.shared.download(for: Self.request(for: link))
+                    if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
+                        try? FileManager.default.removeItem(at: temporary)
+                        throw PluginError("The site answered \(http.statusCode) for \(link.name).")
+                    }
+                    let destination = folder.appending(path: LibraryFolderLayout.cleanPath(link.name))
+                    try FileManager.default.createDirectory(at: destination.deletingLastPathComponent(), withIntermediateDirectories: true)
+                    try FileManager.default.moveItem(at: temporary, to: destination)
+                    files.append(destination)
+                }
+                try await shelf.upload(files: files, title: name, author: book?.authors.first)
+                Task { await library.refresh(using: self, afterChange: true) }
+                return "Sent to Audiobookshelf. It files it under Author/Title and scans it in a moment."
             case .service(let serviceID):
                 guard links.allSatisfy(\.isPlain) else {
                     throw PluginError("Only Dove can download this file (\(call.manifest.name) needs extra headers): pick This iPhone or iCloud Drive.")

@@ -40,7 +40,7 @@ struct MacHomeSections: View {
     /// Set-up services as capsules: light, name, days left. A click opens the service's page.
     @ViewBuilder
     private var services: some View {
-        let backends = (BackendID.services + [.calibre]).filter(model.isConfigured)
+        let backends = (BackendID.services + [.calibre, .audiobookshelf]).filter(model.isConfigured)
         if !backends.isEmpty {
             FlowRow(spacing: 8) {
                 ForEach(backends, id: \.self) { backend in

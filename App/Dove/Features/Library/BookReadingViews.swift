@@ -4,12 +4,14 @@ import MessageUI
 import SwiftUI
 import UIKit
 
-/// "Read" on a book screen: the best file of the book's ready releases (`BookFiles`) goes to Apple Books (through the
-/// share sheet: Books has no URL scheme for files) or by mail (a Mail draft to the Kindle, PocketBook or other
+/// "Read" on a book screen: the best file of the book's ready releases (`BookFiles`) opens in Dove's reader (EPUB and
+/// PDF, the place kept across devices), goes to Apple Books (through the share sheet: Books has no URL scheme for
+/// files) or by mail (a Mail draft to the Kindle, PocketBook or other
 /// address set in Settings › Reading).
 /// The file is downloaded to Caches once (`BookFileCache`), or taken from Downloads when it is already there.
 struct BookReadSection: View {
     @Environment(AppModel.self) private var model
+    @Environment(AppRouter.self) private var router
     let book: BookTitle
     @State private var working: Action?
     @State private var message: String?
@@ -31,10 +33,11 @@ struct BookReadSection: View {
 
     private static let cache = BookFileCache()
 
-    /// The preferred target when it is still available (mail targets need an address).
+    /// The preferred target when it is still available (mail targets need an address); without one and without
+    /// mail addresses, Dove's own reader.
     private var preferred: ReadingTarget? {
         model.readIn.flatMap { model.readingTargets.contains($0) ? $0 : nil }
-            ?? (model.readingTargets.count == 1 ? .appleBooks : nil)
+            ?? (model.readingTargets.contains(where: \.isMail) ? nil : .dove)
     }
 
     var body: some View {
@@ -114,7 +117,11 @@ struct BookReadSection: View {
     private func title(_ target: ReadingTarget) -> String { target.actionTitle }
 
     private func symbol(_ target: ReadingTarget) -> String {
-        target.isMail ? "paperplane" : "book"
+        switch target {
+        case .dove: "book.pages"
+        case .appleBooks: "book"
+        default: "paperplane"
+        }
     }
 
     private func run(_ action: Action) {
@@ -148,6 +155,8 @@ struct BookReadSection: View {
                 let url = try await localFile(for: pick)
                 if case .read(let target) = action, target.isMail {
                     send(url, pick: pick, to: target)
+                } else if case .read(.dove) = action {
+                    router.reading = ReaderRequest(file: url, title: book.name, bookKey: book.guess.key)
                 } else {
                     SheetPresenter.share(url)
                     if case .read(.appleBooks) = action { message = "Pick Books in the share sheet." }

@@ -5,10 +5,10 @@ private let debridServices = BackendID.allCases.filter { !$0.isUsenet && !$0.isS
 /// A service or feature the user wants to set up.
 public enum SetupChoice: Sendable, Hashable, CaseIterable, Identifiable {
     case service(BackendID)
-    case indexers, addons, movies, games, books, calibre, iCloudDrive, player, reading
+    case indexers, addons, movies, games, books, calibre, audiobookshelf, iCloudDrive, player, reading
 
     public static var allCases: [SetupChoice] {
-        debridServices.map(SetupChoice.service) + [.service(.nzbdav), .indexers, .addons, .movies, .games, .books, .calibre, .iCloudDrive, .player, .reading]
+        debridServices.map(SetupChoice.service) + [.service(.nzbdav), .indexers, .addons, .movies, .games, .books, .calibre, .audiobookshelf, .iCloudDrive, .player, .reading]
     }
 
     public var id: Self { self }
@@ -22,6 +22,7 @@ public enum SetupChoice: Sendable, Hashable, CaseIterable, Identifiable {
         case .games: "Games (IGDB)"
         case .books: "Books"
         case .calibre: "Calibre"
+        case .audiobookshelf: "Audiobookshelf"
         case .iCloudDrive: "iCloud Drive"
         case .player: "A player other than Infuse, or Kodi"
         case .reading: "Kindle, PocketBook or e-mail"
@@ -33,7 +34,7 @@ public enum SetupChoice: Sendable, Hashable, CaseIterable, Identifiable {
         case .service(let backend) where debridServices.contains(backend): "Services you pay for"
         case .indexers, .addons: "Search"
         case .movies, .games, .books: "Titles and covers"
-        case .calibre, .iCloudDrive: "Places"
+        case .calibre, .audiobookshelf, .iCloudDrive: "Places"
         case .player, .reading: "Playing and reading"
         default: "Your own servers"
         }
@@ -45,7 +46,7 @@ public struct SetupStep: Sendable, Hashable, Identifiable {
     public enum Page: Sendable, Hashable {
         case service(BackendID)
         case routing, indexers, addons, movies, games, books
-        case iCloudDrive, calibre, saveTo, player, reading, adult, done
+        case iCloudDrive, calibre, audiobookshelf, saveTo, player, reading, adult, done
     }
 
     public let page: Page
@@ -61,6 +62,7 @@ public struct SetupStep: Sendable, Hashable, Identifiable {
         case .books: .books
         case .iCloudDrive: .iCloudDrive
         case .calibre: .calibre
+        case .audiobookshelf: .audiobookshelf
         case .player: .player
         case .reading: .reading
         case .routing, .saveTo, .adult, .done: nil
@@ -91,7 +93,8 @@ public struct SetupPlan: Sendable, Hashable {
         if choices.contains(.books) { pages.append(.books) }
         if choices.contains(.iCloudDrive) { pages.append(.iCloudDrive) }
         if choices.contains(.calibre) { pages.append(.calibre) }
-        if choices.contains(.iCloudDrive) || choices.contains(.calibre) { pages.append(.saveTo) }
+        if choices.contains(.audiobookshelf) { pages.append(.audiobookshelf) }
+        if choices.contains(.iCloudDrive) || choices.contains(.calibre) || choices.contains(.audiobookshelf) { pages.append(.saveTo) }
         if choices.contains(.player) { pages.append(.player) }
         if choices.contains(.reading) { pages.append(.reading) }
         pages.append(.adult)

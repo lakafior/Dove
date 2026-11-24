@@ -6,7 +6,7 @@ import SwiftUI
 /// A book page's own buttons, the Mac form of the iPhone's Read section and audiobook buttons. An ebook opens in the
 /// Mac's reader for its format (Books for EPUB and PDF), goes by mail to a reader's address (Kindle, PocketBook, any
 /// e-mail set in Settings › Reading), shows in the Finder, or goes to Calibre. An audiobook plays in Dove's player
-/// (the bar at the bottom), continues where it was left, or starts over.
+/// (the bar at the bottom), continues where it was left, starts over, or goes to Audiobookshelf.
 struct MacBookActions: View {
     @Environment(AppModel.self) private var model
     let book: BookTitle
@@ -51,6 +51,9 @@ struct MacBookActions: View {
             }
             .buttonStyle(.bordered)
         }
+        ShelfSendButton(book: book)
+            .buttonStyle(.bordered)
+            .frame(maxWidth: 320)
     }
 
     private func play() {

@@ -167,7 +167,7 @@ struct MacRootView: View {
 
     /// Services and places that are set up, in Settings' order.
     private var services: [BackendID] {
-        (BackendID.services + [.calibre, .iCloudDrive]).filter(model.isConfigured)
+        (BackendID.services + [.calibre, .audiobookshelf, .iCloudDrive]).filter(model.isConfigured)
     }
 }
 

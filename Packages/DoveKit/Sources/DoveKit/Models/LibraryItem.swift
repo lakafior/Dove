@@ -13,6 +13,8 @@ public enum BackendID: String, Sendable, Codable, CaseIterable, Identifiable {
     case iCloudDrive
     /// The user's Calibre library (Content server): books kept there, listed and downloaded, never added through.
     case calibre
+    /// The user's Audiobookshelf server: audiobooks kept there, listed, downloaded and sent to, never added through.
+    case audiobookshelf
 
     public var id: String { rawValue }
 
@@ -27,15 +29,16 @@ public enum BackendID: String, Sendable, Codable, CaseIterable, Identifiable {
         case .nzbdav: "nzbdav"
         case .iCloudDrive: "iCloud Drive"
         case .calibre: "Calibre"
+        case .audiobookshelf: "Audiobookshelf"
         }
     }
 
     /// Usenet backends get their own segment in the Library tab, because their statuses mean different things.
     public var isUsenet: Bool { self == .nzbdav }
 
-    /// A storage place of the user's (iCloud Drive, Calibre), not a debrid or Usenet service: no key, no adds through
-    /// the router, no premium account.
-    public var isStorage: Bool { self == .iCloudDrive || self == .calibre }
+    /// A storage place of the user's (iCloud Drive, Calibre, Audiobookshelf), not a debrid or Usenet service: no adds
+    /// through the router, no premium account.
+    public var isStorage: Bool { self == .iCloudDrive || self == .calibre || self == .audiobookshelf }
 
     /// The files are already on this device's storage (iCloud Drive): nothing to download or link.
     public var isOnDevice: Bool { self == .iCloudDrive }

@@ -21,7 +21,7 @@ struct DebridServiceView: View {
         case .allDebrid: .allDebridAPIKey
         case .nzbdav: .nzbdavAPIKey
         // Never shown for places or nzbdav: those have their own screens.
-        case .iCloudDrive, .calibre: preconditionFailure("\(backend.displayName) has no key")
+        case .iCloudDrive, .calibre, .audiobookshelf: preconditionFailure("\(backend.displayName) has no key")
         }
     }
 

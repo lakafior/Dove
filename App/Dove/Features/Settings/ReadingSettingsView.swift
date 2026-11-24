@@ -13,12 +13,12 @@ struct ReadingSettingsView: View {
         @Bindable var model = model
         Form {
             Section {
-                Picker("Read in", selection: $model.readIn) {
+                Picker("Read in", selection: Binding(get: { model.availableReadIn }, set: { model.readIn = $0 })) {
                     Text("Ask every time").tag(ReadingTarget?.none)
                     ForEach(model.readingTargets) { Text($0.displayName).tag(Optional($0)) }
                 }
             } footer: {
-                Text("Read sends the best file the reader takes: EPUB first, then PDF. Apple Books opens through the share sheet; the others get a Mail draft. Apple Books and Kindle do not take MOBI or AZW3: use Share file for those.")
+                Text("Read sends the best file the reader takes: EPUB first, then PDF. Dove's reader opens it here and keeps your place on your other devices; Apple Books opens through the share sheet; the others get a Mail draft. Dove, Apple Books and Kindle do not take MOBI or AZW3: use Share file for those.")
             }
 
             ForEach(Self.mailTargets) { target in
@@ -62,7 +62,7 @@ struct ReadingSettingsView: View {
             "Set it up on the reader: Send-to-PocketBook in its applications (needs a PocketBook Cloud account). The first book from a new sender address may need your confirmation by e-mail. EPUB, FB2, PDF, MOBI, AZW3, DjVu and comics."
         case .email:
             "Any address: your own inbox, or another reader's mail service. Takes any ebook format, EPUB first. Kobo has no such address: use Share file and its Dropbox or Google Drive library instead."
-        case .appleBooks:
+        case .dove, .appleBooks:
             ""
         }
     }

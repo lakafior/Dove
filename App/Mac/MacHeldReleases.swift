@@ -303,7 +303,7 @@ struct MacHeldReleases: View {
         }
         Divider()
         Button("Copy Name", systemImage: "doc.on.doc") { store.copy(file.name) }
-        // Places (iCloud Drive, Calibre) have no service link to share, as on the iPhone.
+        // Places (iCloud Drive, Calibre, Audiobookshelf) have no service link to share, as on the iPhone.
         if !item.item.backend.isStorage {
             Button("Copy Link", systemImage: "link") { store.copyLink(file, of: item, using: model) }
         }

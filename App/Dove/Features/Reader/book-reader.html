@@ -1,0 +1,23 @@
+<!doctype html>
+<!-- This Source Code Form is subject to the terms of the Mozilla Public
+   - License, v. 2.0. If a copy of the MPL was not distributed with this
+   - file, You can obtain one at https://mozilla.org/MPL/2.0/. -->
+<!-- Dove's EPUB reader page. Loaded from the dovebook: scheme, which serves only the reader's own files and the one
+     book; the web view's content rules block everything else, so the page has no network. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self' dovebook: blob: data:; script-src 'self' dovebook:; style-src 'self' dovebook: blob: 'unsafe-inline'; img-src 'self' dovebook: blob: data:; font-src 'self' dovebook: blob: data:; connect-src dovebook:">
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden; background: var(--page, #fff); -webkit-text-size-adjust: 100%; }
+  #book { position: absolute; top: var(--top, 0px); bottom: var(--bottom, 0px); left: var(--side, 20px); right: var(--side, 20px); }
+</style>
+<script src="jszip.min.js"></script>
+<script src="epub.min.js"></script>
+</head>
+<body>
+<div id="book"></div>
+<script src="book-reader.js"></script>
+</body>
+</html>

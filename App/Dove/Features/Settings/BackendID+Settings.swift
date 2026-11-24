@@ -16,6 +16,7 @@ extension BackendID {
         case .nzbdav: "server.rack"
         case .iCloudDrive: "icloud.fill"
         case .calibre: "books.vertical.fill"
+        case .audiobookshelf: "headphones"
         }
     }
 
@@ -30,6 +31,7 @@ extension BackendID {
         case .nzbdav: .orange
         case .iCloudDrive: .cyan
         case .calibre: .brown
+        case .audiobookshelf: .indigo
         }
     }
 
@@ -42,7 +44,7 @@ extension BackendID {
         case .debridLink: "debrid-link.com › My account › API key. Debrid-Link seeds, so torrents from private trackers can go here."
         case .premiumize: "premiumize.me › Account › API key. Every plan includes Usenet."
         case .allDebrid: "alldebrid.com › Account › API keys (alldebrid.com/apikeys). A new key may need confirming from the e-mail AllDebrid sends."
-        case .nzbdav, .iCloudDrive, .calibre: ""
+        case .nzbdav, .iCloudDrive, .calibre, .audiobookshelf: ""
         }
     }
 

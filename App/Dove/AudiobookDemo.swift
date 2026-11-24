@@ -6,6 +6,8 @@ import Foundation
 
 /// Debug builds only: `-demoAudiobook` at launch plays a made-up book of three short tone files through the real
 /// player path (`AudiobookTracks`, `AudiobookPlayer`), so the player can be tried on the Simulator without a service.
+/// With `-demoBrokenLink` the second part points at a missing file, like an expired service link: the player should
+/// ask for it once more, then say it stopped.
 @MainActor
 enum AudiobookDemo {
     static let argument = "-demoAudiobook"
@@ -66,7 +68,11 @@ enum AudiobookDemo {
         )
         guard case .success(let tracks) = AudiobookTracks.tracks(in: item.files) else { return }
         let real = model.audiobook.assetProvider
+        let broken = ProcessInfo.processInfo.arguments.contains("-demoBrokenLink")
         model.audiobook.assetProvider = { item, track in
+            if item.id == itemID, broken, track.path.contains("02 - Middle") {
+                return AVURLAsset(url: directory.appending(path: "missing.wav"))
+            }
             if item.id == itemID { return AVURLAsset(url: directory.appending(path: track.path)) }
             guard let real else { throw CancellationError() }
             return try await real(item, track)

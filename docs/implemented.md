@@ -347,3 +347,105 @@ have never run at all. Expect to fix things on the first tag.
 - The package's `.ipa` names are UUIDs and `manifest.json`/`signature` are fixed names, so one iOS version per tag.
 - `xcodegen generate` adds `ITSAppUsesNonExemptEncryption` to `App/Dove/Info.plist` (it is in `project.yml`; the
   committed plist was behind).
+
+### Player fixes, ebook reader, Audiobookshelf, About (2026-11-24)
+
+Asked by the owner: look at AudiobookSwift (`/Volumes/wew/audiobookswift`, the same author's Audiobookshelf app, whose
+player started as a copy of Dove's) for player fixes and its reader; add Audiobookshelf as a place; add About.
+
+**Player** (`DoveAppCore/AudiobookPlayer.swift`), ported from what AudiobookSwift learned, without its whole-book
+timeline, `AVQueuePlayer`, HLS or server sync (they need server-side durations and would rewrite the music queue):
+- `wantsToPlay`: the listener's intent, cleared only by Pause, Stop, the sleep timer and the end. A call or Siri that
+  ends with `.shouldResume` plays again only when it is still set. iOS 17 has no `resumptionRecommendation`
+  notification (iOS 27 only, what AudiobookSwift uses), so the classic `interruptionNotification` type and options.
+- Route change `oldDeviceUnavailable` (headphones out): AVPlayer pauses by itself; Dove now records the pause and
+  saves the place. `mediaServicesWereReset` drops the item, rebuilt on the next Play.
+- Failures: `failedToPlayToEndTime` and item status `.failed` were not observed, so an expired debrid link (a long
+  pause, a prefetched asset) left a silent player. The first failure asks `assetProvider` again from the same
+  place; a second shows the error and Play tries again. Decided by the failing item's identity, not `isLoading`: a
+  dead link fails while its load still waits for the duration or the seek. `-demoBrokenLink` (debug, with
+  `-demoAudiobook`) points part 2 at a missing file; checked on the Simulator: one retry, then the message.
+- `pendingSeek`: the clock no longer overwrites `elapsed` with the old position while a seek runs.
+- Skip past a part's end carries the rest of the jump into the next part (it used to land at the next part's start).
+- "End of chapter" stops at the m4b chapter's end (it stopped half a second into the next one) and, at a part's
+  end, moves to the next part's start without playing (Play used to start at the finished part's end).
+- Audiobooks' covers on the lock screen: artwork was loaded for music only.
+- Now Playing is rewritten on a change of state or chapter and every 10 s, not every half second; the chapter
+  number is the chapter's (it was the track's); on the Mac `playbackState` is set so media keys reach Dove.
+- `stop()` resets `isLoading` (a cancelled load left the spinner on).
+- Player screen: for an m4b with chapter marks the slider moves within the chapter (a 10-hour slider moved minutes a
+  point), with the time left in the file under it.
+Checked on the Simulator with `-demoAudiobook`: +30 s across a part's end, end-of-chapter on the last part, a broken
+part. A call, headphones, end-of-chapter mid-book and a real expired link need a device.
+
+**Ebook reader** (iPhone only, `App/Dove/Features/Reader`): AudiobookSwift's iOS reader brought over (MPL-2.0, same
+author) without its server and text-sync parts, translated to English. EPUB through epub.js 0.3.93 + JSZip 3.10.1
+in a `WKWebView` (page and book from the `dovebook:` scheme, content rules block http/https/ws/ftp, the book's own
+scripts never run, links inside the book go through epub.js, links out do nothing), PDF through PDFKit. Themes,
+typeface, size from Dynamic Type, margins (UserDefaults, per device); contents; a place slider once epub.js has
+counted locations (cached in Caches/EbookLocations). Place: `ReadingPositions` (DoveKit, tested) keyed by
+`BookGuess.key`, one synced Keychain item (`CredentialKey.readingPositions`), CFI for EPUB or `page:N`; saved a
+second after the last page turn and on close, never on opening (the opening place would overwrite another device's).
+`ReadingTarget.dove` ("Read in Dove", EPUB and PDF) is first in Read; with no mail address set it is what Read does
+without asking (it used to be Apple Books). Older installs read `readIn: "dove"` as nil (`try?` in
+`SyncedPreferences`), i.e. "Ask". Presented from `RootView` through `AppRouter.reading` (a cover inside the book
+screen's list closes when it redraws). Debug builds: `-demoReader /path/book.epub` opens a file. Checked on the
+Simulator with a generated EPUB (pages, chapter title, percent, place restored after relaunch; epub.js can land a
+page early: the start-of-page CFI rounds back, same as in AudiobookSwift) and a generated PDF (page count, page 6
+restored). Not seen: the Read button on a real book (the debug hook skips `BookReadSection`), a large real EPUB.
+On the Mac a synced `readIn == .dove` reads as "Ask" (`AppModel.availableReadIn`) without overwriting the iPhone's.
+**Exception to "no third-party dependencies"**: epub.js and JSZip are vendored as files (licences in
+`THIRD-PARTY-NOTICES.txt`, shown in Settings › About › Acknowledgements). A native EPUB renderer was the
+alternative; the owner pointed at this reader, which works and keeps CFIs compatible with epub.js-based apps.
+MOBI/AZW3 stay out (the only JS parser, mobi.js, is AGPL).
+
+**Audiobookshelf as a place** (`Backends/Audiobookshelf`, tested against fixtures and, 2026-11-24, against a real
+server: see "Live test" below):
+`BackendID.audiobookshelf` (`isStorage`), `CredentialKey.audiobookshelfURL/Token/Library`, Settings › Your
+libraries › Audiobookshelf (address with its path, API key from Settings › API Keys on server 2.26+, library picker,
+whether the account may upload). Lists book libraries (`api/libraries/<id>/items?minified=1`, 500 a page, missing
+items left out) as `abs:<id>` with the server's metadata (`authorName` split on commas, description HTML → text);
+files from `api/items/<id>?expanded=1` (`libraryFiles`, metadata files left out), downloads from
+`api/items/<id>/file/<ino>/download`; covers `audiobookshelf://cover/<id>?v=<updatedAt>` resolved by `ImageCache`
+to `api/items/<id>/cover?width=400` with the key. Being a listed place, its books get the Library's "In library"
+marks; search rows and a book's releases say "In Audiobookshelf" (`BookTitle.heldPlace`: Calibre, then
+Audiobookshelf), its description wins when two matches merge (`LibraryShelf`), and the Mac's sidebar and Home list
+it. Routes, permission rules (`User.canUpload`/`canDownload`: the flag alone, root included) and API keys (2.26.0)
+checked in the server's source (`vendor/audiobookshelf` v2.38.0 in AudiobookSwift). Send ("Send to Audiobookshelf"
+on an audiobook's screen, iPhone and Mac, `ShelfSendButton`; the transfer lives in `AppModel.shelfSends`, so a
+redrawn screen cannot start a second one): checks the account may upload (`permissions.upload`; off for new users) and
+that `api/filesystem/pathexists` says the Author/Title folder is free (the server refuses occupied folders), then
+fetches the release's audio files and cover image to a temporary folder (from Downloads when there), and posts
+them as `api/upload` multipart (`title`, `author`, `library`, `folder`, files `0…n`) written to a temporary file and
+streamed with progress. Files flatten into one folder on the server, so repeated names get their subfolder as a
+prefix (`CD1 - 01.mp3`; `AudiobookshelfUpload.uploadNames`, from AudiobookSwift). Foreground only: iOS stops the transfer soon after Dove leaves the screen (the button says to keep Dove open).
+Also a "Save to" place for audiobooks (owner, 2026-11-24): `AppModel.places(for: .audiobooks)` offers
+`FilePlace.service(.audiobookshelf)`, and `getFile` (plugin results, the site browser) downloads the plugin's files
+with their headers to a temporary folder and uploads them with the book's title and author. Library items keep
+their own "Send to Audiobookshelf" (a library Download still goes to the device). 1.0.0 installs drop the unknown
+place when they read `DownloadDestinations` (`compactMapValues`), so nothing breaks; one of them saving its
+preferences would write the audiobooks row back to the default. In the setup wizard as a place
+(`SetupChoice.audiobookshelf` → its settings page, then Save to).
+**Live test** (2026-11-24): a throwaway Audiobookshelf 2.38.0 (AudiobookSwift's `build/abs-server` with
+`SKIP_BINARIES_CHECK=1`, port 13499, config and library in a temporary folder; never the owner's server): root
+created through `/init`, a book library, a user with upload and one without, API keys from `POST api/api-keys`.
+`AudiobookshelfLiveTests` (skipped unless `DOVE_ABS_LIVE_URL`, `DOVE_ABS_LIVE_KEY`, `DOVE_ABS_LIVE_FILES`, optionally
+`DOVE_ABS_LIVE_READER_KEY` are set) passed: account and permissions, upload of `CD1/01.m4a` + `CD2/01.m4a` +
+`cover.jpg` with progress to 1, the server's scan within seconds, listing with author and kind, files named
+`CD1 - 01.m4a`/`CD2 - 01.m4a`, a byte-identical download, the cover through `coverRequest`, the "already has a
+folder" refusal, the reader account refused, a wrong key's message. In the app on the Simulator: the wizard's
+Audiobookshelf page connected ("dove", may send, library picker), Save to offered Audiobookshelf for audiobooks,
+and Home showed the two uploaded books with the server's cover. Not run: the in-app Send button (the demo has no
+service release to send) and a plugin download into Audiobookshelf.
+
+**About** (Settings › App › About, both apps): version, author (Smigi, the owner's choice, linking the GitHub
+profile), website, source, privacy policy, support, issues, e-mail, MPL 2.0, Acknowledgements
+(iPhone only, where the notices are bundled).
+
+**Release fixes from Aicord** (2026-11-24, before Dove 1.1.0, the first tag through the `ios` job): Aicord's v0.1.13
+release failed at signing because the `xcode-27` runner image lacks Apple's WWDR G3 intermediate, so the imported
+Apple Distribution identity was not valid; importing `AppleWWDRCAG3.cer` into the signing keychain fixed it (its
+next run passed). Brought over: that import, a list of the keychain's identities when none is valid, the archive
+log written to `dist/ios-archive.log` (errors printed, the file kept as an artefact on failure), and
+`altstore-publish.py`'s `release_notes` (drops `##` headings, the Full Changelog link and install instructions
+from what AltStore shows).

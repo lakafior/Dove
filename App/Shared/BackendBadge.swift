@@ -28,6 +28,7 @@ extension BackendID {
         case .nzbdav: "ND"
         case .iCloudDrive: "iC"
         case .calibre: "CA"
+        case .audiobookshelf: "AB"
         }
     }
 
@@ -42,6 +43,7 @@ extension BackendID {
         case .nzbdav: .orange
         case .iCloudDrive: .cyan
         case .calibre: .brown
+        case .audiobookshelf: .indigo
         }
     }
 }
@@ -61,6 +63,7 @@ extension FilePlace {
         switch self {
         case .download(let destination): destination.symbol
         case .service(.calibre): "books.vertical"
+        case .service(.audiobookshelf): "headphones"
         case .service: "cloud"
         }
     }

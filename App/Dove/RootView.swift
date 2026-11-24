@@ -53,6 +53,13 @@ struct RootView: View {
         }
         #if DEBUG
         .task { AudiobookDemo.startIfRequested(on: model) }
+        // `-demoReader /path/book.epub` opens a file from disk in the reader, to try it on the Simulator.
+        .task {
+            if let path = UserDefaults.standard.string(forKey: "demoReader") {
+                let file = URL(filePath: path)
+                router.reading = ReaderRequest(file: file, title: file.deletingPathExtension().lastPathComponent, bookKey: "demo:\(file.lastPathComponent)")
+            }
+        }
         #endif
         // Download-only jobs wait for the service only while Dove is open: iOS has no background polling.
         .onChange(of: scenePhase, initial: true) {
@@ -71,6 +78,9 @@ struct RootView: View {
         }
         .sheet(isPresented: Binding(get: { model.audiobook.isPresented }, set: { model.audiobook.isPresented = $0 })) {
             AudiobookPlayerView()
+        }
+        .fullScreenCover(item: Binding(get: { router.reading }, set: { router.reading = $0 })) { request in
+            ReaderScreen(request: request)
         }
         .alert(openedMessage ?? "", isPresented: Binding(get: { openedMessage != nil }, set: { if !$0 { openedMessage = nil } })) {
             Button("OK") {}

@@ -1,17 +1,19 @@
 import Foundation
 
-/// Where "Read" sends an ebook. Apple Books takes EPUB and PDF; Send to Kindle (e-mail) takes EPUB, PDF and DOCX,
+/// Where "Read" sends an ebook. Dove's own reader (iPhone) opens EPUB and PDF and keeps the place across devices;
+/// Apple Books takes EPUB and PDF; Send to Kindle (e-mail) takes EPUB, PDF and DOCX,
 /// up to 50 MB, and neither takes MOBI or AZW3 (Amazon dropped MOBI from Send to Kindle in 2022). Send-to-PocketBook
 /// (e-mail to `name@pbsync.com`, delivered to the reader's library on its next sync) takes what PocketBook readers
 /// open, FB2 and AZW3 included. "E-mail" is any address the user sets (their own inbox, another reader's mail
 /// service) and takes any ebook. Kobo has no send-by-e-mail address, so it is not a target.
 public enum ReadingTarget: String, Codable, Sendable, CaseIterable, Identifiable {
-    case appleBooks, kindle, pocketBook, email
+    case dove, appleBooks, kindle, pocketBook, email
 
     public var id: String { rawValue }
 
     public var displayName: String {
         switch self {
+        case .dove: "Dove"
         case .appleBooks: "Apple Books"
         case .kindle: "Kindle"
         case .pocketBook: "PocketBook"
@@ -22,6 +24,7 @@ public enum ReadingTarget: String, Codable, Sendable, CaseIterable, Identifiable
     /// What the Read button says.
     public var actionTitle: String {
         switch self {
+        case .dove: "Read in Dove"
         case .appleBooks: "Open in Apple Books"
         case .kindle: "Send to Kindle"
         case .pocketBook: "Send to PocketBook"
@@ -29,13 +32,13 @@ public enum ReadingTarget: String, Codable, Sendable, CaseIterable, Identifiable
         }
     }
 
-    /// Sent as a Mail draft to an address the user sets; Apple Books is the only one that is not.
-    public var isMail: Bool { self != .appleBooks }
+    /// Sent as a Mail draft to an address the user sets; Dove's reader and Apple Books are not.
+    public var isMail: Bool { self != .appleBooks && self != .dove }
 
     /// The address field's placeholder.
     public var addressPlaceholder: String {
         switch self {
-        case .appleBooks: ""
+        case .dove, .appleBooks: ""
         case .kindle: "name@kindle.com"
         case .pocketBook: "name@pbsync.com"
         case .email: "name@example.com"
@@ -45,7 +48,7 @@ public enum ReadingTarget: String, Codable, Sendable, CaseIterable, Identifiable
     /// Said after Mail sent it.
     public var deliveryNote: String {
         switch self {
-        case .appleBooks, .email: ""
+        case .dove, .appleBooks, .email: ""
         case .kindle: "Amazon delivers it in a few minutes."
         case .pocketBook: "It reaches the reader's library on its next sync."
         }
@@ -54,7 +57,7 @@ public enum ReadingTarget: String, Codable, Sendable, CaseIterable, Identifiable
     /// Extensions the target takes, best first. EPUB reflows on any screen; PDF keeps its pages.
     public var formats: [String] {
         switch self {
-        case .appleBooks: ["epub", "pdf"]
+        case .dove, .appleBooks: ["epub", "pdf"]
         case .kindle: ["epub", "pdf", "docx"]
         case .pocketBook: ["epub", "fb2", "pdf", "azw3", "mobi", "djvu", "cbz", "cbr", "docx"]
         case .email: BookFiles.ebookFormats

@@ -73,6 +73,9 @@ public final class AudiobookPlayer {
     public private(set) var elapsed: Double = 0
     public private(set) var duration: Double?
     public private(set) var isPlaying = false
+    /// The listener wants it to play: set by Play, cleared only by Pause, Stop, the sleep timer and the end of the
+    /// book, not by the system (a call, Siri, a stall). A call that ends resumes only when this is still set.
+    public private(set) var wantsToPlay = false
     public private(set) var isLoading = false
     public var error: String?
     /// The full-screen player.
@@ -108,7 +111,17 @@ public final class AudiobookPlayer {
     @ObservationIgnored private var positions: AudiobookPositions
     @ObservationIgnored private var timeObserver: Any?
     @ObservationIgnored private var endObserver: NSObjectProtocol?
-    @ObservationIgnored private var interruptionObserver: NSObjectProtocol?
+    @ObservationIgnored private var systemObservers: [NSObjectProtocol] = []
+    @ObservationIgnored private var statusObservation: NSKeyValueObservation?
+    /// The current track's link failed once and was asked for again; a second failure is shown.
+    @ObservationIgnored private var retriedFailure = false
+    /// The last seek still running: until it ends, the clock reports the old position, so it is not read.
+    @ObservationIgnored private var pendingSeek: UUID?
+    /// "Now Playing" is not rewritten on every tick: the system moves the time from the rate, so a change of
+    /// state or chapter, or every `nowPlayingInterval`, is enough.
+    @ObservationIgnored private var nowPlayingUpdated: Date?
+    @ObservationIgnored private var nowPlayingChapter: AudiobookChapter?
+    private static let nowPlayingInterval: TimeInterval = 10
     @ObservationIgnored private var prefetched: (entryID: String, asset: AVURLAsset)?
     @ObservationIgnored private var loadTask: Task<Void, Never>?
     @ObservationIgnored private var lastKeychainSave = Date.distantPast
@@ -134,13 +147,7 @@ public final class AudiobookPlayer {
         timeObserver = player.addPeriodicTimeObserver(forInterval: CMTime(seconds: 0.5, preferredTimescale: 600), queue: .main) { [weak self] time in
             MainActor.assumeIsolated { self?.tick(time) }
         }
-        #if os(iOS)
-        interruptionObserver = NotificationCenter.default.addObserver(
-            forName: AVAudioSession.interruptionNotification, object: nil, queue: .main
-        ) { [weak self] _ in
-            MainActor.assumeIsolated { self?.syncPlayingState() }
-        }
-        #endif
+        observeAudioSession()
     }
 
     // MARK: - State
@@ -232,6 +239,7 @@ public final class AudiobookPlayer {
         artwork = nil
         artworkURL = nil
         error = nil
+        retriedFailure = false
         isShuffled = false
         orderedQueue = []
         cancelSleepTimer()
@@ -300,7 +308,11 @@ public final class AudiobookPlayer {
 
     public func play() {
         guard session != nil else { return }
-        if player.currentItem == nil {
+        wantsToPlay = true
+        // No item, or the last one failed (a debrid link expires during a long pause): ask for the link again.
+        if player.currentItem == nil || error != nil || player.currentItem?.status == .failed {
+            error = nil
+            prefetched = nil
             load(trackIndex, at: elapsed, autoplay: true)
             return
         }
@@ -310,6 +322,7 @@ public final class AudiobookPlayer {
     }
 
     public func pause() {
+        wantsToPlay = false
         player.pause()
         syncPlayingState()
         savePosition(force: true)
@@ -325,8 +338,13 @@ public final class AudiobookPlayer {
         player.pause()
         player.replaceCurrentItem(with: nil)
         loadTask?.cancel()
+        statusObservation = nil
         session = nil
         isPlaying = false
+        wantsToPlay = false
+        isLoading = false
+        pendingSeek = nil
+        nowPlayingUpdated = nil
         isPresented = false
         isShuffled = false
         orderedQueue = []
@@ -334,19 +352,30 @@ public final class AudiobookPlayer {
         MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
         #if os(iOS)
         try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+        #else
+        MPNowPlayingInfoCenter.default().playbackState = .stopped
         #endif
     }
 
     /// Seconds within the current track; past the end goes on to the next track.
     public func seek(to seconds: Double) {
         if let duration, seconds >= duration - 0.5 {
-            advance()
+            // Past the end of a part: into the next one by what is left of the jump.
+            guard let session, trackIndex + 1 < session.queue.count else {
+                advance()
+                return
+            }
+            load(trackIndex + 1, at: session.isMusic ? 0 : max(0, seconds - duration), autoplay: wantsToPlay || isPlaying)
             return
         }
         let target = max(0, seconds)
         elapsed = target
+        guard player.currentItem != nil else { return }
+        let token = UUID()
+        pendingSeek = token
         Task {
             await player.seek(to: CMTime(seconds: target, preferredTimescale: 600), toleranceBefore: .zero, toleranceAfter: .zero)
+            if pendingSeek == token { pendingSeek = nil }
             updateNowPlaying()
             savePosition(force: false)
         }
@@ -414,6 +443,17 @@ public final class AudiobookPlayer {
         pause()
     }
 
+    /// The chapter "end of chapter" waits for has an end inside this track (m4b marks): stop there, not half a
+    /// second into the next chapter.
+    private func reachedSleepChapterEnd() -> Bool {
+        guard sleepTimer == .endOfChapter, let sleepChapter else { return false }
+        if let length = sleepChapter.duration, length > 0, sleepChapter.trackIndex == trackIndex {
+            return elapsed >= sleepChapter.start + length - 0.25
+        }
+        guard let current = currentChapter else { return false }
+        return current != sleepChapter
+    }
+
     // MARK: - Tracks
 
     /// Opens a track and seeks: to `seconds`, or `fromEnd` seconds before its end.
@@ -426,6 +466,8 @@ public final class AudiobookPlayer {
         duration = nil
         isLoading = true
         error = nil
+        pendingSeek = nil
+        if autoplay { wantsToPlay = true }
         loadTask = Task {
             defer { if !Task.isCancelled { isLoading = false } }
             do {
@@ -443,7 +485,7 @@ public final class AudiobookPlayer {
                 item.audioTimePitchAlgorithm = .timeDomain
                 observeEnd(of: item)
                 player.replaceCurrentItem(with: item)
-                if session.isMusic { loadArtwork(entry.cover) }
+                loadArtwork(entry.cover ?? session.cover)
                 let length = try? await asset.load(.duration).seconds
                 guard !Task.isCancelled, self.session?.id == session.id else { return }
                 duration = length.flatMap { $0.isFinite && $0 > 0 ? $0 : nil }
@@ -456,6 +498,9 @@ public final class AudiobookPlayer {
                 if autoplay {
                     activateAudioSession()
                     player.playImmediately(atRate: playbackRate)
+                } else {
+                    // Moved without playing (the sleep timer at a part's end): the new place is the saved one.
+                    savePosition(force: true)
                 }
                 syncPlayingState()
                 if !session.isMusic { await loadChapters(of: asset, track: index) }
@@ -464,6 +509,7 @@ public final class AudiobookPlayer {
                 guard !Task.isCancelled else { return }
                 self.error = error.localizedDescription
                 isPlaying = false
+                updateNowPlaying()
             }
         }
     }
@@ -481,18 +527,63 @@ public final class AudiobookPlayer {
         }
     }
 
+    /// The end of the part, and its failure: a link that stopped working (expired, the service forgot it) or a
+    /// network that dropped mid-file.
     private func observeEnd(of item: AVPlayerItem) {
         if let endObserver { NotificationCenter.default.removeObserver(endObserver) }
+        for observer in failureObservers { NotificationCenter.default.removeObserver(observer) }
         endObserver = NotificationCenter.default.addObserver(
             forName: AVPlayerItem.didPlayToEndTimeNotification, object: item, queue: .main
         ) { [weak self] _ in
             MainActor.assumeIsolated { self?.trackEnded() }
         }
+        let id = ObjectIdentifier(item)
+        let failed = NotificationCenter.default.addObserver(
+            forName: AVPlayerItem.failedToPlayToEndTimeNotification, object: item, queue: .main
+        ) { [weak self] note in
+            let message = (note.userInfo?[AVPlayerItemFailedToPlayToEndTimeErrorKey] as? any Error)?.localizedDescription
+            MainActor.assumeIsolated { self?.itemFailed(id, message) }
+        }
+        failureObservers = [failed]
+        statusObservation = item.observe(\.status) { [weak self] item, _ in
+            guard item.status == .failed else { return }
+            let message = item.error?.localizedDescription
+            Task { @MainActor in self?.itemFailed(id, message) }
+        }
+    }
+
+    @ObservationIgnored private var failureObservers: [NSObjectProtocol] = []
+
+    /// The first failure asks the service for the link again and carries on from the same place; a second one
+    /// is shown, and Play tries once more.
+    /// Decided by the item, not by `isLoading`: a dead link usually fails while its load still waits for the
+    /// duration or the seek, and the status changes only once.
+    private func itemFailed(_ id: ObjectIdentifier, _ message: String?) {
+        guard session != nil, player.currentItem.map(ObjectIdentifier.init) == id else { return }
+        loadTask?.cancel()
+        isLoading = false
+        prefetched = nil
+        if !retriedFailure {
+            retriedFailure = true
+            load(trackIndex, at: elapsed, autoplay: wantsToPlay)
+            return
+        }
+        player.pause()
+        player.replaceCurrentItem(with: nil)
+        error = "This part did not play" + (message.map { " (\($0))" } ?? "") + ". Tap Play to try again."
+        isPlaying = false
+        syncPlayingState()
     }
 
     private func trackEnded() {
         if sleepTimer == .endOfChapter {
             sleepNow()
+            // On to the next part's start without playing, so Play continues there rather than at this end.
+            if let session, trackIndex + 1 < session.queue.count {
+                load(trackIndex + 1, at: 0, autoplay: false)
+            } else {
+                advance()
+            }
             return
         }
         advance()
@@ -505,12 +596,14 @@ public final class AudiobookPlayer {
         if trackIndex + 1 < session.queue.count {
             load(trackIndex + 1, at: 0, autoplay: true)
         } else if session.isMusic {
+            wantsToPlay = false
             player.pause()
             syncPlayingState()
             trackIndex = 0
             elapsed = 0
             player.replaceCurrentItem(with: nil)
         } else {
+            wantsToPlay = false
             player.pause()
             syncPlayingState()
             positions.set(nil, for: session.key)
@@ -544,27 +637,35 @@ public final class AudiobookPlayer {
     // MARK: - Clock
 
     private func tick(_ time: CMTime) {
-        guard session != nil, player.currentItem != nil, !isLoading else { return }
+        guard session != nil, player.currentItem != nil, !isLoading, pendingSeek == nil else { return }
         elapsed = time.seconds.isFinite ? time.seconds : 0
-        syncPlayingState()
+        syncPlayingState(fromClock: true)
         guard isPlaying else { return }
+        retriedFailure = false
         if let sleepDeadline, Date.now >= sleepDeadline {
             sleepNow()
             return
         }
         // End of an m4b chapter (between tracks, `trackEnded` handles it).
-        if sleepTimer == .endOfChapter, let sleepChapter, let current = currentChapter, current != sleepChapter {
+        if reachedSleepChapterEnd() {
             sleepNow()
             return
         }
         savePosition(force: false)
     }
 
-    private func syncPlayingState() {
+    /// `fromClock`: from the half-second clock, which rewrites "Now Playing" only on a change of state or chapter
+    /// and every `nowPlayingInterval`.
+    private func syncPlayingState(fromClock: Bool = false) {
         let playing = player.timeControlStatus != .paused
-        if playing != isPlaying {
+        let changed = playing != isPlaying
+        if changed {
             isPlaying = playing
             if !playing { savePosition(force: true) }
+        }
+        if fromClock, !changed, currentChapter == nowPlayingChapter,
+           let nowPlayingUpdated, Date.now.timeIntervalSince(nowPlayingUpdated) < Self.nowPlayingInterval {
+            return
         }
         updateNowPlaying()
     }
@@ -580,6 +681,48 @@ public final class AudiobookPlayer {
     }
 
     // MARK: - System
+
+    /// Calls, Siri and alarms (a call that ends with "should resume" plays again if the listener had it playing),
+    /// headphones unplugged (AVPlayer pauses by itself; Dove saves the place and stays paused), and a reset of the
+    /// media services. macOS has none of these.
+    private func observeAudioSession() {
+        #if os(iOS)
+        let center = NotificationCenter.default
+        let audio = AVAudioSession.sharedInstance()
+        systemObservers = [
+            center.addObserver(forName: AVAudioSession.interruptionNotification, object: audio, queue: .main) { [weak self] note in
+                let type = (note.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt).flatMap(AVAudioSession.InterruptionType.init)
+                let options = (note.userInfo?[AVAudioSessionInterruptionOptionKey] as? UInt).map(AVAudioSession.InterruptionOptions.init)
+                let shouldResume = type == .ended && options?.contains(.shouldResume) == true
+                MainActor.assumeIsolated { self?.interrupted(ended: type == .ended, shouldResume: shouldResume) }
+            },
+            center.addObserver(forName: AVAudioSession.routeChangeNotification, object: audio, queue: .main) { [weak self] note in
+                let reason = (note.userInfo?[AVAudioSessionRouteChangeReasonKey] as? UInt).flatMap(AVAudioSession.RouteChangeReason.init)
+                MainActor.assumeIsolated { self?.routeChanged(deviceGone: reason == .oldDeviceUnavailable) }
+            },
+            center.addObserver(forName: AVAudioSession.mediaServicesWereResetNotification, object: audio, queue: .main) { [weak self] _ in
+                MainActor.assumeIsolated {
+                    // Every AVPlayer is gone with the services: the item is rebuilt on the next Play.
+                    self?.player.replaceCurrentItem(with: nil)
+                    self?.syncPlayingState()
+                }
+            },
+        ]
+        #endif
+    }
+
+    private func interrupted(ended: Bool, shouldResume: Bool) {
+        syncPlayingState()
+        if ended, shouldResume, wantsToPlay, !isPlaying { play() }
+    }
+
+    private func routeChanged(deviceGone: Bool) {
+        if deviceGone, session != nil {
+            pause()
+        } else {
+            syncPlayingState()
+        }
+    }
 
     /// macOS has no audio session: apps just play.
     private func activateAudioSession() {
@@ -619,7 +762,8 @@ public final class AudiobookPlayer {
             if let album = currentEntry?.album { info[MPMediaItemPropertyAlbumTitle] = album }
             if let duration { info[MPMediaItemPropertyPlaybackDuration] = duration }
             if let artwork { info[MPMediaItemPropertyArtwork] = artwork }
-            MPNowPlayingInfoCenter.default().nowPlayingInfo = info
+            publish(info)
+            nowPlayingChapter = nil
             return
         }
         let chapter = currentChapter
@@ -634,11 +778,23 @@ public final class AudiobookPlayer {
         if let author = session.author { info[MPMediaItemPropertyArtist] = author }
         if let duration { info[MPMediaItemPropertyPlaybackDuration] = duration }
         if let artwork { info[MPMediaItemPropertyArtwork] = artwork }
-        if session.tracks.count > 1 {
-            info[MPNowPlayingInfoPropertyChapterNumber] = trackIndex
-            info[MPNowPlayingInfoPropertyChapterCount] = session.tracks.count
+        let all = chapters
+        if let chapter, let number = all.firstIndex(of: chapter), all.count > 1 {
+            info[MPNowPlayingInfoPropertyChapterNumber] = number
+            info[MPNowPlayingInfoPropertyChapterCount] = all.count
         }
-        MPNowPlayingInfoCenter.default().nowPlayingInfo = info
+        publish(info)
+        nowPlayingChapter = chapter
+    }
+
+    private func publish(_ info: [String: Any]) {
+        let center = MPNowPlayingInfoCenter.default()
+        center.nowPlayingInfo = info
+        nowPlayingUpdated = .now
+        #if os(macOS)
+        // On the Mac media keys go to the app whose state is "playing"; iOS takes it from the audio session.
+        center.playbackState = isPlaying ? .playing : .paused
+        #endif
     }
 
     private func installRemoteCommands() {
