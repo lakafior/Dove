@@ -449,3 +449,16 @@ next run passed). Brought over: that import, a list of the keychain's identities
 log written to `dist/ios-archive.log` (errors printed, the file kept as an artefact on failure), and
 `altstore-publish.py`'s `release_notes` (drops `##` headings, the Full Changelog link and install instructions
 from what AltStore shows).
+The v1.1.0 run (45356075753): the Mac DMG and the unsigned IPA were published; the signed archive succeeded (the
+WWDR import works), but `-exportArchive` failed with "Cloud signing permission error" and "No profiles for
+'net.smigi.dove' / '.share' / '.files' / '.widgets' were found": the App Store Connect key in Dove's secrets (from
+2026-10-27, made for notarytool) may not create App Store profiles. Aicord replaced its `NOTARY_KEY_ID` and
+`NOTARY_KEY_P8_BASE64` a minute before its passing run (2026-11-20 10:12), so its key is the one that can. Fix: the
+same key (role Admin, or App Manager with access to certificates and profiles) in Dove's `NOTARY_KEY_ID`,
+`NOTARY_KEY_P8_BASE64` (and `NOTARY_ISSUER_ID` if it differs), then `gh run rerun 45356075753 --failed`: the
+unsigned IPA is attached again with `--clobber`, the build number is unchanged and nothing was uploaded yet.
+Done 2026-11-24: the owner put an Admin-role key (`HG45D2965N`) in Dove's `NOTARY_KEY_ID`/`NOTARY_KEY_P8_BASE64`
+and re-ran the failed job: archive, upload, build 1.1.0 (132) VALID after a few minutes of "not listed yet",
+version created and submitted for notarization by `asc-notarize.py`. The `ios` job has now run end to end; step 5
+(`altstore.yml`) waits for Apple. The key needs the Admin role (or App Manager with certificates and profiles): a
+Developer-role key notarizes Mac apps but cannot create App Store profiles.
