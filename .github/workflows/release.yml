@@ -241,8 +241,15 @@ jobs:
           security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN" >/dev/null
           security list-keychains -d user -s "$KEYCHAIN" $(security list-keychains -d user | tr -d '"')
           rm -f "$RUNNER_TEMP/cert.p12"
+          # The runner image lacks Apple's WWDR G3 intermediate, without which the Distribution identity is
+          # not valid for signing (Aicord's v0.1.13 release failed here, 2026-11-20).
+          curl -fsSL -o "$RUNNER_TEMP/AppleWWDRCAG3.cer" \
+            https://www.apple.com/certificateauthority/AppleWWDRCAG3.cer
+          security import "$RUNNER_TEMP/AppleWWDRCAG3.cer" -k "$KEYCHAIN" || true
           security find-identity -v -p codesigning "$KEYCHAIN" | grep -q 'Apple Distribution' || {
-            echo "::error::No 'Apple Distribution' identity in the imported certificate"
+            echo "Identities in the keychain, valid or not:"
+            security find-identity -p codesigning "$KEYCHAIN"
+            echo "::error::No valid 'Apple Distribution' identity in the imported certificate"
             exit 1
           }
 
@@ -264,6 +271,14 @@ jobs:
           NOTARY_KEY_ID: ${{ secrets.NOTARY_KEY_ID }}
           NOTARY_ISSUER_ID: ${{ secrets.NOTARY_ISSUER_ID }}
         run: ./scripts/build-ios.sh upload
+
+      - name: Keep the archive log on failure
+        if: failure() && github.ref_type == 'tag'
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-ios-signed-log
+          path: dist/ios-archive.log
+          if-no-files-found: ignore
 
       - name: Submit for notarization
         if: github.ref_type == 'tag'

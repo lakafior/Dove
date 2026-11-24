@@ -64,6 +64,9 @@ else
 fi
 
 ARCHIVE="dist/DoveIOS.xcarchive"
+# The whole log goes to a file (CI keeps it as an artefact on failure); the errors are shown here.
+LOG="dist/ios-archive.log"
+mkdir -p dist
 rm -rf "$ARCHIVE"
 xcodebuild archive \
   -project Dove.xcodeproj \
@@ -72,7 +75,9 @@ xcodebuild archive \
   -destination 'generic/platform=iOS' \
   -archivePath "$ARCHIVE" \
   "${AUTH[@]}" \
-  CURRENT_PROJECT_VERSION="$BUILD"
+  CURRENT_PROJECT_VERSION="$BUILD" > "$LOG" 2>&1 \
+  || { grep -E 'error:|\*\* ARCHIVE' "$LOG" | head -40; exit 1; }
+grep -E '\*\* ARCHIVE' "$LOG"
 
 OPTS="$(mktemp -t dove-export).plist"
 cat > "$OPTS" <<PLIST

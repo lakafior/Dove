@@ -33,6 +33,19 @@ ALTSTORE = "https://api.altstore.io/adps"
 REPO = "lakafior/Dove"
 
 
+def release_notes(body):
+    """The release's notes as AltStore shows them: without headings (`## What's Changed`), the "Full Changelog"
+    link and any install instructions after them (they point at sideloading)."""
+    lines = []
+    for line in body.splitlines():
+        if line.startswith(("**Install on iPhone", "**AltStore PAL")):
+            break
+        if line.startswith("## ") or "Full Changelog" in line:
+            continue
+        lines.append(line)
+    return "\n".join(lines).strip()
+
+
 def altstore(method, adp=None, body=None):
     url = ALTSTORE + (f"/{adp}" if adp else "")
     data = json.dumps(body).encode() if body is not None else None
@@ -126,8 +139,7 @@ def main():
     if len(set(names)) != len(names):
         sys.exit(f"Two package files share a name: {names}")
     base = f"https://github.com/{REPO}/releases/download/{args.tag}/"
-    notes = "\n".join(line for line in release["body"].splitlines()
-                      if "Full Changelog" not in line).strip()
+    notes = release_notes(release["body"])
     entry = {
         "version": manifest["shortVersionString"],
         "buildVersion": str(manifest["bundleVersion"]),
